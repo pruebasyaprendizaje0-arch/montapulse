@@ -8,14 +8,50 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    // Helper: is the user the owner of the user document?
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    // Helper: is the user an Admin?
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "frank.p.6@gmail.com" || 
+        request.auth.token.email == "montapulse@gmail.com" ||
+        request.auth.token.email == "fhernandezcalle@gmail.com" ||
+        request.auth.token.email == "pruebasyaprendizaje0@gmail.com"
+      );
     }
 
-    // DEBUGGING: ALLOW ALL
+    // Users: Only owner or admin can read/write
+    match /users_v2/{userId} {
+      allow read, write: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
+    }
+
+    // Events: Public read, authenticated write
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Businesses: Public read, authenticated write
+    match /businesses/{bizId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Favorites: Only owner can manage their favorites
+    match /favorites/{favId} {
+      allow read, write: if isSignedIn() && (
+        request.auth.uid == request.resource.data.userId || 
+        (resource != null && request.auth.uid == resource.data.userId)
+      );
+    }
+
+    // Settings: Public read, Admin only write
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Default deny
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
     }
   }
 }

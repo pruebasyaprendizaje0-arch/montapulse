@@ -236,3 +236,13 @@ export const PLAN_PRICES = {
   [SubscriptionPlan.PREMIUM]: 10,
   [SubscriptionPlan.VISITOR]: 0
 };
+
+export const DEFAULT_PAYMENT_DETAILS = {
+  bankName: "Banco Pichincha",
+  accountType: "Cuenta de Ahorros",
+  accountNumber: "2201938384",
+  accountOwner: "Montapulse S.A.",
+  idNumber: "1792938485001",
+  whatsappNumber: "593980000000",
+  bankRegion: "Pichincha (Ecuador)"
+};

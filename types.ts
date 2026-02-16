@@ -25,6 +25,7 @@ export enum SubscriptionPlan {
 export interface UserProfile {
   id: string;
   name: string;
+  surname: string;
   email: string;
   preferredVibe: Vibe;
   role: 'visitor' | 'host' | 'admin';

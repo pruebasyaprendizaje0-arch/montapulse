@@ -258,3 +258,41 @@ export const subscribeToUserFavorites = (userId: string, callback: (eventIds: st
         callback(eventIds);
     });
 };
+
+// ==================== SETTINGS ====================
+
+export const getAppSettings = async (settingId: string) => {
+    try {
+        const settingRef = doc(db, 'settings', settingId);
+        const snapshot = await getDoc(settingRef);
+        if (snapshot.exists()) {
+            return snapshot.data();
+        }
+        return null;
+    } catch (error) {
+        console.error('Error getting settings:', error);
+        return null;
+    }
+};
+
+export const updateAppSettings = async (settingId: string, data: any) => {
+    try {
+        const settingRef = doc(db, 'settings', settingId);
+        await setDoc(settingRef, {
+            ...data,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+    } catch (error) {
+        console.error('Error updating settings:', error);
+        throw error;
+    }
+};
+
+export const subscribeToAppSettings = (settingId: string, callback: (data: any) => void) => {
+    const settingRef = doc(db, 'settings', settingId);
+    return onSnapshot(settingRef, (doc) => {
+        if (doc.exists()) {
+            callback(doc.data());
+        }
+    });
+};

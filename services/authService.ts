@@ -5,19 +5,26 @@ import {
     GoogleAuthProvider,
     signOut,
     onAuthStateChanged,
-    User
+    User,
+    updateProfile
 } from 'firebase/auth';
 import { auth } from '../firebase.config';
 import { createUser } from './firestoreService';
 import { Vibe, SubscriptionPlan } from '../types';
 
-// Super admin email - ONLY this email has full admin access
-const SUPER_ADMIN_EMAIL = 'pruebasyaprendizaje0@gmail.com';
+// Super admin emails - ONLY these emails have full admin access
+const SUPER_ADMIN_EMAILS = [
+    'pruebasyaprendizaje0@gmail.com',
+    'frank.p.6@gmail.com',
+    'montapulse@gmail.com',
+    'fhernandezcalle@gmail.com'
+];
 
 export type UserRole = 'visitor' | 'host' | 'admin';
 
 export const isSuperAdmin = (email: string | null | undefined): boolean => {
-    return email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+    if (!email) return false;
+    return SUPER_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === email.toLowerCase());
 };
 
 export const getUserRole = (email: string | null | undefined): UserRole => {
@@ -49,6 +56,7 @@ export const registerWithEmail = async (
     email: string,
     password: string,
     name: string,
+    surname: string,
     role: 'visitor' | 'host',
     avatarUrl?: string
 ) => {
@@ -59,6 +67,7 @@ export const registerWithEmail = async (
         // Create user profile in Firestore
         await createUser(result.user.uid, {
             name,
+            surname,
             email,
             role,
             preferredVibe: Vibe.RELAX,
@@ -73,7 +82,6 @@ export const registerWithEmail = async (
     }
 };
 
-import { updateProfile } from 'firebase/auth';
 
 export const updateUserProfile = async (user: User, displayName?: string, photoURL?: string) => {
     try {

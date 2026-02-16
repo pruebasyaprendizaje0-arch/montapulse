@@ -10,6 +10,7 @@ interface RegisterFormProps {
 export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess }) => {
     const [formData, setFormData] = useState({
         name: '',
+        surname: '',
         email: '',
         password: '',
         confirmPassword: '',
@@ -54,6 +55,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
                 formData.email,
                 formData.password,
                 formData.name,
+                formData.surname,
                 formData.role,
                 formData.avatarUrl
             );
@@ -166,19 +168,35 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
                 </div>
             </div>
 
-            {/* Name */}
-            <div>
-                <label className="text-xs font-black text-slate-400 uppercase mb-2 block">Name</label>
-                <div className="relative">
-                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                    <input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="Your name"
-                        className="w-full bg-slate-800 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                        required
-                    />
+            {/* Name & Surname */}
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="text-xs font-black text-slate-400 uppercase mb-2 block">Nombre</label>
+                    <div className="relative">
+                        <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                        <input
+                            type="text"
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            placeholder="Tu nombre"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                            required
+                        />
+                    </div>
+                </div>
+                <div>
+                    <label className="text-xs font-black text-slate-400 uppercase mb-2 block">Apellido</label>
+                    <div className="relative">
+                        <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                        <input
+                            type="text"
+                            value={formData.surname}
+                            onChange={(e) => setFormData({ ...formData, surname: e.target.value })}
+                            placeholder="Tu apellido"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                            required
+                        />
+                    </div>
                 </div>
             </div>
 

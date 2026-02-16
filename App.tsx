@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, MessageCircle, Phone, CreditCard, Banknote } from 'lucide-react';
+import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck } from 'lucide-react';
 import { MapView } from './components/MapView.tsx';
 import { EventCard } from './components/EventCard.tsx';
 import { MigrationPanel } from './components/MigrationPanel.tsx';
 import { LoginScreen } from './components/LoginScreen.tsx';
 import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan } from './types.ts';
-import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES } from './constants.ts';
+import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS } from './constants.ts';
 import { getSmartRecommendations, generateEventDescription } from './services/geminiService.ts';
 import { useAuth } from './hooks/useAuth.ts';
 // Imports cleaned up
@@ -13,7 +13,7 @@ import { logout, isSuperAdmin, updateUserProfile } from './services/authService.
 import {
   getUser, createUser, updateUser, createBusiness, updateBusiness, deleteBusiness,
   subscribeToEvents, createEvent, updateEvent, deleteEvent,
-  subscribeToBusinesses
+  subscribeToBusinesses, subscribeToAppSettings, updateAppSettings
 } from './services/firestoreService.ts';
 
 
@@ -69,9 +69,13 @@ const Dashboard: React.FC = () => {
     const unsubBusinesses = subscribeToBusinesses((data) => {
       setBusinesses(data);
     });
+    const unsubSettings = subscribeToAppSettings('payment_info', (data) => {
+      if (data) setPaymentDetails({ ...DEFAULT_PAYMENT_DETAILS, ...data });
+    });
     return () => {
       unsubEvents();
       unsubBusinesses();
+      unsubSettings();
     };
   }, []);
 
@@ -113,6 +117,9 @@ const Dashboard: React.FC = () => {
   const [showMigrationPanel, setShowMigrationPanel] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<Record<string, boolean>>({});
   const [agendaRange, setAgendaRange] = useState<'day' | 'week' | 'month'>('day');
+  const [paymentDetails, setPaymentDetails] = useState(DEFAULT_PAYMENT_DETAILS);
+  const [showPaymentEdit, setShowPaymentEdit] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   // Force map update on view change - catching mobile UI settling
   React.useEffect(() => {
@@ -125,6 +132,7 @@ const Dashboard: React.FC = () => {
   }, [activeView]);
 
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editingBusinessId, setEditingBusinessId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -184,7 +192,8 @@ const Dashboard: React.FC = () => {
 
           const newUser: UserProfile = {
             id: authUser.uid,
-            name: authUser.displayName || (isMaster ? 'Super Admin' : 'Visitor'),
+            name: authUser.displayName?.split(' ')[0] || (isMaster ? 'Super' : 'Visitor'),
+            surname: authUser.displayName?.split(' ').slice(1).join(' ') || (isMaster ? 'Admin' : ''),
             email: authUser.email || '',
             role: defaultRole, // Will be 'visitor' for most new Google logins
             preferredVibe: Vibe.RELAX,
@@ -243,15 +252,9 @@ const Dashboard: React.FC = () => {
     setSectorPolygons(prev => ({ ...prev, [sector]: coords }));
   };
 
-  const handleEditBusiness = async (id: string) => {
-    const biz = businesses.find(b => b.id === id);
-    if (!biz) return;
-
-    const newName = prompt('Nuevo nombre:', biz.name);
-    const newDesc = prompt('Nueva descripción:', biz.description);
-    if (newName) {
-      await updateBusiness(id, { name: newName, description: newDesc || biz.description });
-    }
+  const handleEditBusiness = (id: string) => {
+    setEditingBusinessId(id);
+    setShowBusinessEdit(true);
   };
 
   const getLocalISOString = (date: Date) => {
@@ -344,7 +347,8 @@ const Dashboard: React.FC = () => {
     // Create visitor profile
     const newUser: UserProfile = {
       id: authUser.uid,
-      name: regForm.name,
+      name: regForm.name.split(' ')[0],
+      surname: regForm.name.split(' ').slice(1).join(' ') || '',
       email: regForm.email,
       preferredVibe: regForm.vibe,
       role: 'visitor',
@@ -355,6 +359,7 @@ const Dashboard: React.FC = () => {
     try {
       await createUser(authUser.uid, {
         name: newUser.name,
+        surname: newUser.surname,
         email: newUser.email,
         preferredVibe: newUser.preferredVibe,
         role: newUser.role,
@@ -394,7 +399,8 @@ const Dashboard: React.FC = () => {
       // 2. Create Host Profile linked to business
       const newUserProfile: UserProfile = {
         id: authUser.uid,
-        name: user?.name || authUser.displayName || 'Host',
+        name: user?.name || authUser.displayName?.split(' ')[0] || 'Host',
+        surname: user?.surname || authUser.displayName?.split(' ').slice(1).join(' ') || '',
         email: user?.email || authUser.email || '',
         preferredVibe: user?.preferredVibe || Vibe.RELAX,
         role: 'host',
@@ -466,11 +472,12 @@ const Dashboard: React.FC = () => {
 
   const handleBusinessImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && user?.businessId) {
+    const targetBusinessId = editingBusinessId || user?.businessId;
+    if (file && targetBusinessId) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setBusinesses(prev => prev.map(b =>
-          b.id === user.businessId ? { ...b, imageUrl: reader.result as string } : b
+          b.id === targetBusinessId ? { ...b, imageUrl: reader.result as string } : b
         ));
       };
       reader.readAsDataURL(file);
@@ -538,6 +545,7 @@ const Dashboard: React.FC = () => {
       // 1. Update Firestore (Persistent DB)
       await createUser(user.id, {
         name: user.name,
+        surname: user.surname,
         email: user.email,
         preferredVibe: user.preferredVibe,
         avatarUrl: user.avatarUrl || null,
@@ -548,7 +556,7 @@ const Dashboard: React.FC = () => {
 
       // 2. Update Firebase Auth Profile (Session / Cache)
       if (authUser) {
-        await updateUserProfile(authUser, user.name, user.avatarUrl);
+        await updateUserProfile(authUser, `${user.name} ${user.surname}`.trim(), user.avatarUrl);
       }
 
       setShowProfileEdit(false);
@@ -560,13 +568,14 @@ const Dashboard: React.FC = () => {
   };
 
   const handleUpdateBusinessProfile = async () => {
-    if (!user?.businessId) return;
+    const targetBusinessId = editingBusinessId || user?.businessId;
+    if (!targetBusinessId) return;
 
-    const business = businesses.find(b => b.id === user.businessId);
+    const business = businesses.find(b => b.id === targetBusinessId);
     if (!business) return;
 
     try {
-      await updateBusiness(user.businessId, {
+      await updateBusiness(targetBusinessId, {
         name: business.name,
         description: business.description,
         sector: business.sector,
@@ -575,6 +584,7 @@ const Dashboard: React.FC = () => {
         imageUrl: business.imageUrl
       });
       setShowBusinessEdit(false);
+      setEditingBusinessId(null);
     } catch (error) {
       console.error("Error updating business:", error);
       alert("Error saving business changes.");
@@ -583,6 +593,17 @@ const Dashboard: React.FC = () => {
 
 
 
+
+  const handleUpdatePaymentDetails = async () => {
+    try {
+      await updateAppSettings('payment_info', paymentDetails);
+      setShowPaymentEdit(false);
+      alert("Información de pago actualizada.");
+    } catch (error) {
+      console.error("Error updating payment details:", error);
+      alert("Error al actualizar información de pago.");
+    }
+  };
 
   const handleSaveEvent = async () => {
     // Validate limits
@@ -1015,7 +1036,7 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
               <div className="text-center space-y-1">
-                <h2 className="text-3xl font-black text-white tracking-tighter">{user?.name || "Visitante"}</h2>
+                <h2 className="text-3xl font-black text-white tracking-tighter">{user?.name} {user?.surname}</h2>
                 <div className="flex items-center justify-center gap-2 text-slate-500 font-bold text-xs">
                   <MapPin className="w-3 h-3" /> Citizen of Montañita
                   <span>•</span>
@@ -1162,16 +1183,29 @@ const Dashboard: React.FC = () => {
                 ))}
               </div>
 
-              {/* Migrate to Firestore Button */}
-              {/* Migrate to Firestore Button - Admin Only */}
+              {/* Admin Buttons Group */}
               {isAdmin && (
-                <button
-                  onClick={() => setShowMigrationPanel(true)}
-                  className="mt-6 w-full bg-gradient-to-r from-orange-500 to-pink-500 text-white font-black py-4 rounded-2xl hover:from-orange-600 hover:to-pink-600 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2"
-                >
-                  <Upload className="w-5 h-5" />
-                  <span>Migrate to Firestore</span>
-                </button>
+                <div className="flex flex-col gap-3 mt-6">
+                  <button
+                    onClick={() => setShowMigrationPanel(true)}
+                    className="w-full bg-gradient-to-r from-orange-500 to-pink-500 text-white font-black py-4 rounded-2xl hover:from-orange-600 hover:to-pink-600 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2"
+                  >
+                    <Upload className="w-5 h-5" />
+                    <span>Migrate to Firestore</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      alert("Panel de Control Súper Activado");
+                      setActiveView('plans'); // Navigate to plans where payment edit is available
+                      setTimeout(() => setShowPaymentEdit(true), 300);
+                    }}
+                    className="w-full bg-slate-800 text-sky-400 font-black py-4 rounded-2xl border-2 border-sky-500/30 flex items-center justify-center gap-2 hover:bg-slate-700 transition-all shadow-xl shadow-sky-500/10"
+                  >
+                    <ShieldCheck className="w-5 h-5" />
+                    <span>MODO SUPERUSUARIO</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1663,9 +1697,22 @@ const Dashboard: React.FC = () => {
 
             {/* Payment Methods Section */}
             <div className="mt-12 bg-slate-900/60 border border-white/5 rounded-[2.5rem] p-8 space-y-6">
-              <h4 className="text-xl font-black text-white italic uppercase flex items-center gap-3">
-                <CreditCard className="w-6 h-6 text-sky-500" />
-                Métodos de Pago
+              <h4 className="text-xl font-black text-white italic uppercase flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <CreditCard className="w-6 h-6 text-sky-500" />
+                  Métodos de Pago
+                </div>
+                {isAdmin && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowPaymentEdit(true);
+                    }}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
+                  >
+                    <Edit3 className="w-4 h-4 text-white" />
+                  </button>
+                )}
               </h4>
 
               <p className="text-sm text-slate-400 font-medium">Puedes realizar el pago mediante transferencia bancaria o depósito. Una vez realizado, envía el comprobante a nuestro equipo para la activación inmediata.</p>
@@ -1674,19 +1721,19 @@ const Dashboard: React.FC = () => {
                 <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
                   <div className="flex items-center gap-2 mb-3">
                     <Banknote className="w-4 h-4 text-sky-500" />
-                    <p className="text-[10px] font-black text-sky-500 uppercase tracking-widest">Pichincha (Ecuador)</p>
+                    <p className="text-[10px] font-black text-sky-500 uppercase tracking-widest">{paymentDetails.bankRegion}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-y-2">
                     <span className="text-xs text-slate-500">Banco:</span>
-                    <span className="text-xs font-bold text-white text-right">Banco Pichincha</span>
+                    <span className="text-xs font-bold text-white text-right">{paymentDetails.bankName}</span>
                     <span className="text-xs text-slate-500">Tipo:</span>
-                    <span className="text-xs font-bold text-white text-right">Cuenta de Ahorros</span>
+                    <span className="text-xs font-bold text-white text-right">{paymentDetails.accountType}</span>
                     <span className="text-xs text-slate-500">Número:</span>
-                    <span className="text-xs font-bold text-white text-right">2201938384</span>
+                    <span className="text-xs font-bold text-white text-right">{paymentDetails.accountNumber}</span>
                     <span className="text-xs text-slate-500">Titular:</span>
-                    <span className="text-xs font-bold text-white text-right">Montapulse S.A.</span>
+                    <span className="text-xs font-bold text-white text-right">{paymentDetails.accountOwner}</span>
                     <span className="text-xs text-slate-500">ID/RUC:</span>
-                    <span className="text-xs font-bold text-white text-right">1792938485001</span>
+                    <span className="text-xs font-bold text-white text-right">{paymentDetails.idNumber}</span>
                   </div>
                 </div>
               </div>
@@ -1700,7 +1747,7 @@ const Dashboard: React.FC = () => {
                   ENVIAR POR CORREO
                 </a>
                 <a
-                  href="https://wa.me/593980000000?text=Hola,%20adjunto%20mi%20comprobante%20de%20pago%20para%20el%20Plan%20Premium."
+                  href={`https://wa.me/${paymentDetails.whatsappNumber}?text=Hola,%20adjunto%20mi%20comprobante%20de%20pago%20para%20el%20Plan%20Premium.`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full py-4 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 font-black rounded-2xl border border-emerald-500/30 flex items-center justify-center gap-3 transition-all"
@@ -1764,7 +1811,7 @@ const Dashboard: React.FC = () => {
         <div className="flex items-center gap-4">
           {user && (
             <div className="flex items-center gap-2 pr-2">
-              <span className="text-[10px] font-black text-white uppercase tracking-tighter hidden sm:inline">{user.name}</span>
+              <span className="text-[10px] font-black text-white uppercase tracking-tighter hidden sm:inline">{user.name} {user.surname}</span>
               <div className="w-6 h-6 rounded-full border border-rose-500 overflow-hidden ring-2 ring-rose-500/20">
                 <img src={user.avatarUrl} className="w-full h-full object-cover" />
               </div>
@@ -1913,24 +1960,65 @@ const Dashboard: React.FC = () => {
             <div className="relative h-80 flex-shrink-0">
               <img src={selectedEvent.imageUrl} className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
-              <button
-                onClick={() => setSelectedEvent(null)}
-                className="absolute top-6 right-6 w-14 h-14 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-2xl z-[100] active:scale-90 transition-transform"
-              >
-                <X className="w-8 h-8 stroke-[3]" />
-              </button>
+              <div className="absolute top-6 right-6 flex gap-2 z-[100]">
+                {isAdmin && (
+                  <>
+                    <button
+                      onClick={() => handleEditEvent(selectedEvent)}
+                      className="w-14 h-14 bg-sky-500 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
+                    >
+                      <Edit3 className="w-8 h-8" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleDeleteEvent(selectedEvent.id);
+                        setSelectedEvent(null);
+                      }}
+                      className="w-14 h-14 bg-rose-500/20 text-rose-500 border-2 border-rose-500/20 rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
+                    >
+                      <Trash2 className="w-8 h-8" />
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => setSelectedEvent(null)}
+                  className="w-14 h-14 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
+                >
+                  <X className="w-8 h-8 stroke-[3]" />
+                </button>
+              </div>
               <div className="absolute bottom-6 left-8 flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-2 overflow-hidden ring-4 ring-white/5">
-                  <img
-                    src={businesses.find(b => b.id === selectedEvent.businessId)?.imageUrl || `https://i.pravatar.cc/100?u=${selectedEvent.businessId}`}
-                    className="w-full h-full object-cover rounded-lg"
-                  />
+                <div className="relative group/biz">
+                  <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-2 overflow-hidden ring-4 ring-white/5">
+                    <img
+                      src={businesses.find(b => b.id === selectedEvent.businessId)?.imageUrl || `https://i.pravatar.cc/100?u=${selectedEvent.businessId}`}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleEditBusiness(selectedEvent.businessId)}
+                      className="absolute -top-2 -right-2 bg-sky-500 p-1.5 rounded-lg shadow-lg opacity-0 group-hover/biz:opacity-100 transition-opacity"
+                    >
+                      <Settings className="w-3 h-3 text-white" />
+                    </button>
+                  )}
                 </div>
                 <div>
                   <span className="text-[10px] font-black uppercase text-slate-400">Publicado por</span>
-                  <h4 className="text-white font-black">
-                    {businesses.find(b => b.id === selectedEvent.businessId)?.name || 'Anónimo'}
-                  </h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-white font-black">
+                      {businesses.find(b => b.id === selectedEvent.businessId)?.name || 'Anónimo'}
+                    </h4>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleEditBusiness(selectedEvent.businessId)}
+                        className="text-sky-400 hover:text-sky-300 transition-colors"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2007,14 +2095,25 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="space-y-6">
-              <div>
-                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Name</label>
-                <input
-                  type="text"
-                  value={user.name}
-                  onChange={(e) => setUser({ ...user, name: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Nombre</label>
+                  <input
+                    type="text"
+                    value={user.name}
+                    onChange={(e) => setUser({ ...user, name: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Apellido</label>
+                  <input
+                    type="text"
+                    value={user.surname}
+                    onChange={(e) => setUser({ ...user, surname: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
+                  />
+                </div>
               </div>
 
               <div>
@@ -2105,18 +2204,19 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Business Edit Modal */}
-      {showBusinessEdit && user?.role === 'host' && user?.businessId && (
+      {showBusinessEdit && (isAdmin || (user?.role === 'host' && user?.businessId)) && (
         <div className="fixed inset-0 z-[2100] bg-slate-900/80 backdrop-blur-md flex items-end justify-center">
           <div className="w-full max-w-lg bg-slate-900 rounded-t-[3.5rem] p-8 pb-12 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-black text-white">Edit Business</h2>
-              <button onClick={() => setShowBusinessEdit(false)} className="p-2 rounded-full hover:bg-slate-800">
+              <button onClick={() => { setShowBusinessEdit(false); setEditingBusinessId(null); }} className="p-2 rounded-full hover:bg-slate-800">
                 <X className="w-6 h-6 text-slate-400" />
               </button>
             </div>
 
             {(() => {
-              const business = businesses.find(b => b.id === user.businessId);
+              const targetBusinessId = editingBusinessId || user?.businessId;
+              const business = businesses.find(b => b.id === targetBusinessId);
               if (!business) return <p className="text-slate-500">Business not found</p>;
 
               return (
@@ -2127,7 +2227,7 @@ const Dashboard: React.FC = () => {
                       type="text"
                       value={business.name}
                       onChange={(e) => setBusinesses(prev => prev.map(b =>
-                        b.id === user.businessId ? { ...b, name: e.target.value } : b
+                        b.id === targetBusinessId ? { ...b, name: e.target.value } : b
                       ))}
                       className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
                     />
@@ -2139,7 +2239,7 @@ const Dashboard: React.FC = () => {
                       rows={3}
                       value={business.description}
                       onChange={(e) => setBusinesses(prev => prev.map(b =>
-                        b.id === user.businessId ? { ...b, description: e.target.value } : b
+                        b.id === targetBusinessId ? { ...b, description: e.target.value } : b
                       ))}
                       className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
                     />
@@ -2150,7 +2250,7 @@ const Dashboard: React.FC = () => {
                     <select
                       value={business.sector}
                       onChange={(e) => setBusinesses(prev => prev.map(b =>
-                        b.id === user.businessId ? { ...b, sector: e.target.value as Sector } : b
+                        b.id === targetBusinessId ? { ...b, sector: e.target.value as Sector } : b
                       ))}
                       className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
                     >
@@ -2166,7 +2266,7 @@ const Dashboard: React.FC = () => {
                       type="tel"
                       value={business.whatsapp || ''}
                       onChange={(e) => setBusinesses(prev => prev.map(b =>
-                        b.id === user.businessId ? { ...b, whatsapp: e.target.value } : b
+                        b.id === targetBusinessId ? { ...b, whatsapp: e.target.value } : b
                       ))}
                       placeholder="+593 99 999 9999"
                       className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
@@ -2179,7 +2279,7 @@ const Dashboard: React.FC = () => {
                       type="tel"
                       value={business.phone || ''}
                       onChange={(e) => setBusinesses(prev => prev.map(b =>
-                        b.id === user.businessId ? { ...b, phone: e.target.value } : b
+                        b.id === targetBusinessId ? { ...b, phone: e.target.value } : b
                       ))}
                       placeholder="+593 99 999 9999"
                       className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
@@ -2250,6 +2350,102 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Migration Panel */}
+      {/* Payment Edit Modal */}
+      {showPaymentEdit && isAdmin && (
+        <div className="fixed inset-0 z-[2100] bg-slate-900/80 backdrop-blur-md flex items-end justify-center">
+          <div className="w-full max-w-lg bg-slate-900 rounded-t-[3.5rem] p-8 pb-12 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-black text-white">Editar Formas de Pago</h2>
+              <button onClick={() => setShowPaymentEdit(false)} className="p-2 rounded-full hover:bg-slate-800">
+                <X className="w-6 h-6 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Región/Banco (Header)</label>
+                <input
+                  type="text"
+                  value={paymentDetails.bankRegion}
+                  onChange={(e) => setPaymentDetails({ ...paymentDetails, bankRegion: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
+                  placeholder="Ej: Pichincha (Ecuador)"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Nombre del Banco</label>
+                  <input
+                    type="text"
+                    value={paymentDetails.bankName}
+                    onChange={(e) => setPaymentDetails({ ...paymentDetails, bankName: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Tipo de Cuenta</label>
+                  <input
+                    type="text"
+                    value={paymentDetails.accountType}
+                    onChange={(e) => setPaymentDetails({ ...paymentDetails, accountType: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Número de Cuenta</label>
+                <input
+                  type="text"
+                  value={paymentDetails.accountNumber}
+                  onChange={(e) => setPaymentDetails({ ...paymentDetails, accountNumber: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Titular de la Cuenta</label>
+                <input
+                  type="text"
+                  value={paymentDetails.accountOwner}
+                  onChange={(e) => setPaymentDetails({ ...paymentDetails, accountOwner: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">ID / RUC</label>
+                <input
+                  type="text"
+                  value={paymentDetails.idNumber}
+                  onChange={(e) => setPaymentDetails({ ...paymentDetails, idNumber: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">WhatsApp de Contacto (incluir código país)</label>
+                <input
+                  type="text"
+                  value={paymentDetails.whatsappNumber}
+                  onChange={(e) => setPaymentDetails({ ...paymentDetails, whatsappNumber: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
+                  placeholder="Ej: 593980000000"
+                />
+              </div>
+
+              <button
+                onClick={handleUpdatePaymentDetails}
+                className="w-full bg-sky-500 text-white font-black py-4 rounded-2xl hover:bg-sky-600 transition"
+              >
+                Guardar Cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showMigrationPanel && (
         <MigrationPanel onClose={() => setShowMigrationPanel(false)} />
       )}
