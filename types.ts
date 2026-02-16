@@ -16,6 +16,12 @@ export enum Vibe {
   FIESTA = 'Fiesta'
 }
 
+export enum SubscriptionPlan {
+  VISITOR = 'Visitor',
+  BASIC = 'Básico',
+  PREMIUM = 'Premium'
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -23,7 +29,8 @@ export interface UserProfile {
   preferredVibe: Vibe;
   role: 'visitor' | 'host' | 'admin';
   avatarUrl?: string;
-  businessId?: string; // Optional: Links a host user to their business
+  businessId?: string;
+  plan: SubscriptionPlan;
 }
 
 export interface Business {
@@ -31,12 +38,15 @@ export interface Business {
   name: string;
   sector: Sector;
   description: string;
-  icon?: string; // Icon name or SVG path
+  icon?: string;
   isVerified: boolean;
-  coordinates: [number, number]; // [lat, lng]
+  coordinates: [number, number];
   imageUrl: string;
-  whatsapp?: string; // WhatsApp number
-  phone?: string; // Phone number
+  whatsapp?: string;
+  phone?: string;
+  plan: SubscriptionPlan;
+  monthlyEventCount?: number;
+  lastResetDate?: string; // To track when the monthly count should reset
 }
 
 export interface MontanitaEvent {
@@ -53,4 +63,4 @@ export interface MontanitaEvent {
   interestedCount: number;
 }
 
-export type ViewType = 'explore' | 'calendar' | 'favorites' | 'host' | 'history' | 'all-favorites';
+export type ViewType = 'explore' | 'calendar' | 'favorites' | 'host' | 'history' | 'all-favorites' | 'plans';

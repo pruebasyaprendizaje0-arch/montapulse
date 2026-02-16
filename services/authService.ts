@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase.config';
 import { createUser } from './firestoreService';
-import { Vibe } from '../types';
+import { Vibe, SubscriptionPlan } from '../types';
 
 // Super admin email - ONLY this email has full admin access
 const SUPER_ADMIN_EMAIL = 'pruebasyaprendizaje0@gmail.com';
@@ -63,6 +63,7 @@ export const registerWithEmail = async (
             role,
             preferredVibe: Vibe.RELAX,
             avatarUrl: avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0ea5e9&color=fff&size=200`,
+            plan: SubscriptionPlan.VISITOR
         });
 
         return result.user;

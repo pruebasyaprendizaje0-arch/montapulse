@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, MessageCircle, Phone } from 'lucide-react';
+import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, MessageCircle, Phone, CreditCard, Banknote } from 'lucide-react';
 import { MapView } from './components/MapView.tsx';
 import { EventCard } from './components/EventCard.tsx';
 import { MigrationPanel } from './components/MigrationPanel.tsx';
 import { LoginScreen } from './components/LoginScreen.tsx';
-import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business } from './types.ts';
-import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS } from './constants.ts';
+import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan } from './types.ts';
+import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES } from './constants.ts';
 import { getSmartRecommendations, generateEventDescription } from './services/geminiService.ts';
 import { useAuth } from './hooks/useAuth.ts';
 // Imports cleaned up
@@ -98,7 +98,12 @@ const Dashboard: React.FC = () => {
   }, [journeyCards]);
 
   const [selectedSector, setSelectedSector] = useState<Sector | null>(null);
+  const [activeFilter, setActiveFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<MontanitaEvent | null>(null);
+  const [isEditorFocus, setIsEditorFocus] = useState(false);
+  const [isPanelMinimized, setIsPanelMinimized] = useState(false);
+
   const [aiRecData, setAiRecData] = useState<{ text: string, sources: any[] } | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [showHostWizard, setShowHostWizard] = useState(false);
@@ -108,6 +113,16 @@ const Dashboard: React.FC = () => {
   const [showMigrationPanel, setShowMigrationPanel] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<Record<string, boolean>>({});
   const [agendaRange, setAgendaRange] = useState<'day' | 'week' | 'month'>('day');
+
+  // Force map update on view change - catching mobile UI settling
+  React.useEffect(() => {
+    if (activeView === 'explore') {
+      const refresh = () => {
+        window.dispatchEvent(new Event('resize'));
+      };
+      [10, 150, 400, 800, 1500].forEach(delay => setTimeout(refresh, delay));
+    }
+  }, [activeView]);
 
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
@@ -173,7 +188,8 @@ const Dashboard: React.FC = () => {
             email: authUser.email || '',
             role: defaultRole, // Will be 'visitor' for most new Google logins
             preferredVibe: Vibe.RELAX,
-            avatarUrl: authUser.photoURL || undefined
+            avatarUrl: authUser.photoURL || undefined,
+            plan: defaultRole === 'admin' ? SubscriptionPlan.PREMIUM : SubscriptionPlan.VISITOR
           };
 
           // Set local state
@@ -186,8 +202,6 @@ const Dashboard: React.FC = () => {
 
     syncUserProfile();
   }, [authUser, isAdmin, userRole]);
-  const [isEditorFocus, setIsEditorFocus] = useState(false);
-  const [isPanelMinimized, setIsPanelMinimized] = useState(false);
   const [regForm, setRegForm] = useState({ name: '', email: '', vibe: Vibe.RELAX, role: 'visitor' as 'visitor' | 'host' });
   const [bizForm, setBizForm] = useState({
     name: '',
@@ -207,7 +221,10 @@ const Dashboard: React.FC = () => {
       description: 'Nuevo punto añadido por Administrador',
       isVerified: true,
       coordinates: [lat, lng],
-      imageUrl: 'https://images.unsplash.com/photo-1574672280600-4accfa5b6f98?auto=format&fit=crop&q=80&w=400'
+      imageUrl: 'https://images.unsplash.com/photo-1574672280600-4accfa5b6f98?auto=format&fit=crop&q=80&w=400',
+      plan: SubscriptionPlan.BASIC,
+      monthlyEventCount: 0,
+      lastResetDate: new Date().toISOString()
     };
     await createBusiness(newBiz);
   };
@@ -256,8 +273,6 @@ const Dashboard: React.FC = () => {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [generatedDesc, setGeneratedDesc] = useState('');
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('All');
 
   const filteredEvents = useMemo(() => {
     return events.filter(e => {
@@ -265,7 +280,7 @@ const Dashboard: React.FC = () => {
       const matchesSearch = e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         e.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesFilter = activeFilter === 'All' || e.vibe === activeFilter || e.category === activeFilter;
-      const isActive = new Date() <= e.endAt;
+      const isActive = new Date() <= new Date(e.endAt); // Ensure comparison with Date object
       return matchesSector && matchesSearch && matchesFilter && isActive;
     });
   }, [selectedSector, events, searchQuery, activeFilter]);
@@ -273,6 +288,42 @@ const Dashboard: React.FC = () => {
   const favoritedEvents = useMemo(() => {
     return events.filter(e => favorites.includes(e.id));
   }, [favorites, events]);
+
+  const currentMonthEventsCount = useMemo(() => {
+    if (!user?.businessId) return 0;
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    return events.filter(e => {
+      const isMyEvent = e.businessId === user.businessId;
+      const eStart = new Date(e.startAt);
+      return isMyEvent && eStart >= startOfMonth;
+    }).length;
+  }, [events, user?.businessId]);
+
+  const handleUpdatePlan = async (targetPlan: SubscriptionPlan) => {
+    if (!user) return;
+
+    if (targetPlan === SubscriptionPlan.PREMIUM) {
+      const confirmUpgrade = confirm("Para activar el Plan Premium ($10), por favor asegúrate de haber realizado la transferencia bancaria y enviado el comprobante. ¿Confirmar solicitud de activación?");
+      if (!confirmUpgrade) return;
+    }
+
+    try {
+      const updatedUser = { ...user, plan: targetPlan };
+      await updateUser(user.id, { plan: targetPlan });
+
+      if (user.businessId) {
+        await updateBusiness(user.businessId, { plan: targetPlan });
+      }
+
+      setUser(updatedUser);
+      alert(`¡Solicitud procesada! Tu plan se ha actualizado a ${targetPlan}.`);
+      setActiveView('host');
+    } catch (error) {
+      console.error("Error updating plan:", error);
+      alert("Error al actualizar el plan.");
+    }
+  };
 
   const handleAiAsk = async () => {
     setIsAiLoading(true);
@@ -297,7 +348,8 @@ const Dashboard: React.FC = () => {
       email: regForm.email,
       preferredVibe: regForm.vibe,
       role: 'visitor',
-      avatarUrl: authUser.photoURL || `https://i.pravatar.cc/150?u=${regForm.email}`
+      avatarUrl: authUser.photoURL || `https://i.pravatar.cc/150?u=${regForm.email}`,
+      plan: SubscriptionPlan.VISITOR
     };
 
     try {
@@ -306,7 +358,8 @@ const Dashboard: React.FC = () => {
         email: newUser.email,
         preferredVibe: newUser.preferredVibe,
         role: newUser.role,
-        avatarUrl: newUser.avatarUrl
+        avatarUrl: newUser.avatarUrl || null,
+        plan: newUser.plan
       });
       setUser(newUser);
     } catch (error) {
@@ -330,7 +383,10 @@ const Dashboard: React.FC = () => {
         whatsapp: bizForm.whatsapp,
         phone: bizForm.phone,
         isVerified: false,
-        coordinates: [-1.8253, -80.7523] as [number, number] // Default coords, user should update map
+        coordinates: [-1.8253, -80.7523] as [number, number],
+        plan: SubscriptionPlan.BASIC,
+        monthlyEventCount: 0,
+        lastResetDate: new Date().toISOString()
       };
 
       const newBusinessId = await createBusiness(businessData);
@@ -343,7 +399,8 @@ const Dashboard: React.FC = () => {
         preferredVibe: user?.preferredVibe || Vibe.RELAX,
         role: 'host',
         avatarUrl: user?.avatarUrl || authUser.photoURL || undefined,
-        businessId: newBusinessId
+        businessId: newBusinessId,
+        plan: SubscriptionPlan.BASIC
       };
 
       await updateUser(authUser.uid, {
@@ -485,7 +542,8 @@ const Dashboard: React.FC = () => {
         preferredVibe: user.preferredVibe,
         avatarUrl: user.avatarUrl || null,
         role: user.role,
-        businessId: user.businessId || null
+        businessId: user.businessId || null,
+        plan: user.plan || SubscriptionPlan.VISITOR
       });
 
       // 2. Update Firebase Auth Profile (Session / Cache)
@@ -527,6 +585,26 @@ const Dashboard: React.FC = () => {
 
 
   const handleSaveEvent = async () => {
+    // Validate limits
+    if (!editingEventId && user?.role === 'host') {
+      const plan = user.plan || SubscriptionPlan.BASIC;
+      const limit = PLAN_LIMITS[plan] || 2;
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthlyEvents = events.filter(e =>
+        e.businessId === user.businessId &&
+        new Date(e.startAt) >= startOfMonth
+      ).length;
+
+      if (monthlyEvents >= limit) {
+        alert(`Has alcanzado el límite de tu plan ${plan} (${limit} eventos por mes). Mejora a Premium para crear hasta 20.`);
+        setActiveView('plans');
+        setShowHostWizard(false);
+        return;
+      }
+    }
+
     const eventInput = {
       title: newEvent.title || 'Evento sin nombre',
       description: generatedDesc || 'Un evento increíble en Montañita.',
@@ -597,8 +675,8 @@ const Dashboard: React.FC = () => {
     switch (activeView) {
       case 'explore':
         return (
-          <div className="h-full relative flex flex-col bg-[#020617]">
-            <div className="flex-1 min-h-[45vh]">
+          <div className="h-full relative flex flex-col bg-[#020617] overflow-hidden">
+            <div className="flex-1 relative h-full min-h-0">
               <MapView
                 onBusinessSelect={(b) => {
                   setSearchQuery(b.name);
@@ -619,6 +697,7 @@ const Dashboard: React.FC = () => {
                 }}
                 businesses={businesses}
                 sectorPolygons={sectorPolygons}
+                sectorLabels={sectorLabels}
                 isEditorFocus={isEditorFocus}
                 onToggleEditorFocus={() => setIsEditorFocus(!isEditorFocus)}
                 isPanelMinimized={isPanelMinimized}
@@ -1262,12 +1341,61 @@ const Dashboard: React.FC = () => {
                   <span className="text-xs text-slate-400 font-medium">Sector: {userBusiness?.sector || bizForm.sector}, Montañita</span>
                 </div>
                 <button
-                  onClick={() => setActiveView('favorites')}
-                  className="mt-2 text-[10px] font-bold text-sky-400 bg-sky-500/10 px-3 py-1 rounded-full border border-sky-500/20"
+                  onClick={() => setActiveView('plans')}
+                  className={`mt-2 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border transition-all ${user?.plan === SubscriptionPlan.PREMIUM
+                    ? 'bg-amber-500/20 text-amber-500 border-amber-500/30'
+                    : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                    }`}
                 >
-                  Premium Partner
+                  Plan {user?.plan || SubscriptionPlan.BASIC}
                 </button>
               </div>
+            </div>
+
+            {/* Subscription Progress Card */}
+            <div className={`p-6 rounded-[2.5rem] border transition-all relative overflow-hidden ${user?.plan === SubscriptionPlan.PREMIUM
+              ? 'bg-amber-500/5 border-amber-500/10'
+              : 'bg-slate-900/40 border-white/5'
+              }`}>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl ${user?.plan === SubscriptionPlan.PREMIUM ? 'bg-amber-500 text-black' : 'bg-sky-500 text-white'}`}>
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white">Eventos del Mes</h4>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                      {currentMonthEventsCount} publicados de {PLAN_LIMITS[user?.plan || SubscriptionPlan.BASIC]}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className={`text-xl font-black ${(PLAN_LIMITS[user?.plan || SubscriptionPlan.BASIC] - currentMonthEventsCount) <= 0
+                    ? 'text-rose-500'
+                    : 'text-white'
+                    }`}>
+                    {Math.max(0, (PLAN_LIMITS[user?.plan || SubscriptionPlan.BASIC] || 0) - currentMonthEventsCount)}
+                  </span>
+                  <p className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">Quedan</p>
+                </div>
+              </div>
+              <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-1000 ease-out ${currentMonthEventsCount >= (PLAN_LIMITS[user?.plan || SubscriptionPlan.BASIC])
+                    ? 'bg-rose-500'
+                    : (user?.plan === SubscriptionPlan.PREMIUM ? 'bg-amber-500' : 'bg-sky-500')
+                    }`}
+                  style={{ width: `${Math.min(100, (currentMonthEventsCount / (PLAN_LIMITS[user?.plan || SubscriptionPlan.BASIC] || 2)) * 100)}%` }}
+                />
+              </div>
+              {user?.plan !== SubscriptionPlan.PREMIUM && (
+                <button
+                  onClick={() => setActiveView('plans')}
+                  className="mt-4 w-full py-2 bg-white/5 hover:bg-white/10 text-[10px] text-slate-300 font-bold rounded-xl border border-white/5 transition-colors uppercase tracking-widest"
+                >
+                  Aumentar Límite a 20
+                </button>
+              )}
             </div>
 
             {/* Stats Grid */}
@@ -1289,6 +1417,7 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
             </div>
+
 
             {/* Profile Completion */}
             <div className="bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 space-y-3">
@@ -1422,6 +1551,172 @@ const Dashboard: React.FC = () => {
           </div>
         );
 
+      case 'plans':
+        return (
+          <div className="p-6 pt-20 flex flex-col gap-8 h-full overflow-y-auto pb-24 no-scrollbar bg-[#020617]">
+            <div className="flex items-center gap-4">
+              <button onClick={() => setActiveView('host')} className="p-2 -ml-2 rounded-full hover:bg-slate-800 transition-colors">
+                <ChevronLeft className="w-6 h-6 text-white" />
+              </button>
+              <h1 className="text-3xl font-black text-white tracking-tighter uppercase italic">Membresía <span className="text-sky-500">Pulse.</span></h1>
+            </div>
+
+            <div className="bg-gradient-to-br from-sky-500/10 to-rose-500/10 border border-white/5 p-6 rounded-[2rem]">
+              <p className="text-slate-300 text-sm leading-relaxed font-medium">Lleva tu negocio al siguiente nivel. Elige el plan que mejor se adapte al ritmo de tus eventos.</p>
+            </div>
+
+            <div className="space-y-6">
+              <div className={`p-8 rounded-[2.5rem] border-2 transition-all duration-500 ${user?.plan === SubscriptionPlan.BASIC ? 'border-sky-500 bg-sky-500/5 shadow-2xl shadow-sky-500/10' : 'border-white/5 bg-slate-900/40'}`}>
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h3 className="text-2xl font-black text-white italic uppercase">BÁSICO</h3>
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <p className="text-3xl font-black text-white">GRATIS</p>
+                      <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Siempre</p>
+                    </div>
+                  </div>
+                  {user?.plan === SubscriptionPlan.BASIC && (
+                    <div className="bg-sky-500 p-2 rounded-xl text-white">
+                      <CheckCircle className="w-5 h-5" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-4 mb-10">
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center group-hover:bg-sky-500/20 transition-colors">
+                      <Calendar className="w-5 h-5 text-sky-400" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-300">2 Eventos / Mes</span>
+                  </div>
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center group-hover:bg-sky-500/20 transition-colors">
+                      <MapPin className="w-5 h-5 text-sky-400" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-300">Presencia en el Mapa</span>
+                  </div>
+                  <div className="flex items-center gap-4 opacity-40">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center">
+                      <Sparkles className="w-5 h-5 text-slate-500" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-500 line-through">Destacado Semanal</span>
+                  </div>
+                </div>
+                <button
+                  disabled={user?.plan === SubscriptionPlan.BASIC}
+                  onClick={() => handleUpdatePlan(SubscriptionPlan.BASIC)}
+                  className={`w-full py-5 rounded-[1.5rem] font-black text-sm uppercase tracking-widest transition-all ${user?.plan === SubscriptionPlan.BASIC ? 'bg-slate-800 text-slate-600 cursor-default' : 'bg-white text-black hover:scale-[1.02]'}`}
+                >
+                  {user?.plan === SubscriptionPlan.BASIC ? 'PLAN ACTUAL' : 'SELECCIONAR'}
+                </button>
+              </div>
+
+              <div className={`p-8 rounded-[2.5rem] border-2 transition-all duration-500 relative overflow-hidden ${user?.plan === SubscriptionPlan.PREMIUM ? 'border-rose-500 bg-rose-500/5 shadow-2xl shadow-rose-500/10' : 'border-rose-500/30 bg-slate-900/40'}`}>
+                <div className="absolute top-4 -right-8 bg-rose-500 text-white text-[10px] font-black px-10 py-1.5 transform rotate-45 uppercase tracking-widest shadow-lg">Premium</div>
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h3 className="text-2xl font-black text-white italic uppercase">PREMIUM</h3>
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <p className="text-3xl font-black text-white">$10</p>
+                      <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">/ por mes</p>
+                    </div>
+                  </div>
+                  {user?.plan === SubscriptionPlan.PREMIUM && (
+                    <div className="bg-rose-500 p-2 rounded-xl text-white">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-4 mb-10">
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center">
+                      <Zap className="w-5 h-5 text-rose-500" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-200">20 Eventos / Mes</span>
+                  </div>
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center">
+                      <Sparkles className="w-5 h-5 text-rose-500" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-200">Eventos Destacados</span>
+                  </div>
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center">
+                      <MessageCircle className="w-5 h-5 text-rose-500" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-200">Soporte VIP 24/7</span>
+                  </div>
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center">
+                      <Navigation className="w-5 h-5 text-rose-500" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-200">Análisis del Pulso</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleUpdatePlan(SubscriptionPlan.PREMIUM)}
+                  className={`w-full py-5 rounded-[1.5rem] font-black text-sm uppercase tracking-widest transition-all ${user?.plan === SubscriptionPlan.PREMIUM ? 'bg-slate-800 text-slate-600 cursor-default' : 'bg-gradient-to-r from-rose-500 to-orange-500 text-white hover:scale-[1.02] shadow-xl shadow-rose-500/20'}`}
+                >
+                  {user?.plan === SubscriptionPlan.PREMIUM ? 'PLAN ACTUAL' : 'MEJORAR A PREMIUM'}
+                </button>
+              </div>
+            </div>
+
+            {/* Payment Methods Section */}
+            <div className="mt-12 bg-slate-900/60 border border-white/5 rounded-[2.5rem] p-8 space-y-6">
+              <h4 className="text-xl font-black text-white italic uppercase flex items-center gap-3">
+                <CreditCard className="w-6 h-6 text-sky-500" />
+                Métodos de Pago
+              </h4>
+
+              <p className="text-sm text-slate-400 font-medium">Puedes realizar el pago mediante transferencia bancaria o depósito. Una vez realizado, envía el comprobante a nuestro equipo para la activación inmediata.</p>
+
+              <div className="space-y-4">
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Banknote className="w-4 h-4 text-sky-500" />
+                    <p className="text-[10px] font-black text-sky-500 uppercase tracking-widest">Pichincha (Ecuador)</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-y-2">
+                    <span className="text-xs text-slate-500">Banco:</span>
+                    <span className="text-xs font-bold text-white text-right">Banco Pichincha</span>
+                    <span className="text-xs text-slate-500">Tipo:</span>
+                    <span className="text-xs font-bold text-white text-right">Cuenta de Ahorros</span>
+                    <span className="text-xs text-slate-500">Número:</span>
+                    <span className="text-xs font-bold text-white text-right">2201938384</span>
+                    <span className="text-xs text-slate-500">Titular:</span>
+                    <span className="text-xs font-bold text-white text-right">Montapulse S.A.</span>
+                    <span className="text-xs text-slate-500">ID/RUC:</span>
+                    <span className="text-xs font-bold text-white text-right">1792938485001</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <a
+                  href="mailto:contacto@montapulse.com?subject=Comprobante de Pago - Plan Premium"
+                  className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-black rounded-2xl flex items-center justify-center gap-3 transition-all border border-white/5"
+                >
+                  <Mail className="w-5 h-5 text-sky-500" />
+                  ENVIAR POR CORREO
+                </a>
+                <a
+                  href="https://wa.me/593980000000?text=Hola,%20adjunto%20mi%20comprobante%20de%20pago%20para%20el%20Plan%20Premium."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-4 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 font-black rounded-2xl border border-emerald-500/30 flex items-center justify-center gap-3 transition-all"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  WHATSAPP DIRECTO
+                </a>
+              </div>
+
+              <p className="text-[10px] text-center text-slate-600 font-bold uppercase tracking-tighter">
+                Activación en <span className="text-slate-400">menos de 2 horas</span> tras verificar el depósito
+              </p>
+            </div>
+          </div>
+        );
+
       case 'all-favorites':
         return (
           <div className="p-6 pt-20 flex flex-col gap-6 h-full overflow-y-auto pb-24 no-scrollbar bg-[#020617]">
@@ -1455,7 +1750,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="relative h-screen w-screen bg-slate-900 overflow-hidden flex flex-col font-sans select-none">
+    <div className="relative h-[100dvh] w-screen bg-slate-900 overflow-hidden flex flex-col font-sans select-none">
       <div className="fixed top-0 left-0 right-0 z-50 bg-slate-900/60 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-6">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-rose-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-rose-500/20 rotate-3">

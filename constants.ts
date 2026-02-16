@@ -1,5 +1,5 @@
 
-import { Sector, Vibe, Business, MontanitaEvent } from './types';
+import { Sector, Vibe, Business, MontanitaEvent, SubscriptionPlan } from './types';
 
 export const SECTOR_INFO = {
   [Sector.PLAYA]: {
@@ -84,7 +84,8 @@ export const MOCK_BUSINESSES: Business[] = [
     icon: 'palmtree',
     isVerified: true,
     coordinates: [-1.8282, -80.7570],
-    imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=400'
+    imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=400',
+    plan: SubscriptionPlan.BASIC
   },
   {
     id: 'ref-centro',
@@ -94,7 +95,8 @@ export const MOCK_BUSINESSES: Business[] = [
     icon: 'music',
     isVerified: true,
     coordinates: [-1.8270, -80.7535],
-    imageUrl: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&q=80&w=400'
+    imageUrl: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&q=80&w=400',
+    plan: SubscriptionPlan.BASIC
   },
   {
     id: 'ref-tigrillo',
@@ -104,7 +106,8 @@ export const MOCK_BUSINESSES: Business[] = [
     icon: 'mountain',
     isVerified: true,
     coordinates: [-1.8305, -80.7490],
-    imageUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=400'
+    imageUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=400',
+    plan: SubscriptionPlan.BASIC
   },
   {
     id: 'ref-punta',
@@ -114,7 +117,8 @@ export const MOCK_BUSINESSES: Business[] = [
     icon: 'waves',
     isVerified: true,
     coordinates: [-1.8210, -80.7585],
-    imageUrl: 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&q=80&w=400'
+    imageUrl: 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&q=80&w=400',
+    plan: SubscriptionPlan.BASIC
   },
   {
     id: 'ref-montana',
@@ -124,7 +128,8 @@ export const MOCK_BUSINESSES: Business[] = [
     icon: 'leaf',
     isVerified: true,
     coordinates: [-1.8195, -80.7470],
-    imageUrl: 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&q=80&w=400'
+    imageUrl: 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&q=80&w=400',
+    plan: SubscriptionPlan.BASIC
   },
   {
     id: 'ref-iglesia',
@@ -134,7 +139,8 @@ export const MOCK_BUSINESSES: Business[] = [
     icon: 'church',
     isVerified: true,
     coordinates: [-1.8278, -80.7540],
-    imageUrl: 'https://images.unsplash.com/photo-1548625361-195fd01a35fe?auto=format&fit=crop&q=80&w=400'
+    imageUrl: 'https://images.unsplash.com/photo-1548625361-195fd01a35fe?auto=format&fit=crop&q=80&w=400',
+    plan: SubscriptionPlan.BASIC
   },
   {
     id: 'ref-clp',
@@ -144,7 +150,8 @@ export const MOCK_BUSINESSES: Business[] = [
     icon: 'bus',
     isVerified: true,
     coordinates: [-1.8290, -80.7530],
-    imageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=400'
+    imageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=400',
+    plan: SubscriptionPlan.BASIC
   },
   {
     id: 'ref-escuela-surf',
@@ -154,7 +161,8 @@ export const MOCK_BUSINESSES: Business[] = [
     icon: 'surf',
     isVerified: true,
     coordinates: [-1.8215, -80.7590],
-    imageUrl: 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&q=80&w=400'
+    imageUrl: 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&q=80&w=400',
+    plan: SubscriptionPlan.BASIC
   },
   {
     id: 'ref-parada-comida',
@@ -164,7 +172,8 @@ export const MOCK_BUSINESSES: Business[] = [
     icon: 'food',
     isVerified: true,
     coordinates: [-1.8285, -80.7560],
-    imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=400'
+    imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=400',
+    plan: SubscriptionPlan.BASIC
   }
 ];
 
@@ -216,3 +225,14 @@ export const MOCK_EVENTS: MontanitaEvent[] = [
     interestedCount: 22
   }
 ];
+export const PLAN_LIMITS = {
+  [SubscriptionPlan.BASIC]: 2,
+  [SubscriptionPlan.PREMIUM]: 20,
+  [SubscriptionPlan.VISITOR]: 0
+};
+
+export const PLAN_PRICES = {
+  [SubscriptionPlan.BASIC]: 0,
+  [SubscriptionPlan.PREMIUM]: 10,
+  [SubscriptionPlan.VISITOR]: 0
+};

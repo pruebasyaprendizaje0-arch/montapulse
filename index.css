@@ -120,6 +120,15 @@ body {
 /* Leaflet Overrides */
 .leaflet-container {
     background-color: var(--bg-darker) !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 1;
+    min-height: 200px;
+    /* Prevent collapse */
+}
+
+.custom-marker {
+    z-index: 1000 !important;
 }
 
 .leaflet-control-zoom {
