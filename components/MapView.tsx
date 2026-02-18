@@ -1,15 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Search, SlidersHorizontal, Navigation, Layers, Plus, Minus, X, Clock, CheckCircle, Edit3, Settings, Trash2, MapPin } from 'lucide-react';
+import { Search, SlidersHorizontal, Navigation, Layers, Plus, Minus, X, Clock, CheckCircle, Edit3, Settings, Trash2, MapPin, Zap } from 'lucide-react';
 import { Business, Sector, Vibe } from '../types.ts';
-import { SECTOR_INFO } from '../constants.ts';
+import { SECTOR_INFO, LOCALITIES, MAP_ICONS } from '../constants.ts';
 
 const FLOATING_LEMAS = {
   [Sector.PLAYA]: "Diversión al Sol • Sports & Vibe",
   [Sector.CENTRO]: "Calle de los Cócteles • 24/7",
   [Sector.TIGRILLO]: "Eco-Chill & Paisajes",
   [Sector.LA_PUNTA]: "Surf & Sunset Vibes",
-  [Sector.MONTANA]: "Vistas Épicas & Aventura"
+  [Sector.MONTANA]: "Vistas Épicas & Aventura",
+  [Sector.OLON]: "Gastronomía & Relax Familiar",
+  [Sector.MANGLARALTO]: "Manglares & Tradición"
 };
 
 interface MapViewProps {
@@ -34,6 +36,10 @@ interface MapViewProps {
   onTogglePanel?: () => void;
   hideUI?: boolean;
   sectorLabels?: Record<string, string>;
+  mapCenter?: [number, number] | null;
+  localityName?: string;
+  onLocalityChange?: (name: string) => void;
+  onResetFilters?: () => void;
 }
 
 export const MapView: React.FC<MapViewProps> = ({
@@ -54,7 +60,13 @@ export const MapView: React.FC<MapViewProps> = ({
   isEditorFocus,
   isPanelMinimized,
   hideUI,
-  sectorLabels
+  sectorLabels,
+  mapCenter,
+  onLocalityChange,
+  onResetFilters,
+  onTogglePanel,
+  onToggleEditorFocus,
+  localityName = 'Montañita'
 }: MapViewProps) => {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -154,27 +166,29 @@ export const MapView: React.FC<MapViewProps> = ({
     // Render Markers
     businesses.forEach(business => {
       const isRef = business.id.startsWith('ref-');
+      const matchesLocality = business.locality === localityName;
       const matchesSector = !selectedSector || business.sector === selectedSector;
       const matchesSearch = business.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         business.description.toLowerCase().includes(searchQuery.toLowerCase());
 
-      if (!isRef && (!matchesSector || !matchesSearch)) return;
+      if (!isRef && (!matchesLocality || !matchesSector || !matchesSearch)) return;
+      if (isRef && !matchesLocality) return;
       if (!business.coordinates || business.coordinates.some(isNaN)) return;
 
       const info = SECTOR_INFO[business.sector] || SECTOR_INFO[Sector.CENTRO];
       const vibeClass = activeFilter === 'Party' ? 'vibe-party' :
         activeFilter === 'Relax' ? 'vibe-relax' : 'vibe-default';
 
-      const ICON_MAP: Record<string, string> = {
-        'palmtree': '🏖️', 'music': '🍹', 'leaf': '🌿', 'waves': '🏄‍♂️',
-        'mountain': '⛰️', 'surf': '🏄', 'hotel': '🏨', 'food': '🍕',
-        'church': '⛪', 'bus': '🚌'
-      };
-      const displayIcon = business.icon ? ICON_MAP[business.icon] || '📍' : '📍';
+      const displayIcon = MAP_ICONS.find(i => i.id === business.icon)?.emoji || '📍';
 
       const customIcon = L.divIcon({
         className: 'custom-marker',
         html: `<div class="relative group">
+                 <div class="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 bg-slate-900/90 backdrop-blur-md border border-white/20 rounded-lg text-[10px] font-black text-white whitespace-nowrap opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none shadow-xl z-[1001]">
+                   ${business.name}
+                   <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r border-b border-white/20 rotate-45"></div>
+                 </div>
+
                  <div class="w-12 h-12 rounded-full border-2 border-white/40 bg-slate-900/80 flex items-center justify-center shadow-[0_0_20px_${info.hex}66] backdrop-blur-md transform transition-all duration-300 group-hover:scale-125 group-hover:border-white ${vibeClass}">
                    <span class="text-xl drop-shadow-lg">${displayIcon}</span>
                    <div class="absolute -bottom-1 w-2 h-2 rounded-full border border-white/20" style="background-color: ${info.hex}"></div>
@@ -208,7 +222,6 @@ export const MapView: React.FC<MapViewProps> = ({
       });
     });
 
-    // Fly to sector or center
     if (selectedSector) {
       const coords = sectorPolygons[selectedSector];
       if (coords && coords.length > 0) {
@@ -217,9 +230,11 @@ export const MapView: React.FC<MapViewProps> = ({
           map.flyToBounds(bounds, { padding: [50, 50], duration: 1.2 });
         }
       }
+    } else if (mapCenter) {
+      map.flyTo(mapCenter, 15, { duration: 1.2 });
     }
 
-  }, [businesses, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, editingSector, tempCoords]);
+  }, [businesses, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, editingSector, tempCoords, mapCenter, localityName]);
 
   // 4. Handle Map Events (Click, Mousemove)
   useEffect(() => {
@@ -309,8 +324,28 @@ export const MapView: React.FC<MapViewProps> = ({
   return (
     <div ref={containerRef} className="w-full h-full relative bg-[#020617] overflow-hidden">
       {/* Map UI Overlay */}
-      <div className="absolute inset-x-0 top-0 z-[1000] p-4 pointer-events-none">
-        <div className="max-w-xl mx-auto space-y-3">
+      <div className="absolute inset-x-0 top-20 z-[1000] p-4 pointer-events-none">
+        <div className="max-w-xl mx-auto space-y-6">
+          {/* Locality Selector */}
+          {!hideUI && (
+            <div className="flex justify-center">
+              <div className="bg-slate-900/90 backdrop-blur-2xl border border-white/10 rounded-full p-1.5 flex items-center shadow-2xl ring-1 ring-white/5 pointer-events-auto">
+                {LOCALITIES.map((loc) => (
+                  <button
+                    key={loc.name}
+                    onClick={() => onLocalityChange?.(loc.name)}
+                    className={`px-6 py-2 rounded-full text-[11px] font-black uppercase tracking-[0.15em] transition-all duration-300 ${localityName === loc.name
+                      ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/40 transform scale-105 active:scale-95'
+                      : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                  >
+                    {loc.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Search Bar */}
           {!hideUI && (
             <div className="flex gap-2 pointer-events-auto">
@@ -382,35 +417,51 @@ export const MapView: React.FC<MapViewProps> = ({
         </div>
       )}
 
-      {/* Floating Sector Indicators */}
-      {!hideUI && !editingSector && (
-        <div className="absolute inset-0 pointer-events-none z-[500]">
-          {Object.entries(sectorPolygons).map(([sector, coords]) => {
-            const info = SECTOR_INFO[sector as Sector];
-            const coordsArray = coords as [number, number][];
-            if (!info || !coordsArray || coordsArray.length === 0) return null;
-
-            return (
-              <div
-                key={sector}
-                className="absolute transition-all duration-500 opacity-60 flex flex-col items-center"
-                style={{
-                  left: `${((coordsArray[0][1] + 80.765) / 0.02) * 100}%`,
-                  top: `${((coordsArray[0][0] + 1.835) / 0.02) * 100}%`
-                }}
-              >
-                <span className={`text-[8px] font-black uppercase tracking-[0.3em] ${info.color} bg-slate-950/40 px-2 py-0.5 rounded-full backdrop-blur-sm whitespace-nowrap pointer-events-auto`}>
-                  {sectorLabels?.[sector] || sector}
-                </span>
-                <p className="text-[6px] text-white/40 font-bold whitespace-nowrap">{FLOATING_LEMAS[sector as Sector]}</p>
-              </div>
-            );
-          })}
+      {/* Floating Pulse of Today Reset - Visible ONLY in Full Screen Map Mode */}
+      {isEditorFocus && (
+        <div className="absolute bottom-52 left-1/2 -translate-x-1/2 z-[1000] animate-in slide-in-from-bottom duration-500 pointer-events-none">
+          <button
+            onClick={() => onResetFilters?.()}
+            className="pointer-events-auto flex items-center gap-3 px-8 py-3.5 bg-rose-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(244,63,94,0.4)] hover:scale-105 active:scale-95 transition-all border-2 border-white/20 whitespace-nowrap"
+          >
+            <div className="relative">
+              <Zap className="w-4 h-4 fill-current" />
+              <div className="absolute inset-0 bg-white blur-md animate-pulse opacity-50"></div>
+            </div>
+            PULSE OF TODAY
+            {(selectedSector || activeFilter !== 'All' || searchQuery) && (
+              <X className="w-3.5 h-3.5 ml-1 opacity-60" />
+            )}
+          </button>
         </div>
       )}
 
+      {/* Floating Sector Indicators removed as per user request */}
+
       {/* Map Controls */}
       <div className="absolute right-4 bottom-24 z-[1000] flex flex-col gap-2">
+        {/* Restore Pulse Window Button */}
+        {(isPanelMinimized || isEditorFocus) && (
+          <button
+            onClick={() => {
+              if (isEditorFocus && onToggleEditorFocus) onToggleEditorFocus();
+              // Only toggle panel if it IS minimized. If it's already open (but hidden by focus), we don't flip it.
+              // Logic: If focus is ON, turn it OFF.
+              // If focus is OFF and panel is minimized, toggle it (to open).
+              // If focus is ON, panel might be minimized or not. We want to ensure it ends up OPEN.
+              // App 'onTogglePanel' blindly toggles. So we shouldn't just call it if we don't know state.
+              // But 'isPanelMinimized' tells us state.
+              if (isPanelMinimized && onTogglePanel) onTogglePanel();
+            }}
+            className="w-12 h-12 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-[0_4px_20px_rgba(244,63,94,0.4)] border border-white/20 hover:scale-110 active:scale-95 transition-all pointer-events-auto mb-2 relative group"
+            title="Restaurar Pulse of Today"
+          >
+            <Zap className="w-6 h-6 fill-white" />
+            <span className="absolute right-full mr-3 px-3 py-1 bg-slate-900/90 text-white text-[10px] font-bold uppercase rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+              Pulse of Today
+            </span>
+          </button>
+        )}
         <button onClick={zoomIn} className="w-12 h-12 rounded-2xl bg-slate-900/80 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl shadow-2xl hover:bg-slate-800 transition-all pointer-events-auto">
           <Plus className="w-5 h-5" />
         </button>

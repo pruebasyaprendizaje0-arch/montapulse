@@ -2,9 +2,11 @@
 export enum Sector {
   PLAYA = 'Playa',
   CENTRO = 'Centro',
-  TIGRILLO = 'Montaña',
+  TIGRILLO = 'El Tigrillo',
   LA_PUNTA = 'La Punta',
-  MONTANA = 'El Tigrillo'
+  MONTANA = 'Montaña',
+  OLON = 'Olón',
+  MANGLARALTO = 'Manglaralto'
 }
 
 export enum Vibe {
@@ -38,6 +40,7 @@ export interface Business {
   id: string;
   name: string;
   sector: Sector;
+  locality?: string;
   description: string;
   icon?: string;
   isVerified: boolean;
@@ -54,6 +57,7 @@ export interface MontanitaEvent {
   id: string;
   businessId: string;
   title: string;
+  locality?: string;
   description: string;
   startAt: Date;
   endAt: Date;

@@ -6,18 +6,24 @@ import { Skeleton } from './Skeleton.tsx';
 
 interface EventCardProps {
   event: MontanitaEvent;
+  locality?: string;
   onClick: (event: MontanitaEvent) => void;
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, locality, onClick }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const sectorStyle = SECTOR_INFO[event.sector] || SECTOR_INFO[Sector.CENTRO];
 
   const formatTimeRange = (startInput: Date | string) => {
-    const start = new Date(startInput);
-    if (isNaN(start.getTime())) return 'Time TBA';
-    const end = new Date(start.getTime() + 3 * 3600000); // Mock end 3h later
-    return `${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+    if (!startInput) return 'Time TBA';
+    try {
+      const start = new Date(startInput);
+      if (isNaN(start.getTime())) return 'Time TBA';
+      const end = new Date(start.getTime() + 3 * 3600000); // Mock end 3h later
+      return `${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+    } catch (e) {
+      return 'Time TBA';
+    }
   };
 
   return (
@@ -42,8 +48,9 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
           <div className="px-3 py-1 bg-amber-400 text-black text-[10px] font-black uppercase rounded-lg shadow-lg">
             {event.vibe === 'FIESTA' ? 'PARTY' : event.vibe}
           </div>
-          <div className="px-3 py-1 bg-white/20 backdrop-blur-md text-white text-[10px] font-bold uppercase rounded-lg border border-white/10">
-            {event.sector}
+          <div className="px-3 py-1 bg-white/20 backdrop-blur-md text-white text-[10px] font-bold uppercase rounded-lg border border-white/10 flex items-center gap-1">
+            <MapPin className="w-3 h-3 text-white/70" />
+            <span>{locality || 'Montañita'} • {event.sector}</span>
           </div>
         </div>
 

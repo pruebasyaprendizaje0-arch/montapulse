@@ -11,7 +11,8 @@ import {
     onSnapshot,
     serverTimestamp,
     Timestamp,
-    setDoc
+    setDoc,
+    increment
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { MontanitaEvent, Business, UserProfile } from '../types';
@@ -252,6 +253,63 @@ export const getUserFavorites = async (userId: string): Promise<string[]> => {
 export const subscribeToUserFavorites = (userId: string, callback: (eventIds: string[]) => void) => {
     const favoritesRef = collection(db, 'favorites');
     const q = query(favoritesRef, where('userId', '==', userId));
+
+    return onSnapshot(q, (snapshot) => {
+        const eventIds = snapshot.docs.map(doc => doc.data().eventId);
+        callback(eventIds);
+    });
+};
+
+// ==================== RSVPS ====================
+
+export const toggleRSVP = async (userId: string, eventId: string) => {
+    try {
+        const rsvpsRef = collection(db, 'rsvps');
+        const q = query(rsvpsRef, where('userId', '==', userId), where('eventId', '==', eventId));
+        const snapshot = await getDocs(q);
+
+        const eventRef = doc(db, 'events', eventId);
+
+        if (!snapshot.empty) {
+            // Already RSVP'd -> Remove
+            await deleteDoc(snapshot.docs[0].ref);
+            await updateDoc(eventRef, {
+                interestedCount: increment(-1)
+            });
+            return false; // Removed
+        } else {
+            // Not RSVP'd -> Add
+            await addDoc(rsvpsRef, {
+                userId,
+                eventId,
+                createdAt: serverTimestamp()
+            });
+            await updateDoc(eventRef, {
+                interestedCount: increment(1)
+            });
+            return true; // Added
+        }
+    } catch (error) {
+        console.error('Error toggling RSVP:', error);
+        throw error;
+    }
+};
+
+export const getUserRSVPs = async (userId: string): Promise<string[]> => {
+    try {
+        const rsvpsRef = collection(db, 'rsvps');
+        const q = query(rsvpsRef, where('userId', '==', userId));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => doc.data().eventId);
+    } catch (error) {
+        console.error('Error getting RSVPs:', error);
+        return [];
+    }
+};
+
+export const subscribeToUserRSVPs = (userId: string, callback: (eventIds: string[]) => void) => {
+    const rsvpsRef = collection(db, 'rsvps');
+    const q = query(rsvpsRef, where('userId', '==', userId));
 
     return onSnapshot(q, (snapshot) => {
         const eventIds = snapshot.docs.map(doc => doc.data().eventId);

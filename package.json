@@ -1,12 +1,13 @@
 {
-  "name": "montañita-pulse",
+  "name": "spondylus-pulse",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && npx firebase-tools deploy --only hosting"
   },
   "dependencies": {
     "@google/genai": "^1.39.0",

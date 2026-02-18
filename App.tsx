@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck } from 'lucide-react';
+import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, ChevronRight, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck, Palmtree, Mountain } from 'lucide-react';
 import { MapView } from './components/MapView.tsx';
 import { EventCard } from './components/EventCard.tsx';
+import { EventModal } from './components/EventModal.tsx';
 import { MigrationPanel } from './components/MigrationPanel.tsx';
 import { LoginScreen } from './components/LoginScreen.tsx';
 import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan } from './types.ts';
-import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS } from './constants.ts';
+import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS } from './constants.ts';
 import { getSmartRecommendations, generateEventDescription } from './services/geminiService.ts';
 import { useAuth } from './hooks/useAuth.ts';
 // Imports cleaned up
@@ -13,7 +14,8 @@ import { logout, isSuperAdmin, updateUserProfile } from './services/authService.
 import {
   getUser, createUser, updateUser, createBusiness, updateBusiness, deleteBusiness,
   subscribeToEvents, createEvent, updateEvent, deleteEvent,
-  subscribeToBusinesses, subscribeToAppSettings, updateAppSettings
+  subscribeToBusinesses, subscribeToAppSettings, updateAppSettings,
+  toggleRSVP, subscribeToUserRSVPs
 } from './services/firestoreService.ts';
 
 
@@ -107,6 +109,7 @@ const Dashboard: React.FC = () => {
   const [selectedEvent, setSelectedEvent] = useState<MontanitaEvent | null>(null);
   const [isEditorFocus, setIsEditorFocus] = useState(false);
   const [isPanelMinimized, setIsPanelMinimized] = useState(false);
+  const [currentLocality, setCurrentLocality] = useState(LOCALITIES[0]);
 
   const [aiRecData, setAiRecData] = useState<{ text: string, sources: any[] } | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -117,6 +120,7 @@ const Dashboard: React.FC = () => {
   const [showMigrationPanel, setShowMigrationPanel] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<Record<string, boolean>>({});
   const [agendaRange, setAgendaRange] = useState<'day' | 'week' | 'month'>('day');
+  const [calendarBaseDate, setCalendarBaseDate] = useState(new Date());
   const [paymentDetails, setPaymentDetails] = useState(DEFAULT_PAYMENT_DETAILS);
   const [showPaymentEdit, setShowPaymentEdit] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -214,7 +218,9 @@ const Dashboard: React.FC = () => {
   const [regForm, setRegForm] = useState({ name: '', email: '', vibe: Vibe.RELAX, role: 'visitor' as 'visitor' | 'host' });
   const [bizForm, setBizForm] = useState({
     name: '',
+    locality: LOCALITIES[0].name,
     sector: Sector.CENTRO,
+    icon: 'palmtree',
     description: '',
     imageUrl: 'https://images.unsplash.com/photo-1574672280600-4accfa5b6f98?auto=format&fit=crop&q=80&w=400',
     whatsapp: '',
@@ -226,7 +232,9 @@ const Dashboard: React.FC = () => {
     if (!name) return;
     const newBiz: Omit<Business, 'id'> = {
       name,
-      sector: Sector.CENTRO, // Defaulting to Centro for now
+      locality: currentLocality.name,
+      sector: Sector.CENTRO,
+      icon: 'palmtree',
       description: 'Nuevo punto añadido por Administrador',
       isVerified: true,
       coordinates: [lat, lng],
@@ -235,7 +243,11 @@ const Dashboard: React.FC = () => {
       monthlyEventCount: 0,
       lastResetDate: new Date().toISOString()
     };
-    await createBusiness(newBiz);
+    const id = await createBusiness(newBiz);
+
+    // Refresh local state and open edit modal for refinement (icon, etc)
+    setEditingBusinessId(id);
+    setShowBusinessEdit(true);
   };
 
   const handleDeleteBusinessByAdmin = async (id: string) => {
@@ -264,6 +276,7 @@ const Dashboard: React.FC = () => {
 
   const initialNewEvent = {
     title: '',
+    locality: LOCALITIES[0].name,
     sector: Sector.CENTRO,
     vibe: Vibe.FIESTA,
     category: 'Fiesta',
@@ -279,14 +292,17 @@ const Dashboard: React.FC = () => {
 
   const filteredEvents = useMemo(() => {
     return events.filter(e => {
+      const biz = businesses.find(b => b.id === e.businessId);
+      const eventLocality = e.locality || biz?.locality || 'Montañita';
+      const matchesLocality = eventLocality === currentLocality.name;
       const matchesSector = !selectedSector || e.sector === selectedSector;
       const matchesSearch = e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         e.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesFilter = activeFilter === 'All' || e.vibe === activeFilter || e.category === activeFilter;
-      const isActive = new Date() <= new Date(e.endAt); // Ensure comparison with Date object
-      return matchesSector && matchesSearch && matchesFilter && isActive;
-    });
-  }, [selectedSector, events, searchQuery, activeFilter]);
+      const isActive = new Date() <= new Date(e.endAt);
+      return matchesLocality && matchesSector && matchesSearch && matchesFilter && isActive;
+    }).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+  }, [selectedSector, events, businesses, searchQuery, activeFilter, currentLocality]);
 
   const favoritedEvents = useMemo(() => {
     return events.filter(e => favorites.includes(e.id));
@@ -335,6 +351,103 @@ const Dashboard: React.FC = () => {
     setIsAiLoading(false);
   };
 
+  // Determine which events to navigate through based on current view
+  const navigationEvents = useMemo(() => {
+    if (activeView === 'favorites' || activeView === 'all-favorites') {
+      return favoritedEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+    }
+
+    if (activeView === 'calendar') {
+      if (agendaRange === 'day') {
+        return events.filter(e => {
+          const eDate = new Date(e.startAt);
+          return eDate.getDate() === calendarBaseDate.getDate() &&
+            eDate.getMonth() === calendarBaseDate.getMonth() &&
+            eDate.getFullYear() === calendarBaseDate.getFullYear();
+        }).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+      }
+      if (agendaRange === 'week') {
+        const weekEnd = new Date(calendarBaseDate);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        return events.filter(e => {
+          const eDate = new Date(e.startAt);
+          return eDate >= calendarBaseDate && eDate < weekEnd;
+        }).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+      }
+      // Monthly
+      return events.filter(e => {
+        const eDate = new Date(e.startAt);
+        return eDate.getMonth() === calendarBaseDate.getMonth() &&
+          eDate.getFullYear() === calendarBaseDate.getFullYear();
+      }).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+    }
+
+    // Default: use filteredEvents (what's on screen in explore)
+    if (activeView === 'explore') {
+      return filteredEvents;
+    }
+
+    // Ultimate fallback: all current events sorted by date
+    return [...events]
+      .filter(e => new Date() <= new Date(e.endAt))
+      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+  }, [activeView, events, favorites, filteredEvents, favoritedEvents, agendaRange, calendarBaseDate]);
+
+  const navigateCalendar = (direction: 'prev' | 'next') => {
+    const newDate = new Date(calendarBaseDate);
+    if (agendaRange === 'day') {
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
+    } else if (agendaRange === 'week') {
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+    } else {
+      newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
+    }
+    setCalendarBaseDate(newDate);
+  };
+
+  const getCalendarTitle = () => {
+    if (agendaRange === 'day') {
+      const today = new Date();
+      if (calendarBaseDate.toDateString() === today.toDateString()) return 'Today';
+      return calendarBaseDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+    }
+    if (agendaRange === 'week') {
+      const end = new Date(calendarBaseDate);
+      end.setDate(end.getDate() + 6);
+      return `${calendarBaseDate.getDate()} - ${end.getDate()} ${end.toLocaleDateString('es-ES', { month: 'short' })}`;
+    }
+    return calendarBaseDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+  };
+
+  // Event Navigation Functions
+  const navigateToNextEvent = () => {
+    if (!selectedEvent) return;
+    const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
+    if (currentIndex < navigationEvents.length - 1) {
+      setSelectedEvent(navigationEvents[currentIndex + 1]);
+    }
+  };
+
+  const navigateToPreviousEvent = () => {
+    if (!selectedEvent) return;
+    const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
+    if (currentIndex > 0) {
+      setSelectedEvent(navigationEvents[currentIndex - 1]);
+    }
+  };
+
+  const hasNextEvent = useMemo(() => {
+    if (!selectedEvent) return false;
+    const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
+    return currentIndex < navigationEvents.length - 1;
+  }, [selectedEvent, navigationEvents]);
+
+  const hasPreviousEvent = useMemo(() => {
+    if (!selectedEvent) return false;
+    const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
+    return currentIndex > 0;
+  }, [selectedEvent, navigationEvents]);
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (regForm.role === 'host') {
@@ -380,15 +493,18 @@ const Dashboard: React.FC = () => {
 
     try {
       // 1. Create Business
+      const locObj = LOCALITIES.find(l => l.name === bizForm.locality) || LOCALITIES[0];
       const businessData = {
         name: bizForm.name,
+        locality: bizForm.locality,
         sector: bizForm.sector,
+        icon: bizForm.icon,
         description: bizForm.description,
         imageUrl: bizForm.imageUrl,
         whatsapp: bizForm.whatsapp,
         phone: bizForm.phone,
         isVerified: false,
-        coordinates: [-1.8253, -80.7523] as [number, number],
+        coordinates: locObj.coords,
         plan: SubscriptionPlan.BASIC,
         monthlyEventCount: 0,
         lastResetDate: new Date().toISOString()
@@ -435,12 +551,40 @@ const Dashboard: React.FC = () => {
     setFavorites(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
   };
 
-  const handleRSVP = (id: string) => {
-    if (!user) {
+  // Sync RSVPs
+  React.useEffect(() => {
+    let unsubscribe: () => void;
+    if (authUser) {
+      unsubscribe = subscribeToUserRSVPs(authUser.uid, (eventIds) => {
+        const statuses: Record<string, boolean> = {};
+        eventIds.forEach(id => { statuses[id] = true; });
+        setRsvpStatus(statuses);
+      });
+    } else {
+      setRsvpStatus({});
+    }
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [authUser]);
+
+  const handleRSVP = async (id: string) => {
+    if (!authUser) {
       setActiveView('host');
       return;
     }
+
+    // Optimistic UI update
     setRsvpStatus(prev => ({ ...prev, [id]: !prev[id] }));
+
+    try {
+      await toggleRSVP(authUser.uid, id);
+    } catch (error) {
+      console.error("Failed to toggle RSVP", error);
+      // Revert on error
+      setRsvpStatus(prev => ({ ...prev, [id]: !prev[id] }));
+      alert("No se pudo registrar tu asistencia. Intenta de nuevo.");
+    }
   };
 
   const toggleSector = (sector: Sector) => {
@@ -578,10 +722,13 @@ const Dashboard: React.FC = () => {
       await updateBusiness(targetBusinessId, {
         name: business.name,
         description: business.description,
+        locality: business.locality,
         sector: business.sector,
-        whatsapp: business.whatsapp,
-        phone: business.phone,
-        imageUrl: business.imageUrl
+        icon: business.icon || 'palmtree',
+        whatsapp: business.whatsapp || '',
+        phone: business.phone || '',
+        imageUrl: business.imageUrl,
+        coordinates: business.coordinates
       });
       setShowBusinessEdit(false);
       setEditingBusinessId(null);
@@ -628,6 +775,7 @@ const Dashboard: React.FC = () => {
 
     const eventInput = {
       title: newEvent.title || 'Evento sin nombre',
+      locality: newEvent.locality,
       description: generatedDesc || 'Un evento increíble en Montañita.',
       startAt: new Date(newEvent.startAt),
       endAt: new Date(newEvent.endAt),
@@ -664,6 +812,7 @@ const Dashboard: React.FC = () => {
     setEditingEventId(event.id);
     setNewEvent({
       title: event.title,
+      locality: event.locality || 'Montañita',
       sector: event.sector,
       vibe: event.vibe,
       category: event.category,
@@ -717,15 +866,41 @@ const Dashboard: React.FC = () => {
                   setSectorLabels(prev => ({ ...prev, [sector]: newName }));
                 }}
                 businesses={businesses}
-                sectorPolygons={sectorPolygons}
+                sectorPolygons={LOCALITY_POLYGONS[currentLocality.name] as any || sectorPolygons}
                 sectorLabels={sectorLabels}
                 isEditorFocus={isEditorFocus}
                 onToggleEditorFocus={() => setIsEditorFocus(!isEditorFocus)}
                 isPanelMinimized={isPanelMinimized}
                 onTogglePanel={() => setIsPanelMinimized(!isPanelMinimized)}
                 hideUI={!!selectedEvent}
+                localityName={currentLocality.name}
+                mapCenter={currentLocality.coords}
+                onLocalityChange={(name) => {
+                  const loc = LOCALITIES.find(l => l.name === name);
+                  if (loc) setCurrentLocality(loc);
+                }}
+                onResetFilters={() => {
+                  setSelectedSector(null);
+                  setActiveFilter('All');
+                  setSearchQuery('');
+                }}
               />
             </div>
+
+            {/* Focused Map View: Horizontal Event Carousel */}
+            {isEditorFocus && filteredEvents.length > 0 && !selectedEvent && (
+              <div className="absolute bottom-48 left-0 right-0 z-10 animate-in fade-in slide-in-from-bottom duration-700">
+                <div className="flex gap-4 overflow-x-auto no-scrollbar px-6 py-4">
+                  {filteredEvents.map(event => (
+                    <div key={event.id} className="w-[300px] shrink-0 transform transition-all hover:scale-[1.02] active:scale-95">
+                      <EventCard event={event} onClick={setSelectedEvent} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Floating "Pulse of Today" restore button — fixed so overflow-hidden never clips it */}
 
             {/* Sliding Panel - Hidden in Editor Focus mode */}
             {!isEditorFocus && (
@@ -743,9 +918,19 @@ const Dashboard: React.FC = () => {
 
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex flex-col">
-                    <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                      {selectedSector ? `Pulso en ${selectedSector}` : 'Pulse of today'}
-                    </h2>
+                    <button
+                      onClick={() => {
+                        setSelectedSector(null);
+                        setActiveFilter('All');
+                        setSearchQuery('');
+                      }}
+                      className="text-2xl font-black text-white tracking-tight flex items-center gap-2 hover:text-rose-500 transition-all group/title text-left"
+                    >
+                      <span>{selectedSector ? `Pulso en ${selectedSector}` : 'Pulse of today'}</span>
+                      {(selectedSector || activeFilter !== 'All' || searchQuery) && (
+                        <X className="w-5 h-5 text-rose-500 opacity-0 group-hover/title:opacity-100 transition-opacity" />
+                      )}
+                    </button>
                     <span className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-0.5">{filteredEvents.length} pulses near you</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -830,116 +1015,87 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex bg-slate-900/50 p-1 rounded-2xl border border-white/5">
-                {(['day', 'week', 'month'] as const).map((range) => (
-                  <button
-                    key={range}
-                    onClick={() => setAgendaRange(range)}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${agendaRange === range ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-500'}`}
-                  >
-                    {range === 'day' ? 'Daily' : range === 'week' ? 'Weekly' : 'Monthly'}
-                  </button>
-                ))}
+              <div className="flex bg-slate-900/50 p-1 rounded-2xl border border-white/5 relative items-center">
+                <button
+                  onClick={() => navigateCalendar('prev')}
+                  className="absolute -left-12 p-3 text-slate-500 hover:text-sky-400 hover:bg-white/5 rounded-full transition-all active:scale-90"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+
+                <div className="flex-1 flex gap-1">
+                  {(['day', 'week', 'month'] as const).map((range) => (
+                    <button
+                      key={range}
+                      onClick={() => {
+                        setAgendaRange(range);
+                        setCalendarBaseDate(new Date());
+                      }}
+                      className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${agendaRange === range ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'text-slate-500 hover:text-slate-400'}`}
+                    >
+                      {range === 'day' ? 'Daily' : range === 'week' ? 'Weekly' : 'Monthly'}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => navigateCalendar('next')}
+                  className="absolute -right-12 p-3 text-slate-500 hover:text-sky-400 hover:bg-white/5 rounded-full transition-all active:scale-90"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
               </div>
 
-              {agendaRange === 'day' ? (
+              <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <h2 className="text-3xl font-black text-white tracking-tighter">
-                    Today, {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  <h2 className="text-3xl font-black text-white tracking-tighter capitalize">
+                    {getCalendarTitle()}
                   </h2>
-                  <p className="text-xs text-slate-500 font-medium tracking-wide uppercase">Events until 6:00 AM tomorrow</p>
+                  <p className="text-[10px] text-slate-500 font-bold tracking-[0.2em] uppercase">
+                    {agendaRange === 'day' ? 'Pulso Diario' : agendaRange === 'week' ? 'Semana a la vista' : 'Cartelera Mensual'}
+                  </p>
                 </div>
-              ) : agendaRange === 'week' ? (
-                <div className="space-y-1">
-                  <h2 className="text-3xl font-black text-white tracking-tighter">Next 7 Days</h2>
-                  <p className="text-xs text-slate-500 font-medium tracking-wide uppercase">Your week ahead</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <h2 className="text-3xl font-black text-white tracking-tighter">
-                    {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  </h2>
-                  <p className="text-xs text-slate-500 font-medium tracking-wide uppercase">Full month schedule</p>
-                </div>
-              )}
 
-              {agendaRange === 'day' && (
-                <div className="flex items-center gap-3 py-2">
-                  <div className="w-8 h-8 bg-amber-400 rounded-lg flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-black fill-current" />
-                  </div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sun & Sand</span>
-                </div>
-              )}
+                {calendarBaseDate.toDateString() !== new Date().toDateString() && (
+                  <button
+                    onClick={() => setCalendarBaseDate(new Date())}
+                    className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black text-sky-400 uppercase tracking-widest hover:bg-white/10 transition-all"
+                  >
+                    Hoy
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Event List */}
-            <div className="px-6 space-y-6">
+            <div className="px-6 space-y-8">
               {agendaRange === 'day' ? (
                 <>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-1 h-6 bg-sky-500 rounded-full"></div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-widest">Day Vibes</h3>
-                  </div>
-                  {events.filter(e => {
-                    const now = new Date();
-                    const isToday = e.startAt.getDate() === now.getDate() && e.startAt.getMonth() === now.getMonth() && e.startAt.getFullYear() === now.getFullYear();
-                    return isToday && e.startAt.getHours() >= 6 && e.startAt.getHours() < 18;
-                  }).length > 0 ? (
-                    events.filter(e => {
-                      const now = new Date();
-                      const isToday = e.startAt.getDate() === now.getDate() && e.startAt.getMonth() === now.getMonth() && e.startAt.getFullYear() === now.getFullYear();
-                      return isToday && e.startAt.getHours() >= 6 && e.startAt.getHours() < 18;
-                    }).map(event => (
-                      <EventCard key={event.id} event={event} onClick={setSelectedEvent} />
-                    ))
-                  ) : (
-                    <p className="text-slate-500 text-sm italic">Nothing happening during the day today.</p>
-                  )}
-
-                  <div className="flex items-center gap-2 mt-8 mb-2">
-                    <div className="w-1 h-6 bg-indigo-500 rounded-full"></div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-indigo-400" /> Pulse of the Night
-                    </h3>
-                  </div>
-                  {events.filter(e => {
-                    const now = new Date();
-                    const eventDate = new Date(e.startAt);
-                    const isToday = eventDate.getDate() === now.getDate() && eventDate.getMonth() === now.getMonth() && eventDate.getFullYear() === now.getFullYear();
-                    const isTonight = isToday && eventDate.getHours() >= 18;
-                    const tomorrow = new Date(now);
-                    tomorrow.setDate(tomorrow.getDate() + 1);
-                    const isTomorrowEarly = eventDate.getDate() === tomorrow.getDate() &&
-                      eventDate.getMonth() === tomorrow.getMonth() &&
-                      eventDate.getFullYear() === tomorrow.getFullYear() &&
-                      eventDate.getHours() < 6;
-                    return isTonight || isTomorrowEarly;
-                  }).length > 0 ? (
-                    events.filter(e => {
-                      const now = new Date();
+                  {/* Day Vibes filtering logic updated to use calendarBaseDate */}
+                  {(() => {
+                    const dayEvents = events.filter(e => {
                       const eventDate = new Date(e.startAt);
-                      const isToday = eventDate.getDate() === now.getDate() && eventDate.getMonth() === now.getMonth() && eventDate.getFullYear() === now.getFullYear();
-                      const isTonight = isToday && eventDate.getHours() >= 18;
-                      const tomorrow = new Date(now);
-                      tomorrow.setDate(tomorrow.getDate() + 1);
-                      const isTomorrowEarly = eventDate.getDate() === tomorrow.getDate() &&
-                        eventDate.getMonth() === tomorrow.getMonth() &&
-                        eventDate.getFullYear() === tomorrow.getFullYear() &&
-                        eventDate.getHours() < 6;
-                      return isTonight || isTomorrowEarly;
-                    }).map(event => (
-                      <EventCard key={event.id} event={event} onClick={setSelectedEvent} />
-                    ))
-                  ) : (
-                    <p className="text-slate-500 text-sm italic">No night pulses yet.</p>
-                  )}
+                      return eventDate.getDate() === calendarBaseDate.getDate() &&
+                        eventDate.getMonth() === calendarBaseDate.getMonth() &&
+                        eventDate.getFullYear() === calendarBaseDate.getFullYear();
+                    }).sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+
+                    if (dayEvents.length === 0) {
+                      return <div className="py-20 text-center"><p className="text-slate-500 text-sm italic">Nothing happening on this day.</p></div>;
+                    }
+
+                    return (
+                      <div className="space-y-6">
+                        {dayEvents.map(event => (
+                          <EventCard key={event.id} event={event} onClick={setSelectedEvent} />
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </>
               ) : agendaRange === 'week' ? (
-                /* Weekly View Logic */
                 <div className="space-y-8">
                   {Array.from({ length: 7 }).map((_, i) => {
-                    const date = new Date();
+                    const date = new Date(calendarBaseDate);
                     date.setDate(date.getDate() + i);
                     const dayEvents = events.filter(e => {
                       const eDate = new Date(e.startAt);
@@ -954,9 +1110,9 @@ const Dashboard: React.FC = () => {
                       <div key={i} className="space-y-3">
                         <div className="sticky top-0 z-10 bg-[#020617]/95 backdrop-blur-md py-2 border-b border-white/5">
                           <h3 className="text-lg font-black text-rose-500">
-                            {date.toLocaleDateString('en-US', { weekday: 'long' })}
+                            {date.toLocaleDateString('es-ES', { weekday: 'long' })}
                             <span className="text-slate-500 text-sm font-bold ml-2">
-                              {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              {date.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
                             </span>
                           </h3>
                         </div>
@@ -968,32 +1124,32 @@ const Dashboard: React.FC = () => {
                   })}
                 </div>
               ) : (
-                /* Monthly View Logic */
                 <div className="grid gap-4">
                   {events.filter(e => {
-                    const now = new Date();
                     const eDate = new Date(e.startAt);
-                    return eDate.getMonth() === now.getMonth() && eDate.getFullYear() === now.getFullYear() && eDate >= now;
+                    return eDate.getMonth() === calendarBaseDate.getMonth() &&
+                      eDate.getFullYear() === calendarBaseDate.getFullYear();
                   }).sort((a, b) => a.startAt.getTime() - b.startAt.getTime()).length > 0 ? (
                     events.filter(e => {
-                      const now = new Date();
                       const eDate = new Date(e.startAt);
-                      return eDate.getMonth() === now.getMonth() && eDate.getFullYear() === now.getFullYear() && eDate >= now;
+                      return eDate.getMonth() === calendarBaseDate.getMonth() &&
+                        eDate.getFullYear() === calendarBaseDate.getFullYear();
                     }).sort((a, b) => a.startAt.getTime() - b.startAt.getTime()).map(event => (
                       <div key={event.id} className="relative pl-6 border-l-2 border-slate-800 hover:border-sky-500 transition-colors">
-                        <div className="absolute top-0 left-[-5px] w-2.5 h-2.5 rounded-full bg-slate-800 ring-4 ring-[#020617] group-hover:bg-sky-500"></div>
+                        <div className="absolute top-0 left-[-5px] w-2.5 h-2.5 rounded-full bg-slate-800 ring-4 ring-[#020617] group-hover:bg-sky-500 transition-colors"></div>
                         <p className="text-[10px] font-black text-sky-400 uppercase tracking-widest mb-1">
-                          {event.startAt.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })} • {event.startAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(event.startAt).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })} • {new Date(event.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                         <EventCard event={event} onClick={setSelectedEvent} />
                       </div>
                     ))
                   ) : (
-                    <p className="text-slate-500 text-center py-10">No upcoming events this month.</p>
+                    <p className="text-slate-500 text-center py-10 italic">No hay eventos para este mes.</p>
                   )}
                 </div>
               )}
             </div>
+
           </div>
         );
 
@@ -1065,26 +1221,44 @@ const Dashboard: React.FC = () => {
                 <button onClick={() => setActiveView('explore')} className="text-xs font-bold text-sky-400">View Map</button>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                {journeyCards.map(b => (
+                {[
+                  {
+                    id: 'centro',
+                    label: 'CENTRO',
+                    icon: Store,
+                    color: 'text-rose-500',
+                    bg: 'bg-rose-500/20',
+                    target: Sector.CENTRO
+                  },
+                  {
+                    id: 'playa',
+                    label: 'PLAYA',
+                    icon: Palmtree,
+                    color: 'text-sky-500',
+                    bg: 'bg-sky-500/20',
+                    target: Sector.PLAYA
+                  },
+                  {
+                    id: 'montana',
+                    label: 'MONTAÑA',
+                    icon: Mountain,
+                    color: 'text-emerald-500',
+                    bg: 'bg-emerald-500/20',
+                    target: currentLocality.name === 'Montañita' ? Sector.TIGRILLO : Sector.MONTANA
+                  }
+                ].map((card) => (
                   <div
-                    key={b.id}
+                    key={card.id}
                     onClick={() => {
-                      let sectorToSelect: Sector | null = null;
-                      if (b.id === 'CENTRO') sectorToSelect = Sector.CENTRO;
-                      if (b.id === 'LA PUNTA') sectorToSelect = Sector.LA_PUNTA;
-                      if (b.id === 'TIGRILLO') sectorToSelect = Sector.TIGRILLO;
-
-                      if (sectorToSelect) {
-                        setSelectedSector(sectorToSelect);
-                        setActiveView('explore');
-                      }
+                      setSelectedSector(card.target);
+                      setActiveView('explore');
                     }}
-                    className={`cursor-pointer hover:scale-105 transition-transform flex flex-col items-center gap-3 p-4 rounded-[2rem] border border-white/5 ${b.active ? b.bg : 'opacity-40'} relative group`}
+                    className={`cursor-pointer hover:scale-105 transition-transform flex flex-col items-center gap-3 p-4 rounded-[2rem] border border-white/5 bg-slate-900/40 relative group hover:bg-white/5`}
                   >
-                    <div className={`p-3 rounded-full ${b.active ? 'bg-white/10' : 'bg-slate-800'}`}>
-                      <Store className={`w-6 h-6 ${b.color}`} />
+                    <div className={`p-3 rounded-full ${card.bg}`}>
+                      <card.icon className={`w-6 h-6 ${card.color}`} />
                     </div>
-                    <span className="text-[10px] font-black uppercase text-white tracking-tighter text-center">{b.label}</span>
+                    <span className="text-[10px] font-black uppercase text-white tracking-tighter text-center">{card.label}</span>
                   </div>
                 ))}
               </div>
@@ -1342,7 +1516,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
                 <h1 className="text-2xl font-black text-white tracking-tight">Host Hub</h1>
-                <span className="text-xs text-slate-500 font-medium">Dashboard Control • Montañita</span>
+                <span className="text-xs text-slate-500 font-medium">Dashboard Control • Spondylus</span>
               </div>
               <div className="flex gap-2">
                 <button
@@ -1372,7 +1546,7 @@ const Dashboard: React.FC = () => {
                 <h2 className="text-2xl font-black text-white tracking-tight">{userBusiness?.name || bizForm.name || user?.name || "Mi Negocio"}</h2>
                 <div className="flex items-center gap-2 mt-1">
                   <MapPin className="w-3 h-3 text-slate-500" />
-                  <span className="text-xs text-slate-400 font-medium">Sector: {userBusiness?.sector || bizForm.sector}, Montañita</span>
+                  <span className="text-xs text-slate-400 font-medium">Sector: {userBusiness?.sector || bizForm.sector}, Spondylus</span>
                 </div>
                 <button
                   onClick={() => setActiveView('plans')}
@@ -1804,7 +1978,7 @@ const Dashboard: React.FC = () => {
             <div className="w-2.5 h-2.5 bg-white rounded-full animate-ping"></div>
           </div>
           <div className="flex flex-col">
-            <span className="text-base font-black tracking-tighter text-white leading-none">MONTAÑITA</span>
+            <span className="text-base font-black tracking-tighter text-white leading-none">SPONDYLUS</span>
             <span className="text-[10px] font-black tracking-[0.3em] text-rose-500 leading-none mt-0.5">PULSE</span>
           </div>
         </div>
@@ -1828,12 +2002,30 @@ const Dashboard: React.FC = () => {
         {renderView()}
       </main>
 
+      {/* Floating "Pulse of Today" restore button */}
+      {activeView === 'explore' && (isPanelMinimized || isEditorFocus) && (
+        <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-bottom duration-500">
+          <button
+            onClick={() => {
+              setIsPanelMinimized(false);
+              setIsEditorFocus(false);
+            }}
+            className="flex items-center gap-2.5 px-6 py-3.5 bg-rose-500 hover:bg-rose-400 active:scale-95 text-white font-black text-sm uppercase tracking-widest rounded-full shadow-2xl shadow-rose-500/40 transition-all border border-rose-400/30"
+          >
+            <span className="animate-pulse w-2 h-2 rounded-full bg-white inline-block" />
+            Pulse of Today
+            <span className="text-base">⚡</span>
+          </button>
+        </div>
+      )}
+
       {activeView === 'explore' && !selectedEvent && (
         <div className="fixed bottom-28 left-0 right-0 px-4 z-40 animate-in slide-in-from-bottom duration-500">
           <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
-            {Object.values(Sector).map((sector) => {
+            {(LOCALITY_SECTORS[currentLocality.name] || Object.values(Sector)).map((sector) => {
               const info = SECTOR_INFO[sector];
               const isActive = selectedSector === sector;
+              if (!info) return null;
               return (
                 <button
                   key={sector}
@@ -1895,7 +2087,7 @@ const Dashboard: React.FC = () => {
         <div className="fixed inset-0 z-[2120] bg-slate-900 flex flex-col p-8 overflow-y-auto pb-32 no-scrollbar">
           <div className="space-y-2 text-center mb-8">
             <Store className="w-12 h-12 text-indigo-500 mx-auto mb-4" />
-            <h2 className="text-3xl font-black text-white tracking-tighter">Tu espacio en Montañita</h2>
+            <h2 className="text-3xl font-black text-white tracking-tighter">Tu espacio en Spondylus</h2>
           </div>
           <div className="relative w-full aspect-video bg-slate-800 rounded-3xl border-2 border-dashed border-slate-700 flex items-center justify-center gap-3 text-slate-500 overflow-hidden mb-6">
             <img src={bizForm.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-60" />
@@ -1906,10 +2098,32 @@ const Dashboard: React.FC = () => {
           </div>
           <form onSubmit={handleBusinessRegister} className="space-y-6">
             <input required type="text" placeholder="Nombre Comercial" className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 font-bold text-white shadow-inner" value={bizForm.name} onChange={e => setBizForm({ ...bizForm, name: e.target.value })} />
-            <select className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 font-bold text-white appearance-none" value={bizForm.sector} onChange={e => setBizForm({ ...bizForm, sector: e.target.value as Sector })}>
-              {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <div className="grid grid-cols-2 gap-4">
+              <select className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 font-bold text-white appearance-none" value={bizForm.locality} onChange={e => setBizForm({ ...bizForm, locality: e.target.value, sector: (LOCALITY_SECTORS[e.target.value] || [])[0] || Sector.CENTRO })}>
+                {LOCALITIES.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
+              </select>
+              <select className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 font-bold text-white appearance-none" value={bizForm.sector} onChange={e => setBizForm({ ...bizForm, sector: e.target.value as Sector })}>
+                {(LOCALITY_SECTORS[bizForm.locality] || Object.values(Sector)).map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
             <textarea rows={3} placeholder="Bio del Local" className="w-full bg-slate-800 border border-slate-700 rounded-3xl px-6 py-5 text-slate-300 text-sm shadow-inner" value={bizForm.description} onChange={e => setBizForm({ ...bizForm, description: e.target.value })} />
+
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-2">Ícono del Mapa</label>
+              <div className="grid grid-cols-5 gap-2 p-3 bg-slate-800/50 rounded-3xl border border-white/5">
+                {MAP_ICONS.map(i => (
+                  <button
+                    key={i.id}
+                    type="button"
+                    onClick={() => setBizForm({ ...bizForm, icon: i.id })}
+                    className={`aspect-square rounded-xl flex items-center justify-center text-xl transition-all ${bizForm.icon === i.id ? 'bg-indigo-500 scale-105 shadow-lg shadow-indigo-500/20' : 'bg-slate-800 hover:bg-slate-700'}`}
+                  >
+                    {i.emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <button type="submit" className="w-full py-5 bg-indigo-500 text-white font-black rounded-2xl shadow-xl shadow-indigo-500/20 active:scale-95 transition-all">FINALIZAR REGISTRO</button>
           </form>
         </div>
@@ -1931,11 +2145,14 @@ const Dashboard: React.FC = () => {
           </div>
           <div className="space-y-6">
             <input type="text" placeholder="Título" className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 font-bold text-white shadow-inner" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} />
-            <div className="grid grid-cols-2 gap-4">
-              <select className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 font-bold text-white appearance-none" value={newEvent.sector} onChange={e => setNewEvent({ ...newEvent, sector: e.target.value as Sector })}>
-                {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+            <div className="grid grid-cols-3 gap-3">
+              <select className="col-span-1 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-4 font-black text-[10px] uppercase tracking-wider text-white appearance-none" value={newEvent.locality} onChange={e => setNewEvent({ ...newEvent, locality: e.target.value, sector: (LOCALITY_SECTORS[e.target.value] || [])[0] || Sector.CENTRO })}>
+                {LOCALITIES.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
               </select>
-              <select className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 font-bold text-white appearance-none" value={newEvent.vibe} onChange={e => setNewEvent({ ...newEvent, vibe: e.target.value as Vibe })}>
+              <select className="col-span-1 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-4 font-black text-[10px] uppercase tracking-wider text-white appearance-none" value={newEvent.sector} onChange={e => setNewEvent({ ...newEvent, sector: e.target.value as Sector })}>
+                {(LOCALITY_SECTORS[newEvent.locality || 'Montañita'] || Object.values(Sector)).map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select className="col-span-1 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-4 font-black text-[10px] uppercase tracking-wider text-white appearance-none" value={newEvent.vibe} onChange={e => setNewEvent({ ...newEvent, vibe: e.target.value as Vibe })}>
                 {Object.values(Vibe).map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
@@ -1954,134 +2171,8 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {selectedEvent && (
-        <div className="fixed inset-0 z-[9999] bg-slate-900/80 backdrop-blur-xl flex items-end justify-center animate-in fade-in duration-300">
-          <div className="w-full max-w-lg bg-slate-900 rounded-t-[3.5rem] overflow-hidden flex flex-col max-h-[95vh] shadow-2xl animate-in slide-in-from-bottom duration-500 relative">
-            <div className="relative h-80 flex-shrink-0">
-              <img src={selectedEvent.imageUrl} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
-              <div className="absolute top-6 right-6 flex gap-2 z-[100]">
-                {isAdmin && (
-                  <>
-                    <button
-                      onClick={() => handleEditEvent(selectedEvent)}
-                      className="w-14 h-14 bg-sky-500 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
-                    >
-                      <Edit3 className="w-8 h-8" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleDeleteEvent(selectedEvent.id);
-                        setSelectedEvent(null);
-                      }}
-                      className="w-14 h-14 bg-rose-500/20 text-rose-500 border-2 border-rose-500/20 rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
-                    >
-                      <Trash2 className="w-8 h-8" />
-                    </button>
-                  </>
-                )}
-                <button
-                  onClick={() => setSelectedEvent(null)}
-                  className="w-14 h-14 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
-                >
-                  <X className="w-8 h-8 stroke-[3]" />
-                </button>
-              </div>
-              <div className="absolute bottom-6 left-8 flex items-center gap-4">
-                <div className="relative group/biz">
-                  <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-2 overflow-hidden ring-4 ring-white/5">
-                    <img
-                      src={businesses.find(b => b.id === selectedEvent.businessId)?.imageUrl || `https://i.pravatar.cc/100?u=${selectedEvent.businessId}`}
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                  </div>
-                  {isAdmin && (
-                    <button
-                      onClick={() => handleEditBusiness(selectedEvent.businessId)}
-                      className="absolute -top-2 -right-2 bg-sky-500 p-1.5 rounded-lg shadow-lg opacity-0 group-hover/biz:opacity-100 transition-opacity"
-                    >
-                      <Settings className="w-3 h-3 text-white" />
-                    </button>
-                  )}
-                </div>
-                <div>
-                  <span className="text-[10px] font-black uppercase text-slate-400">Publicado por</span>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-white font-black">
-                      {businesses.find(b => b.id === selectedEvent.businessId)?.name || 'Anónimo'}
-                    </h4>
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleEditBusiness(selectedEvent.businessId)}
-                        className="text-sky-400 hover:text-sky-300 transition-colors"
-                      >
-                        <Edit3 className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="p-8 overflow-y-auto no-scrollbar flex-1 space-y-6">
-              <div>
-                <div className="flex gap-2 mb-4">
-                  <span className="px-3 py-1 bg-rose-500/10 text-rose-500 rounded-lg text-[10px] font-black uppercase tracking-widest border border-rose-500/20">{selectedEvent.sector}</span>
-                  <span className="px-3 py-1 bg-slate-800 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-700">{selectedEvent.vibe}</span>
-                </div>
-                <h2 className="text-3xl font-black text-white leading-tight mb-4">{selectedEvent.title}</h2>
-                <p className="text-slate-400 text-sm leading-relaxed">{selectedEvent.description}</p>
-              </div>
+      {/* Modal is now handled by EventModal component at the bottom */}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-3 p-4 bg-slate-800/40 rounded-2xl border border-slate-700/50">
-                  <Clock className="w-5 h-5 text-rose-500" />
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-slate-500 uppercase">Horario</span>
-                    <span className="text-white font-bold text-sm">
-                      {selectedEvent.startAt.toLocaleDateString('es-EC', { weekday: 'short', day: 'numeric', month: 'short' })}, {selectedEvent.startAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    <span className="text-slate-400 font-bold text-xs mt-0.5">
-                      Hasta: {selectedEvent.endAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {selectedEvent.startAt.getDate() !== selectedEvent.endAt.getDate() &&
-                        ` (${selectedEvent.endAt.toLocaleDateString('es-EC', { weekday: 'short', day: 'numeric' })})`
-                      }
-                    </span>
-                  </div>
-                </div>
-
-                {(() => {
-                  const business = businesses.find(b => b.id === selectedEvent.businessId || b.name === selectedEvent.businessId);
-                  if (business?.whatsapp) {
-                    return (
-                      <a
-                        href={`https://wa.me/${business.whatsapp.replace(/[^0-9]/g, '')}?text=Hola, vi su evento ${selectedEvent.title} en MontaPulse!`}
-                        target="_blank"
-                        className="flex items-center justify-center gap-2 p-4 bg-green-500/10 hover:bg-green-500/20 rounded-2xl border border-green-500/20 transition-all group"
-                      >
-                        <MessageCircle className="w-6 h-6 text-green-500 group-hover:scale-110 transition-transform" />
-                        <span className="text-xs font-black text-green-400 uppercase tracking-wider">WhatsApp</span>
-                      </a>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-
-              <div className="pb-8 pt-4">
-                {new Date() > selectedEvent.endAt ? (
-                  <button disabled className="w-full py-6 rounded-[2.5rem] font-black text-xs sm:text-sm uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-none bg-slate-800/50 text-slate-500 border-2 border-slate-700/50 cursor-not-allowed">
-                    <Clock className="w-5 h-5" /> TE PERDISTE EL SENTIR EL PULSO
-                  </button>
-                ) : (
-                  <button onClick={() => handleRSVP(selectedEvent.id)} className={`w-full py-6 rounded-[2.5rem] font-black text-sm uppercase tracking-[0.25em] transition-all flex items-center justify-center gap-3 shadow-2xl ${rsvpStatus[selectedEvent.id] ? 'bg-slate-800 text-emerald-500 border-2 border-emerald-500/40' : 'bg-gradient-to-r from-rose-600 via-rose-500 to-orange-500 text-white'}`}>
-                    {rsvpStatus[selectedEvent.id] ? <><CheckCircle className="w-5 h-5" /> ASISTIRÉ</> : 'SENTIR EL PULSO'}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Profile Edit Modal */}
       {showProfileEdit && user && (
@@ -2234,6 +2325,24 @@ const Dashboard: React.FC = () => {
                   </div>
 
                   <div>
+                    <label className="text-xs font-black text-slate-500 uppercase mb-3 block">Category Icon</label>
+                    <div className="flex flex-wrap gap-2 p-4 bg-slate-800/50 rounded-3xl border border-white/5">
+                      {MAP_ICONS.map(i => (
+                        <button
+                          key={i.id}
+                          onClick={() => setBusinesses(prev => prev.map(b =>
+                            b.id === targetBusinessId ? { ...b, icon: i.id } : b
+                          ))}
+                          className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-all ${business.icon === i.id ? 'bg-sky-500 scale-110 shadow-lg shadow-sky-500/20' : 'bg-slate-800 hover:bg-slate-700'}`}
+                          title={i.label}
+                        >
+                          {i.emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
                     <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Description</label>
                     <textarea
                       rows={3}
@@ -2245,19 +2354,44 @@ const Dashboard: React.FC = () => {
                     />
                   </div>
 
-                  <div>
-                    <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Sector</label>
-                    <select
-                      value={business.sector}
-                      onChange={(e) => setBusinesses(prev => prev.map(b =>
-                        b.id === targetBusinessId ? { ...b, sector: e.target.value as Sector } : b
-                      ))}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white"
-                    >
-                      {Object.values(Sector).map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Pueblo</label>
+                      <select
+                        value={business.locality || 'Montañita'}
+                        onChange={(e) => {
+                          const newLoc = e.target.value;
+                          const locObj = LOCALITIES.find(l => l.name === newLoc);
+                          setBusinesses(prev => prev.map(b =>
+                            b.id === targetBusinessId ? {
+                              ...b,
+                              locality: newLoc,
+                              sector: (LOCALITY_SECTORS[newLoc] || [])[0] || Sector.CENTRO,
+                              coordinates: locObj ? locObj.coords : b.coordinates
+                            } : b
+                          ));
+                        }}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white appearance-none"
+                      >
+                        {LOCALITIES.map(l => (
+                          <option key={l.name} value={l.name}>{l.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Sector</label>
+                      <select
+                        value={business.sector}
+                        onChange={(e) => setBusinesses(prev => prev.map(b =>
+                          b.id === targetBusinessId ? { ...b, sector: e.target.value as Sector } : b
+                        ))}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white appearance-none"
+                      >
+                        {(LOCALITY_SECTORS[business.locality || 'Montañita'] || Object.values(Sector)).map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div>
@@ -2448,6 +2582,31 @@ const Dashboard: React.FC = () => {
 
       {showMigrationPanel && (
         <MigrationPanel onClose={() => setShowMigrationPanel(false)} />
+      )}
+
+      {/* Event Modal with Navigation */}
+      {selectedEvent && (
+        <EventModal
+          event={events.find(e => e.id === selectedEvent.id) || selectedEvent}
+          business={businesses.find(b => b.id === selectedEvent.businessId)}
+          onClose={() => setSelectedEvent(null)}
+          onNext={navigateToNextEvent}
+          onPrevious={navigateToPreviousEvent}
+          hasNext={hasNextEvent}
+          hasPrevious={hasPreviousEvent}
+          isAdmin={isAdmin}
+          onEdit={event => {
+            handleEditEvent(event);
+            setSelectedEvent(null);
+          }}
+          onDelete={id => {
+            handleDeleteEvent(id);
+            setSelectedEvent(null);
+          }}
+          onEditBusiness={handleEditBusiness}
+          onRsvp={() => handleRSVP(selectedEvent.id)}
+          isRsvp={!!rsvpStatus[selectedEvent.id]}
+        />
       )}
     </div>
   );
