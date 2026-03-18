@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { X, Camera, Upload } from 'lucide-react';
+import { X, Camera, Upload, Store, MapPin } from 'lucide-react';
 import { useAuthContext } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS } from '../../constants';
@@ -16,7 +16,7 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
         businesses, setBusinesses, editingBusinessId, setShowBusinessEdit,
         setEditingBusinessId, handleUpdateBusinessProfile, handleImageUpload,
         bizForm, setBizForm, handleBusinessRegister, setShowBusinessReg,
-        handleBusinessImageUpload
+        handleBusinessImageUpload, handleDeleteBusiness
     } = useData();
 
     const bizEditFileInputRef = useRef<HTMLInputElement>(null);
@@ -40,11 +40,12 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
     // Use either the found business for editing or bizForm for registration
     const data = isRegistration ? bizForm : business!;
     const updateField = (field: string, value: any) => {
+        const safeValue = value === undefined ? null : value;
         if (isRegistration) {
-            setBizForm({ ...bizForm, [field]: value });
+            setBizForm({ ...bizForm, [field]: safeValue });
         } else {
             setBusinesses(prev => prev.map(b =>
-                b.id === targetBusinessId ? { ...b, [field]: value } : b
+                b.id === targetBusinessId ? { ...b, [field]: safeValue } : b
             ));
         }
     };
@@ -55,10 +56,14 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                 <div className="flex items-center justify-between mb-8">
                     <div>
                         <h2 className="text-2xl font-black text-white tracking-tight">
-                            {isRegistration ? 'Registrar Negocio' : 'Editar Negocio'}
+                            {isRegistration 
+                                ? (data.isReference ? 'Registrar Referencia' : 'Registrar Negocio') 
+                                : (data.isReference ? 'Editar Referencia' : 'Editar Negocio')}
                         </h2>
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">
-                            {isRegistration ? 'Crea tu perfil comercial' : 'Configuración del perfil comercial'}
+                            {isRegistration 
+                                ? (data.isReference ? 'Crea un punto de interés' : 'Crea tu perfil comercial') 
+                                : (data.isReference ? 'Configuración del punto de interés' : 'Configuración del perfil comercial')}
                         </p>
                     </div>
                     <button onClick={handleClose} className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors group">
@@ -67,71 +72,118 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                 </div>
 
                 <div className="space-y-8">
+                    {/* Point Type Selector */}
                     <div>
-                        <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Nombre Comercial</label>
+                        <label className="text-xs font-black text-slate-500 uppercase mb-4 block tracking-widest">Tipo de Punto</label>
+                        <div className="grid grid-cols-2 gap-3 p-2 bg-slate-800/30 rounded-[2rem] border border-white/5">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    updateField('isReference', false);
+                                }}
+                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${!data.isReference ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <Store className="w-6 h-6" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Negocio</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    updateField('isReference', true);
+                                }}
+                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${data.isReference ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <MapPin className="w-6 h-6" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Referencia</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">
+                            {data.isReference ? 'Nombre del Punto' : 'Nombre Comercial'}
+                        </label>
                         <input
                             type="text"
                             value={data.name}
                             onChange={(e) => updateField('name', e.target.value)}
-                            className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-sky-500 outline-none transition-all"
-                            placeholder="Nombre de tu negocio"
+                            className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                            placeholder={data.isReference ? "Ej: Letras de Montañita" : "Nombre de tu negocio"}
                         />
                     </div>
 
-                    <div>
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-2 mb-3 block">Categoría</label>
-                        <select
-                            className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-sky-500 outline-none appearance-none transition-all"
-                            value={data.category}
-                            onChange={(e) => updateField('category', e.target.value as BusinessCategory)}
-                        >
-                            {Object.values(BusinessCategory).map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-2 mb-3 block">Categoría</label>
+                            <select
+                                className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none appearance-none transition-all"
+                                value={data.category}
+                                onChange={(e) => updateField('category', e.target.value as BusinessCategory)}
+                            >
+                                {Object.values(BusinessCategory)
+                                    .filter(cat => data.isReference 
+                                        ? [BusinessCategory.PARQUE, BusinessCategory.CANCHA, BusinessCategory.MALECON, BusinessCategory.MERCADO, BusinessCategory.PARADA_TAXI, BusinessCategory.PLAYA, BusinessCategory.OTRO].includes(cat)
+                                        : ![BusinessCategory.PARQUE, BusinessCategory.CANCHA, BusinessCategory.MALECON, BusinessCategory.MERCADO, BusinessCategory.PARADA_TAXI, BusinessCategory.PLAYA, BusinessCategory.REFERENCIA].includes(cat)
+                                    )
+                                    .map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                        </div>
 
-                    <div>
-                        <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Icono del Mapa</label>
-                        <div className="flex flex-wrap gap-2.5 p-5 bg-slate-800/30 rounded-[2.5rem] border border-white/5">
-                            {MAP_ICONS.map(i => (
-                                <button
-                                    key={i.id}
-                                    onClick={() => updateField('icon', i.id)}
-                                    className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl transition-all ${data.icon === i.id ? 'bg-sky-500 scale-110 shadow-xl shadow-sky-500/20' : 'bg-slate-800/50 hover:bg-slate-700 hover:scale-105 hover:border-white/10 border border-transparent'}`}
-                                    title={i.label}
+                        <div>
+                            <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Icono del Mapa</label>
+                            <div className="flex flex-wrap gap-2 p-2 bg-slate-800/30 rounded-2xl border border-white/5">
+                                {MAP_ICONS.slice(0, 5).map(i => (
+                                    <button
+                                        key={i.id}
+                                        type="button"
+                                        onClick={() => updateField('icon', i.id)}
+                                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${data.icon === i.id ? 'bg-orange-500 scale-110' : 'bg-slate-800/50 border border-transparent'}`}
+                                        title={i.label}
+                                    >
+                                        {i.emoji}
+                                    </button>
+                                ))}
+                                <select 
+                                    className="bg-transparent text-slate-400 text-[10px] outline-none max-w-[80px]"
+                                    onChange={(e) => updateField('icon', e.target.value)}
+                                    value={MAP_ICONS.some(icon => icon.id === data.icon) ? data.icon : 'map'}
                                 >
-                                    {i.emoji}
-                                </button>
-                            ))}
+                                    {MAP_ICONS.map(i => (
+                                        <option key={i.id} value={i.id}>{i.label}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     </div>
 
-                    <div>
-                        <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Categoría del Planner IA</label>
-                        <p className="text-[10px] text-slate-600 mb-3">Asigna este negocio a una sección del AI Planner. Los premiums son destacados.</p>
-                        <div className="grid grid-cols-2 gap-2.5">
-                            {([
-                                { id: 'hospedaje', emoji: '🏨', label: 'Hospedaje' },
-                                { id: 'comida', emoji: '🍽️', label: 'Restaurante' },
-                                { id: 'baile', emoji: '🎶', label: 'Bar / Baile' },
-                                { id: 'surf', emoji: '🏄', label: 'Surf / Escuela' },
-                            ] as const).map(opt => (
-                                <button
-                                    key={opt.id}
-                                    type="button"
-                                    onClick={() => updateField('plannerCategory', (data as any).plannerCategory === opt.id ? undefined : opt.id)}
-                                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left ${(data as any).plannerCategory === opt.id
-                                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                                        : 'bg-slate-800/40 border-white/5 text-slate-400 hover:bg-slate-800'
-                                        }`}
-                                >
-                                    <span className="text-xl">{opt.emoji}</span>
-                                    <span className="text-[11px] font-black uppercase tracking-wider">{opt.label}</span>
-                                </button>
-                            ))}
+                    {!data.isReference && (
+                        <div>
+                            <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Categoría del Planner IA</label>
+                            <p className="text-[10px] text-slate-600 mb-3">Asigna una sección del AI Planner para que aparezca en recomendaciones.</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                {([
+                                    { id: 'hospedaje', emoji: '🏨', label: 'Hosp.' },
+                                    { id: 'comida', emoji: '🍽️', label: 'Rest.' },
+                                    { id: 'baile', emoji: '🎶', label: 'Bar' },
+                                    { id: 'surf', emoji: '🏄', label: 'Surf' },
+                                ] as const).map(opt => (
+                                    <button
+                                        key={opt.id}
+                                        type="button"
+                                        onClick={() => updateField('plannerCategory', (data as any).plannerCategory === opt.id ? null : opt.id)}
+                                        className={`flex flex-col items-center justify-center gap-1 p-2 rounded-2xl border transition-all ${(data as any).plannerCategory === opt.id
+                                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                                            : 'bg-slate-800/40 border-white/5 text-slate-400 hover:bg-slate-800'
+                                            }`}
+                                    >
+                                        <span className="text-lg">{opt.emoji}</span>
+                                        <span className="text-[9px] font-black uppercase tracking-tighter">{opt.label}</span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     <div>
                         <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Descripción</label>
@@ -139,7 +191,7 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                             rows={3}
                             value={data.description}
                             onChange={(e) => updateField('description', e.target.value)}
-                            className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-sky-500 outline-none transition-all resize-none"
+                            className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all resize-none"
                             placeholder="Describe tu negocio..."
                         />
                     </div>
@@ -169,7 +221,7 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                         ));
                                     }
                                 }}
-                                className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-sky-500 outline-none appearance-none transition-all"
+                                className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none appearance-none transition-all"
                             >
                                 {LOCALITIES.map(l => (
                                     <option key={l.name} value={l.name}>{l.name}</option>
@@ -181,7 +233,7 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                             <select
                                 value={data.sector}
                                 onChange={(e) => updateField('sector', e.target.value as Sector)}
-                                className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-sky-500 outline-none appearance-none transition-all"
+                                className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none appearance-none transition-all"
                             >
                                 {(LOCALITY_SECTORS[data.locality || 'Montañita'] || Object.values(Sector)).map(s => (
                                     <option key={s} value={s}>{s}</option>
@@ -190,39 +242,43 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">WhatsApp</label>
-                            <input
-                                type="tel"
-                                value={data.whatsapp || ''}
-                                onChange={(e) => updateField('whatsapp', e.target.value)}
-                                placeholder="+593 99..."
-                                className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-sky-500 outline-none transition-all"
-                            />
-                        </div>
-                        <div>
-                            <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Instagram</label>
-                            <input
-                                type="text"
-                                value={data.instagram || ''}
-                                onChange={(e) => updateField('instagram', e.target.value)}
-                                placeholder="@usuario"
-                                className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-sky-500 outline-none transition-all"
-                            />
-                        </div>
-                    </div>
+                    {!data.isReference && (
+                        <>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">WhatsApp</label>
+                                    <input
+                                        type="tel"
+                                        value={data.whatsapp || ''}
+                                        onChange={(e) => updateField('whatsapp', e.target.value)}
+                                        placeholder="+593 99..."
+                                        className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Instagram</label>
+                                    <input
+                                        type="text"
+                                        value={data.instagram || ''}
+                                        onChange={(e) => updateField('instagram', e.target.value)}
+                                        placeholder="@usuario"
+                                        className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
 
-                    <div>
-                        <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Teléfono de contacto</label>
-                        <input
-                            type="tel"
-                            value={data.phone || ''}
-                            onChange={(e) => updateField('phone', e.target.value)}
-                            className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-sky-500 outline-none transition-all"
-                            placeholder="Número para llamadas"
-                        />
-                    </div>
+                            <div>
+                                <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Teléfono de contacto</label>
+                                <input
+                                    type="tel"
+                                    value={data.phone || ''}
+                                    onChange={(e) => updateField('phone', e.target.value)}
+                                    className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                    placeholder="Número para llamadas"
+                                />
+                            </div>
+                        </>
+                    )}
 
                     <div>
                         <label className="text-xs font-black text-slate-500 uppercase mb-4 block tracking-widest">Imagen del Negocio</label>
@@ -268,21 +324,48 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                         </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            if (isRegistration) {
-                                // Create a synthetic form event so handleBusinessRegister works
-                                const fakeEvent = { preventDefault: () => { } } as React.FormEvent;
-                                handleBusinessRegister(fakeEvent);
-                            } else {
-                                handleUpdateBusinessProfile();
-                            }
-                        }}
-                        className="w-full bg-gradient-to-r from-sky-500 to-indigo-500 text-white font-black py-5 rounded-3xl hover:shadow-[0_0_30px_rgba(14,165,233,0.3)] hover:scale-[1.02] active:scale-95 transition-all mt-4 tracking-widest uppercase text-sm"
-                    >
-                        {isRegistration ? 'Finalizar Registro' : 'Guardar Cambios'}
-                    </button>
+                    {/* Admin Only Toggles - Simplified if not referenced above */}
+                    <div className="bg-slate-800/50 p-6 rounded-[2.5rem] border border-white/5 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h4 className="text-white font-bold text-sm">Visible en el Mapa</h4>
+                                <p className="text-[10px] text-slate-500 font-medium tracking-tight">Publicar este punto para todos los usuarios</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => updateField('isPublished', !((data as any).isPublished))}
+                                className={`w-12 h-6 rounded-full transition-all relative ${(data as any).isPublished ? 'bg-orange-500' : 'bg-slate-700'}`}
+                            >
+                                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all ${(data as any).isPublished ? 'left-[calc(100%-1.35rem)]' : 'left-0.5'}`} />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex flex-col gap-3 mt-4">
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                if (isRegistration) {
+                                    const fakeEvent = { preventDefault: () => { } } as React.FormEvent;
+                                    handleBusinessRegister(fakeEvent);
+                                } else {
+                                    handleUpdateBusinessProfile();
+                                }
+                            }}
+                            className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black py-5 rounded-3xl hover:shadow-[0_0_30px_rgba(249,115,22,0.3)] hover:scale-[1.02] active:scale-95 transition-all tracking-widest uppercase text-sm"
+                        >
+                            {isRegistration ? 'Finalizar Registro' : 'Guardar Cambios'}
+                        </button>
+
+                        {!isRegistration && business && (
+                            <button
+                                type="button"
+                                onClick={() => handleDeleteBusiness(business.id)}
+                                className="w-full bg-slate-800/50 text-orange-500 font-bold py-4 rounded-3xl border border-orange-500/10 hover:bg-orange-500/10 transition-all text-xs uppercase tracking-widest"
+                            >
+                                Eliminar Punto permanentemente
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <input

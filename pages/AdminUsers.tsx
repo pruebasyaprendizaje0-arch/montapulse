@@ -12,7 +12,8 @@ import {
     ArrowUpRight,
     Users,
     Zap,
-    CheckCircle
+    CheckCircle,
+    Trash2
 } from 'lucide-react';
 import { UserProfile, SubscriptionPlan } from '../types';
 import { updateUser, togglePulsePass, updateBusiness, incrementBusinessViewCount } from '../services/firestoreService';
@@ -21,7 +22,7 @@ import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 
 export const AdminUsers: React.FC = () => {
-    const { allUsers, setAllUsers, businesses, setBusinesses } = useData();
+    const { allUsers, setAllUsers, businesses, setBusinesses, handlePurgeAllReferences, isSuperUser } = useData();
     const navigate = useNavigate();
     const { showToast, showConfirm } = useToast();
 
@@ -50,9 +51,9 @@ export const AdminUsers: React.FC = () => {
     }), [allUsers]);
 
     return (
-        <div className="min-h-screen bg-slate-950 font-['Outfit'] pb-32">
+        <div className="h-auto w-full bg-slate-950 font-['Outfit'] pb-48">
             {/* Header section with glassmorphism */}
-            <div className="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 pt-12 pb-6 px-6">
+            <div className="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-2xl border-b border-white/5 pt-20 pb-6 px-6">
                 <div className="max-w-2xl mx-auto">
                     <div className="flex items-center justify-between mb-8">
                         <button
@@ -63,7 +64,7 @@ export const AdminUsers: React.FC = () => {
                         </button>
                         <div className="text-center">
                             <h1 className="text-xl font-black tracking-[0.2em] text-white uppercase flex items-center gap-3">
-                                <Users className="w-5 h-5 text-indigo-400" />
+                                <Users className="w-5 h-5 text-orange-400" />
                                 Gestión de Usuarios
                             </h1>
                         </div>
@@ -73,8 +74,8 @@ export const AdminUsers: React.FC = () => {
                     {/* Stats Overview */}
                     <div className="grid grid-cols-3 gap-3 mb-8">
                         {[
-                            { label: 'Total', value: stats.total, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
-                            { label: 'Hosts', value: stats.hosts, color: 'text-sky-400', bg: 'bg-sky-500/10' },
+                            { label: 'Total', value: stats.total, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+                            { label: 'Hosts', value: stats.hosts, color: 'text-amber-400', bg: 'bg-amber-500/10' },
                             { label: 'Premium', value: stats.premium, color: 'text-amber-400', bg: 'bg-amber-500/10' }
                         ].map((stat, i) => (
                             <div key={i} className={`${stat.bg} p-4 rounded-2xl border border-white/5`}>
@@ -93,7 +94,7 @@ export const AdminUsers: React.FC = () => {
                                 placeholder="Buscar por nombre o email..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all"
                             />
                         </div>
 
@@ -115,11 +116,33 @@ export const AdminUsers: React.FC = () => {
                                 className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-white outline-none"
                             >
                                 <option value="all" className="bg-slate-900">Todos los Planes</option>
-                                <option value={SubscriptionPlan.BASIC} className="bg-slate-900">Básico</option>
-                                <option value={SubscriptionPlan.PREMIUM} className="bg-slate-900">Premium</option>
+                                <option value={SubscriptionPlan.VISITOR} className="bg-slate-900">Visitante</option>
+                                <option value={SubscriptionPlan.BASIC} className="bg-slate-900">Básico (3 eventos)</option>
+                                <option value={SubscriptionPlan.PREMIUM} className="bg-slate-900">Premium (7 eventos + Pass)</option>
                             </select>
                         </div>
                     </div>
+
+                    {/* Dangerous Actions - Only for SuperUser/Admin */}
+                    {isSuperUser && (
+                        <div className="mt-8 pt-6 border-t border-white/5">
+                            <button
+                                onClick={handlePurgeAllReferences}
+                                className="w-full group bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-400 p-4 rounded-2xl transition-all duration-300 flex items-center justify-between"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-red-500/20 group-hover:bg-black/20 rounded-xl transition-colors">
+                                        <Trash2 className="w-5 h-5 text-red-500 group-hover:text-white" />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-xs font-black uppercase tracking-widest text-red-500 group-hover:text-white">Zona de Peligro</p>
+                                        <p className="text-[10px] font-bold text-red-500/60 group-hover:text-white/80">Borrar todos los puntos de referencia</p>
+                                    </div>
+                                </div>
+                                <ArrowUpRight className="w-5 h-5 text-red-500 group-hover:text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -141,9 +164,9 @@ export const AdminUsers: React.FC = () => {
                                     <div className="flex items-start justify-between mb-6">
                                         <div className="flex items-center gap-4">
                                             <div className="relative">
-                                                <div className="w-16 h-16 rounded-[1.25rem] bg-gradient-to-br from-indigo-500/20 to-purple-500/20 overflow-hidden ring-2 ring-white/10 group-hover:ring-indigo-500/30 transition-all">
+                                                <div className="w-16 h-16 rounded-[1.25rem] bg-gradient-to-br from-orange-500/20 to-amber-500/20 overflow-hidden ring-2 ring-white/10 group-hover:ring-orange-500/30 transition-all">
                                                     <img
-                                                        src={u.avatarUrl || `https://ui-avatars.com/api/?name=${u.name || 'User'}+${u.surname || 'Name'}&background=6366f1&color=fff&bold=true`}
+                                                        src={u.avatarUrl || `https://ui-avatars.com/api/?name=${u.name || 'User'}+${u.surname || 'Name'}&background=f97316&color=fff&bold=true`}
                                                         className="w-full h-full object-cover"
                                                         alt={u.name || 'User'}
                                                     />
@@ -158,8 +181,8 @@ export const AdminUsers: React.FC = () => {
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <p className="text-white font-black text-xl tracking-tight">{u.name || 'Usuario'} {u.surname || ''}</p>
                                                     {u.role === 'admin' && (
-                                                        <div className="bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">
-                                                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                                                        <div className="bg-orange-500/10 px-1.5 py-0.5 rounded-md border border-orange-500/20">
+                                                            <ShieldCheck className="w-3.5 h-3.5 text-orange-500" />
                                                         </div>
                                                     )}
                                                 </div>
@@ -181,13 +204,13 @@ export const AdminUsers: React.FC = () => {
                                     <div className="grid grid-cols-2 gap-4 mb-6">
                                         <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
                                             <p className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-1 flex items-center gap-2">
-                                                <ShieldCheck className="w-3 h-3 text-indigo-400" /> Rol Actual
+                                                <ShieldCheck className="w-3 h-3 text-orange-400" /> Rol Actual
                                             </p>
                                             <p className="text-sm font-bold text-white capitalize">{u.role}</p>
                                         </div>
                                         <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
                                             <p className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-1 flex items-center gap-2">
-                                                <Building2 className="w-3 h-3 text-sky-400" /> Negocio
+                                                <Building2 className="w-3 h-3 text-amber-400" /> Negocio
                                             </p>
                                             <p className="text-sm font-bold text-white truncate">
                                                 {userBusiness?.name || 'Ninguno'}
@@ -219,8 +242,8 @@ export const AdminUsers: React.FC = () => {
                                                 className="group/btn relative py-4 px-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all overflow-hidden"
                                             >
                                                 <div className="flex items-center justify-center gap-2">
-                                                    <div className="w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center group-hover/btn:bg-indigo-500/20 transition-colors">
-                                                        <ArrowUpRight className="w-4 h-4 text-indigo-400" />
+                                                    <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center group-hover/btn:bg-orange-500/20 transition-colors">
+                                                        <ArrowUpRight className="w-4 h-4 text-orange-400" />
                                                     </div>
                                                     <span className="text-xs font-black uppercase tracking-widest text-white">
                                                         {u.role === 'host' ? 'Quitar Host' : 'Hacer Host'}
@@ -229,7 +252,10 @@ export const AdminUsers: React.FC = () => {
                                             </button>
                                             <button
                                                 onClick={async () => {
-                                                    const newPlan = u.plan === SubscriptionPlan.PREMIUM ? SubscriptionPlan.BASIC : SubscriptionPlan.PREMIUM;
+                                                    const planCycle = [SubscriptionPlan.VISITOR, SubscriptionPlan.BASIC, SubscriptionPlan.PREMIUM];
+                                                    const currentIndex = planCycle.indexOf(u.plan || SubscriptionPlan.VISITOR);
+                                                    const newPlan = planCycle[(currentIndex + 1) % planCycle.length];
+
                                                     const confirmed = await showConfirm(
                                                         `¿Cambiar plan de ${u.name || 'este usuario'} a ${newPlan.toUpperCase()}?`,
                                                         'Actualizar Plan'
@@ -246,11 +272,14 @@ export const AdminUsers: React.FC = () => {
                                                     }
                                                 }}
                                                 className={`py-4 px-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 border ${u.plan === SubscriptionPlan.PREMIUM
-                                                    ? 'bg-slate-800/50 border-white/10 text-slate-400 hover:text-white hover:bg-slate-800'
-                                                    : 'bg-gradient-to-r from-amber-500 to-yellow-500 border-amber-400 text-black shadow-lg shadow-amber-500/20 hover:scale-[1.02] active:scale-95'
-                                                    }`}
+                                                        ? 'bg-amber-500 text-black border-amber-400 shadow-lg shadow-amber-500/20'
+                                                        : u.plan === SubscriptionPlan.BASIC
+                                                            ? 'bg-orange-500 text-white border-orange-400'
+                                                            : 'bg-white/5 border-white/10 text-slate-400'
+                                                    } hover:scale-[1.02] active:scale-95`}
                                             >
-                                                {u.plan === SubscriptionPlan.PREMIUM ? 'Bajar Nivel' : 'Activar Premium'}
+                                                <Zap className={`w-4 h-4 ${u.plan === SubscriptionPlan.PREMIUM ? 'fill-current' : ''}`} />
+                                                <span>Plan: {u.plan || 'Ninguno'}</span>
                                             </button>
                                         </div>
 
@@ -275,7 +304,7 @@ export const AdminUsers: React.FC = () => {
                                                     }
                                                 }}
                                                 className={`py-3 px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${u.pulsePassActive
-                                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                                    ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
                                                     : 'bg-slate-800/50 border-white/5 text-slate-500'
                                                     }`}
                                             >
@@ -301,7 +330,7 @@ export const AdminUsers: React.FC = () => {
                                                             }
                                                         }
                                                     }}
-                                                    className="py-3 px-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-2"
+                                                    className="py-3 px-4 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all flex items-center justify-center gap-2"
                                                 >
                                                     <Crown className="w-3.5 h-3.5" />
                                                     Promover Admin
@@ -324,7 +353,7 @@ export const AdminUsers: React.FC = () => {
                                                             }
                                                         }
                                                     }}
-                                                    className="py-3 px-4 rounded-2xl bg-slate-800 border border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:border-rose-500 hover:text-rose-500 transition-all flex items-center justify-center gap-2"
+                                                    className="py-3 px-4 rounded-2xl bg-slate-800 border border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:border-orange-500 hover:text-orange-500 transition-all flex items-center justify-center gap-2"
                                                 >
                                                     <ShieldCheck className="w-3.5 h-3.5" />
                                                     Quitar Admin
@@ -352,7 +381,7 @@ export const AdminUsers: React.FC = () => {
                                                     }
                                                 }}
                                                 className={`w-full py-3 px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${userBusiness.isVerified
-                                                    ? 'bg-sky-500/10 border-sky-500/20 text-sky-400'
+                                                    ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
                                                     : 'bg-slate-800/50 border-orange-500/20 text-orange-400'
                                                     }`}
                                             >

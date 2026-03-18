@@ -17,7 +17,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
 
     const getIcon = (type: PulseNotification['type']) => {
         switch (type) {
-            case 'system': return <Info className="w-4 h-4 text-sky-400" />;
+            case 'system': return <Info className="w-4 h-4 text-orange-400" />;
             case 'community': return <Zap className="w-4 h-4 text-amber-400" />;
             case 'offer': return <Sparkles className="w-4 h-4 text-rose-400" />;
             default: return <Bell className="w-4 h-4 text-slate-400" />;
@@ -69,7 +69,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                                         </div>
                                     </div>
                                     {!notif.read && (
-                                        <div className="w-2 h-2 bg-sky-500 rounded-full mt-1 shrink-0 shadow-[0_0_8px_rgba(14,165,233,0.5)]" />
+                                        <div className="w-2 h-2 bg-orange-500 rounded-full mt-1 shrink-0 shadow-[0_0_8px_rgba(249,115,22,0.5)]" />
                                     )}
                                 </div>
                             </div>
@@ -81,7 +81,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
             {notifications.some(n => !n.read) && (
                 <button
                     onClick={markAllAsRead}
-                    className="p-4 text-[10px] font-black text-sky-400 uppercase tracking-[0.2em] border-t border-white/5 hover:bg-sky-400/5 transition-colors"
+                    className="p-4 text-[10px] font-black text-orange-500 uppercase tracking-[0.2em] border-t border-white/5 hover:bg-orange-500/5 transition-colors"
                 >
                     Mark all as read
                 </button>

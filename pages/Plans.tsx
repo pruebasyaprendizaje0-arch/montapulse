@@ -73,19 +73,46 @@ export const Plans: React.FC = () => {
 
                     {/* Plans Grid */}
                     <div className="grid gap-6">
+                        {/* Visitor Plan */}
+                        <div className={`relative group p-8 rounded-[3rem] bg-black/40 border transition-all ${user?.plan === SubscriptionPlan.VISITOR ? 'border-orange-500/50 shadow-[0_0_30px_#f9731615]' : 'border-white/5 hover:bg-black/60'}`}>
+                            <div className="absolute top-0 right-0 p-6">
+                                <CheckCircle className={`w-8 h-8 ${user?.plan === SubscriptionPlan.VISITOR ? 'text-orange-500' : 'text-slate-700'}`} />
+                            </div>
+                            <h3 className="text-xl font-black text-white italic uppercase mb-2">Visitante</h3>
+                            <div className="flex items-baseline gap-1 mb-6">
+                                <span className="text-4xl font-black text-white tracking-tighter">GRATIS</span>
+                            </div>
+                            <ul className="space-y-4 mb-8">
+                                <PlanFeature icon={Calendar} text="Ver eventos públicos" highlight={user?.plan === SubscriptionPlan.VISITOR} />
+                                <PlanFeature icon={MapPin} text="Mapa básico interactivo" highlight={user?.plan === SubscriptionPlan.VISITOR} />
+                                <PlanFeature icon={Sparkles} text="Vibes generales" highlight={user?.plan === SubscriptionPlan.VISITOR} />
+                            </ul>
+                            <button
+                                onClick={() => onUpdatePlan(SubscriptionPlan.VISITOR)}
+                                className={`w-full py-5 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] transition-all ${user?.plan === SubscriptionPlan.VISITOR
+                                    ? 'bg-slate-800/50 text-slate-500 border border-white/5 cursor-default'
+                                    : 'bg-white text-black hover:scale-[1.02] active:scale-95'
+                                    }`}
+                            >
+                                {user?.plan === SubscriptionPlan.VISITOR ? 'TU PLAN ACTUAL' : 'SELECCIONAR'}
+                            </button>
+                        </div>
+
                         {/* Basic Plan */}
                         <div className={`relative group p-8 rounded-[3rem] bg-black/40 border transition-all ${user?.plan === SubscriptionPlan.BASIC ? 'border-orange-500/50 shadow-[0_0_30px_#f9731615]' : 'border-white/5 hover:bg-black/60'}`}>
                             <div className="absolute top-0 right-0 p-6">
                                 <CheckCircle className={`w-8 h-8 ${user?.plan === SubscriptionPlan.BASIC ? 'text-orange-500' : 'text-slate-700'}`} />
                             </div>
-                            <h3 className="text-xl font-black text-white italic uppercase mb-2">Visitor</h3>
+                            <h3 className="text-xl font-black text-white italic uppercase mb-2">Plan Básico</h3>
                             <div className="flex items-baseline gap-1 mb-6">
-                                <span className="text-4xl font-black text-white tracking-tighter">FREE</span>
+                                <span className="text-xs font-black text-white/60">$</span>
+                                <span className="text-4xl font-black text-white tracking-tighter">3.00</span>
+                                <span className="text-xs font-black text-white/40 italic">/mes</span>
                             </div>
                             <ul className="space-y-4 mb-8">
-                                <PlanFeature icon={Calendar} text="Ver eventos públicos" highlight={user?.plan === SubscriptionPlan.BASIC} />
-                                <PlanFeature icon={MapPin} text="Mapa básico interactivo" highlight={user?.plan === SubscriptionPlan.BASIC} />
-                                <PlanFeature icon={Sparkles} text="Vibes generales" highlight={user?.plan === SubscriptionPlan.BASIC} />
+                                <PlanFeature icon={Calendar} text="Hasta 3 eventos mensuales" highlight={user?.plan === SubscriptionPlan.BASIC} />
+                                <PlanFeature icon={MapPin} text="Presencia básica en mapa" highlight={user?.plan === SubscriptionPlan.BASIC} />
+                                <PlanFeature icon={Sparkles} text="Acceso a Dashboard Host" highlight={user?.plan === SubscriptionPlan.BASIC} />
                             </ul>
                             <button
                                 onClick={() => onUpdatePlan(SubscriptionPlan.BASIC)}
@@ -106,8 +133,8 @@ export const Plans: React.FC = () => {
                                 </div>
                             </div>
                             <div className="flex items-center gap-2 mb-2">
-                                <h3 className="text-2xl font-black text-white italic uppercase">Premium</h3>
-                                <div className="px-2 py-0.5 bg-orange-500 text-[8px] font-black text-white rounded-full uppercase tracking-widest">Recomendado</div>
+                                <h3 className="text-2xl font-black text-white italic uppercase">Plan Premium</h3>
+                                <div className="px-2 py-0.5 bg-orange-500 text-[8px] font-black text-white rounded-full uppercase tracking-widest">PRO</div>
                             </div>
                             <div className="flex items-baseline gap-1 mb-6">
                                 <span className="text-xs font-black text-white/60">$</span>
@@ -115,10 +142,10 @@ export const Plans: React.FC = () => {
                                 <span className="text-xs font-black text-white/40 italic">/mes</span>
                             </div>
                             <ul className="space-y-4 mb-8">
-                                <PlanFeature icon={Star} text="Publicar eventos ilimitados" highlight={true} />
-                                <PlanFeature icon={Navigation} text="Ubicación premium en el mapa" highlight={true} />
-                                <PlanFeature icon={MessageCircle} text="Canal de comunidad directa" highlight={true} />
-                                <PlanFeature icon={Zap} text="Flash Offers exclusivas" highlight={true} />
+                                <PlanFeature icon={Star} text="7 eventos mensuales" highlight={true} />
+                                <PlanFeature icon={Zap} text="Pulse Pass" highlight={true} />
+                                <PlanFeature icon={Navigation} text="Ubicación destacada VIP" highlight={true} />
+                                <PlanFeature icon={MessageCircle} text="Canal de comunidad exclusiva" highlight={true} />
                             </ul>
 
                             <button

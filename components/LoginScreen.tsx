@@ -63,7 +63,7 @@ export const LoginScreen: React.FC = () => {
             <div className="relative w-full max-w-md">
                 {/* Lock Icon Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-sky-500 to-indigo-600 rounded-3xl shadow-2xl shadow-sky-500/30 mb-4">
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-600 rounded-3xl shadow-2xl shadow-orange-500/30 mb-4">
                         <Lock className="w-10 h-10 text-white" />
                     </div>
                     <h1 translate="no" className="text-4xl font-black text-white tracking-tight mb-2 notranslate">Spondylus Pulse</h1>
@@ -110,7 +110,7 @@ export const LoginScreen: React.FC = () => {
                             {/* Register Button */}
                             <button
                                 onClick={() => setViewMode('register')}
-                                className="w-full bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-bold py-4 px-6 rounded-2xl hover:from-sky-600 hover:to-indigo-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-sky-500/20"
+                                className="w-full bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold py-4 px-6 rounded-2xl hover:from-orange-600 hover:to-amber-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-orange-500/20"
                             >
                                 <UserPlus className="w-5 h-5" />
                                 <span>Create Account</span>
@@ -146,7 +146,7 @@ export const LoginScreen: React.FC = () => {
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
                                             placeholder="••••••••"
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
                                             required
                                         />
                                     </div>
@@ -155,7 +155,7 @@ export const LoginScreen: React.FC = () => {
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-bold py-4 rounded-2xl hover:from-sky-600 hover:to-indigo-700 transition-all shadow-lg shadow-sky-500/30 disabled:opacity-50 flex items-center justify-center gap-2"
+                                    className="w-full bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold py-4 rounded-2xl hover:from-orange-600 hover:to-amber-700 transition-all shadow-lg shadow-orange-500/30 disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
                                     <LogIn className="w-5 h-5" />
                                     <span>{loading ? 'Signing in...' : 'Sign In'}</span>

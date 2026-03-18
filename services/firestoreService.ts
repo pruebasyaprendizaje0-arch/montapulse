@@ -12,10 +12,75 @@ import {
     serverTimestamp,
     Timestamp,
     setDoc,
-    increment
+    increment,
+    orderBy,
+    limit
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { MontanitaEvent, Business, UserProfile } from '../types';
+import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, BusinessReview } from '../types';
+
+// Helper to sanitize data for Firestore
+const sanitizeData = (data: any): any => {
+    if (data === undefined) {
+        return null;
+    }
+    if (Array.isArray(data)) {
+        return data.map(item => sanitizeData(item));
+    }
+    if (data !== null && typeof data === 'object' && !(data instanceof Date) && !(data instanceof Timestamp)) {
+        return Object.fromEntries(
+            Object.entries(data).map(([k, v]) => [k, v === undefined ? null : sanitizeData(v)])
+        );
+    }
+    return data;
+};
+
+// ==================== REVIEWS ====================
+
+export const subscribeToBusinessReviews = (businessId: string, callback: (reviews: BusinessReview[]) => void) => {
+    const reviewsRef = collection(db, 'businessReviews');
+    const q = query(reviewsRef, where('businessId', '==', businessId), orderBy('timestamp', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+        const reviews = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate() || new Date()
+        })) as BusinessReview[];
+        callback(reviews);
+    });
+};
+
+export const addBusinessReview = async (review: BusinessReview) => {
+    try {
+        const reviewsRef = collection(db, 'businessReviews');
+        const reviewDoc = await addDoc(reviewsRef, {
+            ...review,
+            timestamp: serverTimestamp()
+        });
+
+        // Update business reviewCount and calculate new rating
+        const businessRef = doc(db, 'businesses', review.businessId);
+        const businessSnap = await getDoc(businessRef);
+        
+        if (businessSnap.exists()) {
+            const businessData = businessSnap.data();
+            const currentReviewCount = businessData.reviewCount || 0;
+            const currentRating = businessData.rating || 0;
+            
+            // Calculate new average rating
+            const newReviewCount = currentReviewCount + 1;
+            const newRating = ((currentRating * currentReviewCount) + review.rating) / newReviewCount;
+            
+            await updateDoc(businessRef, {
+                reviewCount: newReviewCount,
+                rating: Math.round(newRating * 10) / 10
+            });
+        }
+    } catch (error) {
+        console.error('Error adding business review:', error);
+        throw error;
+    }
+};
 
 // ==================== EVENTS ====================
 
@@ -23,7 +88,7 @@ export const createEvent = async (event: Omit<MontanitaEvent, 'id'>) => {
     try {
         const eventsRef = collection(db, 'events');
         const docRef = await addDoc(eventsRef, {
-            ...event,
+            ...sanitizeData(event),
             startAt: Timestamp.fromDate(event.startAt),
             endAt: Timestamp.fromDate(event.endAt),
             createdAt: serverTimestamp()
@@ -48,7 +113,7 @@ export const updateEvent = async (id: string, data: Partial<MontanitaEvent>) => 
         }
 
         await updateDoc(eventRef, {
-            ...updateData,
+            ...sanitizeData(updateData),
             updatedAt: serverTimestamp()
         });
     } catch (error) {
@@ -98,11 +163,34 @@ export const subscribeToEvents = (callback: (events: MontanitaEvent[]) => void) 
 
 // ==================== BUSINESSES ====================
 
+export const incrementViewCount = async (id: string) => {
+    try {
+        const bizRef = doc(db, 'businesses', id);
+        await updateDoc(bizRef, {
+            viewCount: increment(1)
+        });
+    } catch (error) {
+        // Silently fail as this is not critical
+    }
+};
+
 export const createBusiness = async (business: Omit<Business, 'id'>) => {
     try {
         const businessesRef = collection(db, 'businesses');
+        
+
+        // Reference points need a custom ID with the ref- prefix for map styling
+        if ((business as any).isReference) {
+            const refId = `ref-${Date.now()}`;
+            const docRef = doc(businessesRef, refId);
+            await setDoc(docRef, {
+                ...sanitizeData(business),
+                createdAt: serverTimestamp()
+            });
+            return refId;
+        }
         const docRef = await addDoc(businessesRef, {
-            ...business,
+            ...sanitizeData(business),
             createdAt: serverTimestamp()
         });
         return docRef.id;
@@ -112,13 +200,16 @@ export const createBusiness = async (business: Omit<Business, 'id'>) => {
     }
 };
 
+
 export const updateBusiness = async (id: string, data: Partial<Business>) => {
     try {
         const businessRef = doc(db, 'businesses', id);
-        await updateDoc(businessRef, {
-            ...data,
+
+        // Using setDoc with merge to support reference points that may not exist in Firestore yet
+        await setDoc(businessRef, {
+            ...sanitizeData(data),
             updatedAt: serverTimestamp()
-        });
+        }, { merge: true });
     } catch (error) {
         console.error('Error updating business:', error);
         throw error;
@@ -132,6 +223,68 @@ export const deleteBusiness = async (id: string) => {
     } catch (error) {
         console.error('Error deleting business:', error);
         throw error;
+    }
+};
+
+export const purgeAllReferencePoints = async () => {
+    try {
+        const businessesRef = collection(db, 'businesses');
+        const snapshot = await getDocs(businessesRef);
+        const toDelete = snapshot.docs.filter(doc => {
+            const data = doc.data();
+            const id = doc.id.toLowerCase();
+            const name = (data.name || '').toLowerCase();
+            const category = (data.category as string || '').toLowerCase();
+            
+            return data.isReference || 
+                   id.startsWith('ref-') || 
+                   category.includes('referencia') ||
+                   category.includes('reference') ||
+                   name.includes('ref-') ||
+                   name.includes('referencia') ||
+                   name.includes('reference') ||
+                   name.includes('punto de');
+        });
+
+        console.log(`Purger: Found ${toDelete.length} points to delete.`);
+        
+        const deletePromises = toDelete.map(d => deleteDoc(d.ref));
+        await Promise.all(deletePromises);
+        
+        return toDelete.length;
+    } catch (error) {
+        console.error('Error purging reference points:', error);
+        throw error;
+    }
+};
+
+export const getBusinessById = async (id: string): Promise<Business | null> => {
+    try {
+        const bizRef = doc(db, 'businesses', id);
+        const snapshot = await getDoc(bizRef);
+        if (snapshot.exists()) {
+            return { id: snapshot.id, ...snapshot.data() } as Business;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error getting business:', error);
+        return null;
+    }
+};
+
+export const getBusinessByEmail = async (email: string): Promise<Business | null> => {
+    try {
+        const businessesRef = collection(db, 'businesses');
+        const q = query(businessesRef, where('email', '==', email));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            const doc = snapshot.docs[0];
+            return { id: doc.id, ...doc.data() } as Business;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error getting business by email:', error);
+        return null;
     }
 };
 
@@ -160,14 +313,24 @@ export const subscribeToBusinesses = (callback: (businesses: Business[]) => void
     });
 };
 
+export const incrementBusinessViewCount = async (businessId: string) => {
+    try {
+        const bizRef = doc(db, 'businesses', businessId);
+        await updateDoc(bizRef, {
+            viewCount: increment(1)
+        });
+    } catch (error) {
+        console.error('Error incrementing business view count:', error);
+    }
+};
+
 // ==================== USERS ====================
 
 export const createUser = async (userId: string, userData: Omit<UserProfile, 'id'>) => {
     try {
         const userRef = doc(db, 'users_v2', userId);
-        // Use setDoc with merge: true to create or update
         await setDoc(userRef, {
-            ...userData,
+            ...sanitizeData(userData),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         }, { merge: true });
@@ -181,7 +344,7 @@ export const updateUser = async (userId: string, data: Partial<UserProfile>) => 
     try {
         const userRef = doc(db, 'users_v2', userId);
         await updateDoc(userRef, {
-            ...data,
+            ...sanitizeData(data),
             updatedAt: serverTimestamp()
         });
     } catch (error) {
@@ -203,8 +366,118 @@ export const getUser = async (userId: string): Promise<UserProfile | null> => {
         return null;
     } catch (error) {
         console.error('Error getting user:', error);
-        throw error; // Throw so we can handle errors vs "not found"
+        throw error;
     }
+};
+
+export const getUserByEmail = async (email: string): Promise<UserProfile | null> => {
+    try {
+        const usersRef = collection(db, 'users_v2');
+        const q = query(usersRef, where('email', '==', email));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            const doc = snapshot.docs[0];
+            return { id: doc.id, ...doc.data() } as UserProfile;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error getting user by email:', error);
+        return null;
+    }
+};
+
+export const subscribeToUsers = (callback: (users: UserProfile[]) => void) => {
+    const usersRef = collection(db, 'users_v2');
+    return onSnapshot(usersRef, (snapshot) => {
+        const users = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as UserProfile[];
+        callback(users);
+    });
+};
+
+// ==================== POINTS & PASS ====================
+
+export const addPoints = async (userId: string, amount: number) => {
+    const userRef = doc(db, 'users_v2', userId);
+    await updateDoc(userRef, {
+        points: increment(amount)
+    });
+};
+
+export const redeemPoints = async (userId: string, amount: number) => {
+    const userRef = doc(db, 'users_v2', userId);
+    await updateDoc(userRef, {
+        points: increment(-amount)
+    });
+};
+
+export const togglePulsePass = async (userId: string, active: boolean) => {
+    const userRef = doc(db, 'users_v2', userId);
+    await updateDoc(userRef, {
+        pulsePassActive: active
+    });
+};
+
+// ==================== FOLLOWS ====================
+
+export const toggleFollowBusiness = async (userId: string, businessId: string) => {
+    const followsRef = collection(db, 'follows');
+    const q = query(followsRef, where('userId', '==', userId), where('businessId', '==', businessId));
+    const snapshot = await getDocs(q);
+
+    if (!snapshot.empty) {
+        await deleteDoc(snapshot.docs[0].ref);
+        // Decrement follower count
+        const businessRef = doc(db, 'businesses', businessId);
+        await updateDoc(businessRef, {
+            followerCount: increment(-1)
+        });
+        return false;
+    } else {
+        await addDoc(followsRef, {
+            userId,
+            businessId,
+            createdAt: serverTimestamp()
+        });
+        // Increment follower count
+        const businessRef = doc(db, 'businesses', businessId);
+        await updateDoc(businessRef, {
+            followerCount: increment(1)
+        });
+        return true;
+    }
+};
+
+export const getFollowedBusinessIds = async (userId: string): Promise<string[]> => {
+    const followsRef = collection(db, 'follows');
+    const q = query(followsRef, where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data().businessId);
+};
+
+export const subscribeToUserFollows = (userId: string, callback: (businessIds: string[]) => void) => {
+    const followsRef = collection(db, 'follows');
+    const q = query(followsRef, where('userId', '==', userId));
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.docs.map(doc => doc.data().businessId));
+    });
+};
+
+export const getBusinessFollowers = async (businessId: string): Promise<string[]> => {
+    const followsRef = collection(db, 'follows');
+    const q = query(followsRef, where('businessId', '==', businessId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data().userId);
+};
+
+export const subscribeToBusinessFollowers = (businessId: string, callback: (userIds: string[]) => void) => {
+    const followsRef = collection(db, 'follows');
+    const q = query(followsRef, where('businessId', '==', businessId));
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.docs.map(doc => doc.data().userId));
+    });
 };
 
 // ==================== FAVORITES ====================
@@ -238,18 +511,6 @@ export const removeFavorite = async (userId: string, eventId: string) => {
     }
 };
 
-export const getUserFavorites = async (userId: string): Promise<string[]> => {
-    try {
-        const favoritesRef = collection(db, 'favorites');
-        const q = query(favoritesRef, where('userId', '==', userId));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => doc.data().eventId);
-    } catch (error) {
-        console.error('Error getting favorites:', error);
-        return [];
-    }
-};
-
 export const subscribeToUserFavorites = (userId: string, callback: (eventIds: string[]) => void) => {
     const favoritesRef = collection(db, 'favorites');
     const q = query(favoritesRef, where('userId', '==', userId));
@@ -271,14 +532,12 @@ export const toggleRSVP = async (userId: string, eventId: string) => {
         const eventRef = doc(db, 'events', eventId);
 
         if (!snapshot.empty) {
-            // Already RSVP'd -> Remove
             await deleteDoc(snapshot.docs[0].ref);
             await updateDoc(eventRef, {
                 interestedCount: increment(-1)
             });
-            return false; // Removed
+            return false;
         } else {
-            // Not RSVP'd -> Add
             await addDoc(rsvpsRef, {
                 userId,
                 eventId,
@@ -287,23 +546,11 @@ export const toggleRSVP = async (userId: string, eventId: string) => {
             await updateDoc(eventRef, {
                 interestedCount: increment(1)
             });
-            return true; // Added
+            return true;
         }
     } catch (error) {
         console.error('Error toggling RSVP:', error);
         throw error;
-    }
-};
-
-export const getUserRSVPs = async (userId: string): Promise<string[]> => {
-    try {
-        const rsvpsRef = collection(db, 'rsvps');
-        const q = query(rsvpsRef, where('userId', '==', userId));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => doc.data().eventId);
-    } catch (error) {
-        console.error('Error getting RSVPs:', error);
-        return [];
     }
 };
 
@@ -317,16 +564,25 @@ export const subscribeToUserRSVPs = (userId: string, callback: (eventIds: string
     });
 };
 
+export const subscribeToRSVPCounts = (callback: (counts: Record<string, number>) => void) => {
+    const rsvpsRef = collection(db, 'rsvps');
+    return onSnapshot(rsvpsRef, (snapshot) => {
+        const counts: Record<string, number> = {};
+        snapshot.docs.forEach(doc => {
+            const eventId = doc.data().eventId;
+            counts[eventId] = (counts[eventId] || 0) + 1;
+        });
+        callback(counts);
+    });
+};
+
 // ==================== SETTINGS ====================
 
 export const getAppSettings = async (settingId: string) => {
     try {
         const settingRef = doc(db, 'settings', settingId);
         const snapshot = await getDoc(settingRef);
-        if (snapshot.exists()) {
-            return snapshot.data();
-        }
-        return null;
+        return snapshot.exists() ? snapshot.data() : null;
     } catch (error) {
         console.error('Error getting settings:', error);
         return null;
@@ -354,3 +610,132 @@ export const subscribeToAppSettings = (settingId: string, callback: (data: any) 
         }
     });
 };
+
+// ==================== COMMUNITY ====================
+
+export const subscribeToPosts = (callback: (posts: any[]) => void) => {
+    const postsRef = collection(db, 'posts');
+    const q = query(postsRef, orderBy('timestamp', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+        const posts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate() || new Date()
+        }));
+        callback(posts);
+    });
+};
+
+export const createPost = async (post: any) => {
+    try {
+        const postsRef = collection(db, 'posts');
+        await addDoc(postsRef, {
+            ...post,
+            timestamp: serverTimestamp(),
+            likes: 0,
+            comments: 0
+        });
+    } catch (error) {
+        console.error('Error creating post:', error);
+        throw error;
+    }
+};
+
+export const toggleLikePost = async (postId: string, userId: string) => {
+    const postRef = doc(db, 'posts', postId);
+    await updateDoc(postRef, {
+        likes: increment(1)
+    });
+};
+
+// ==================== GLOBAL MESSAGES (OLD) ====================
+
+export const subscribeToMessages = (limitNum: number, callback: (messages: any[]) => void) => {
+    const messagesRef = collection(db, 'messages');
+    const q = query(messagesRef, orderBy('timestamp', 'desc'), limit(limitNum));
+    return onSnapshot(q, (snapshot) => {
+        const messages = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate() || new Date()
+        }));
+        callback(messages.reverse());
+    });
+};
+
+export const sendMessage = async (message: any) => {
+    try {
+        const messagesRef = collection(db, 'messages');
+        await addDoc(messagesRef, {
+            ...message,
+            timestamp: serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Error sending message:', error);
+        throw error;
+    }
+};
+
+// ==================== CHAT ROOMS (NEW) ====================
+
+export const subscribeToChatRooms = (userId: string, callback: (rooms: ChatRoom[]) => void) => {
+    const roomsRef = collection(db, 'chatRooms');
+    const q = query(roomsRef, where('participants', 'array-contains', userId));
+    return onSnapshot(q, (snapshot) => {
+        const rooms = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            lastMessageTime: doc.data().lastMessageTime?.toDate() || new Date()
+        })) as ChatRoom[];
+        callback(rooms);
+    });
+};
+
+export const sendRoomMessage = async (roomId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+    try {
+        const messagesRef = collection(db, `chatRooms/${roomId}/messages`);
+        await addDoc(messagesRef, {
+            ...message,
+            timestamp: serverTimestamp()
+        });
+
+        const roomRef = doc(db, 'chatRooms', roomId);
+        const prefix = message.isBusinessMessage ? '🏪 ' : '👤 ';
+        await updateDoc(roomRef, {
+            lastMessage: `${prefix}${message.senderName}: ${message.text}`,
+            lastMessageTime: serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Error sending room message:', error);
+        throw error;
+    }
+};
+
+export const subscribeToRoomMessages = (roomId: string, callback: (messages: ChatMessage[]) => void) => {
+    const messagesRef = collection(db, `chatRooms/${roomId}/messages`);
+    return onSnapshot(messagesRef, (snapshot) => {
+        const messages = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate() || new Date()
+        })) as ChatMessage[];
+        messages.sort((a, b) => a.timestamp - b.timestamp);
+        callback(messages);
+    });
+};
+
+export const createChatRoom = async (roomData: Omit<ChatRoom, 'id'>) => {
+    try {
+        const roomsRef = collection(db, 'chatRooms');
+        const docRef = await addDoc(roomsRef, {
+            ...roomData,
+            createdAt: serverTimestamp(),
+            lastMessageTime: serverTimestamp()
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error('Error creating chat room:', error);
+        throw error;
+    }
+};
+

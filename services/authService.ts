@@ -14,10 +14,7 @@ import { Vibe, SubscriptionPlan } from '../types';
 
 // Super admin emails - ONLY these emails have full admin access
 const SUPER_ADMIN_EMAILS = [
-    'pruebasyaprendizaje0@gmail.com',
-    'frank.p.6@gmail.com',
-    'montapulse@gmail.com',
-    'fhernandezcalle@gmail.com'
+    'pruebasyaprendizaje0@gmail.com'
 ];
 
 export type UserRole = 'visitor' | 'host' | 'admin';

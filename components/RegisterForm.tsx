@@ -104,7 +104,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
                         type="button"
                         onClick={() => setFormData({ ...formData, role: 'visitor' })}
                         className={`p-4 rounded-2xl border-2 transition-all ${formData.role === 'visitor'
-                            ? 'bg-sky-500/10 border-sky-500 text-white'
+                            ? 'bg-orange-500/10 border-orange-500 text-white'
                             : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
                             }`}
                     >
@@ -116,7 +116,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
                         type="button"
                         onClick={() => setFormData({ ...formData, role: 'host' })}
                         className={`p-4 rounded-2xl border-2 transition-all ${formData.role === 'host'
-                            ? 'bg-sky-500/10 border-sky-500 text-white'
+                            ? 'bg-orange-500/10 border-orange-500 text-white'
                             : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
                             }`}
                     >
@@ -179,7 +179,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
                             value={formData.name}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             placeholder="Tu nombre"
-                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
                             required
                         />
                     </div>
@@ -193,7 +193,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
                             value={formData.surname}
                             onChange={(e) => setFormData({ ...formData, surname: e.target.value })}
                             placeholder="Tu apellido"
-                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
                             required
                         />
                     </div>
@@ -264,7 +264,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-bold py-4 rounded-2xl hover:from-sky-600 hover:to-indigo-700 transition-all shadow-lg shadow-sky-500/30 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold py-4 rounded-2xl hover:from-orange-600 hover:to-amber-700 transition-all shadow-lg shadow-orange-500/30 disabled:opacity-50 flex items-center justify-center gap-2"
             >
                 <CheckCircle className="w-5 h-5" />
                 <span>{loading ? 'Creating account...' : 'Create Account'}</span>

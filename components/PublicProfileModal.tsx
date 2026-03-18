@@ -4,6 +4,7 @@ import { Business, UserProfile, MontanitaEvent, BusinessReview } from '../types'
 import { useData } from '../context/DataContext';
 import { subscribeToBusinessReviews, addBusinessReview } from '../services/firestoreService';
 import { useAuthContext } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 interface PublicProfileModalProps {
     isOpen: boolean;
@@ -20,6 +21,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
 }) => {
     const { businesses, events, allUsers, handleToggleFollow, isBusinessFollowed } = useData();
     const { user: currentUser } = useAuthContext();
+    const { showToast } = useToast();
     const [reviews, setReviews] = useState<BusinessReview[]>([]);
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,7 +55,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
             setNewReview({ rating: 5, comment: '' });
         } catch (error) {
             console.error("Error submitting review:", error);
-            alert("No se pudo enviar la reseña.");
+            showToast("No se pudo enviar la reseña.", "error");
         } finally {
             setIsSubmitting(false);
         }
@@ -114,7 +116,12 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                             <MapPin className="w-3 h-3" />
                             {business?.locality || "Montañita"}
                             <span>•</span>
-                            {business ? 'Negocio Verificado' : 'Explorador Pulse'}
+                            {business?.category || "Explorador"}
+                            <span>•</span>
+                            {business 
+                                ? (business.isReference || business.id?.startsWith('ref-') ? 'Punto de Referencia Verificado' : 'Negocio Verificado') 
+                                : 'Explorador Pulse'
+                            }
                         </div>
                     </div>
 

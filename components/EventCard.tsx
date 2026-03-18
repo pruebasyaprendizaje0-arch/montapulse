@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Clock, Users, Flame, Star, MapPin } from 'lucide-react';
-import { MontanitaEvent, Sector } from '../types.ts';
+import { MontanitaEvent, Sector, Vibe } from '../types.ts';
 import { SECTOR_INFO } from '../constants.ts';
 import { Skeleton } from './Skeleton.tsx';
 
@@ -8,9 +8,11 @@ interface EventCardProps {
   event: MontanitaEvent;
   locality?: string;
   onClick: (event: MontanitaEvent) => void;
+  onRsvp?: (id: string, e: React.MouseEvent) => void;
+  isRsvp?: boolean;
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ event, locality, onClick }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, locality, onClick, onRsvp, isRsvp }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const sectorStyle = SECTOR_INFO[event.sector] || SECTOR_INFO[Sector.CENTRO];
 
@@ -46,17 +48,17 @@ export const EventCard: React.FC<EventCardProps> = ({ event, locality, onClick }
         {/* Top Badges */}
         <div className="absolute top-4 left-4 flex gap-2">
           <div className="px-3 py-1 bg-amber-400 text-black text-[10px] font-black uppercase rounded-lg shadow-lg">
-            {event.vibe === 'FIESTA' ? 'PARTY' : event.vibe}
+            {String(event.vibe).toUpperCase() === 'FIESTA' ? 'PARTY' : event.vibe}
           </div>
           <div className="px-3 py-1 bg-white/20 backdrop-blur-md text-white text-[10px] font-bold uppercase rounded-lg border border-white/10 flex items-center gap-1">
             <MapPin className="w-3 h-3 text-white/70" />
-            <span>{locality || 'Montañita'} • {event.sector}</span>
+            <span>{event.locality || locality || 'Montañita'} • {event.sector}</span>
           </div>
         </div>
 
         {/* Content Overlay */}
         <div className="absolute bottom-6 left-6 right-6 flex flex-col gap-1">
-          <div className="flex items-center justify-between text-sky-400">
+          <div className="flex items-center justify-between text-orange-400">
             <span className="text-xs font-black tracking-tight">{formatTimeRange(event.startAt)}</span>
             <div className="flex flex-col items-end">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Interest</span>
@@ -73,12 +75,21 @@ export const EventCard: React.FC<EventCardProps> = ({ event, locality, onClick }
                 </div>
               ))}
               <div className="w-8 h-8 rounded-full border-2 border-[#020617] bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-400">
-                +128
+                +{event.interestedCount}
               </div>
             </div>
 
-            <button className="px-6 py-2.5 bg-sky-500 text-white text-xs font-black uppercase rounded-full shadow-[0_4px_15px_rgba(14,165,233,0.3)] hover:bg-sky-400 transition-colors">
-              Interested
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRsvp?.(event.id, e);
+              }}
+              className={`px-6 py-2.5 text-xs font-black uppercase rounded-full shadow-lg transition-all active:scale-95 ${isRsvp
+                ? 'bg-emerald-500 text-white shadow-emerald-500/20'
+                : 'bg-orange-500 text-white shadow-orange-500/20 hover:bg-orange-400'
+                }`}
+            >
+              {isRsvp ? 'Interested ✓' : 'Interested'}
             </button>
           </div>
         </div>

@@ -15,7 +15,7 @@ export const Policies: React.FC = () => {
                 >
                     <ChevronLeft className="w-5 h-5 text-slate-400" />
                 </button>
-                <h1 className="text-xl font-black uppercase tracking-widest bg-gradient-to-r from-sky-400 to-indigo-500 bg-clip-text text-transparent">
+                <h1 className="text-xl font-black uppercase tracking-widest bg-gradient-to-r from-orange-400 to-amber-600 bg-clip-text text-transparent">
                     Políticas
                 </h1>
                 <div className="w-11" />
@@ -24,8 +24,8 @@ export const Policies: React.FC = () => {
             <div className="p-8 max-w-2xl mx-auto space-y-12">
                 {/* Intro */}
                 <div className="text-center space-y-4">
-                    <div className="inline-flex p-4 bg-indigo-500/10 rounded-3xl border border-indigo-500/20 mb-2">
-                        <Shield className="w-8 h-8 text-indigo-400" />
+                    <div className="inline-flex p-4 bg-orange-500/10 rounded-3xl border border-orange-500/20 mb-2">
+                        <Shield className="w-8 h-8 text-orange-400" />
                     </div>
                     <h2 className="text-3xl font-black tracking-tight">Tu Seguridad es lo Primero</h2>
                     <p className="text-slate-400 leading-relaxed">
@@ -37,8 +37,8 @@ export const Policies: React.FC = () => {
                 <div className="space-y-8">
                     <section className="bg-slate-800/40 rounded-[2rem] p-8 border border-white/5">
                         <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-sky-500/10 rounded-2xl">
-                                <FileText className="w-6 h-6 text-sky-400" />
+                            <div className="p-3 bg-orange-500/10 rounded-2xl">
+                                <FileText className="w-6 h-6 text-orange-400" />
                             </div>
                             <h3 className="text-xl font-black font-sans">Términos del Servicio</h3>
                         </div>
@@ -57,8 +57,8 @@ export const Policies: React.FC = () => {
 
                     <section className="bg-slate-800/40 rounded-[2rem] p-8 border border-white/5">
                         <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-emerald-500/10 rounded-2xl">
-                                <Lock className="w-6 h-6 text-emerald-400" />
+                            <div className="p-3 bg-amber-500/10 rounded-2xl">
+                                <Lock className="w-6 h-6 text-amber-400" />
                             </div>
                             <h3 className="text-xl font-black">Privacidad de Datos</h3>
                         </div>

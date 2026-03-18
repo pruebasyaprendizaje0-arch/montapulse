@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification } from '../types';
-import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS } from '../constants';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef } from 'react';
+import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange } from '../types';
+import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS } from '../constants';
 import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAppSettings,
     incrementViewCount, updateAppSettings, subscribeToUsers,
@@ -9,8 +9,9 @@ import {
     subscribeToPosts, createPost, toggleLikePost,
     subscribeToMessages, sendMessage,
     addPoints, redeemPoints, togglePulsePass,
-    toggleFollowBusiness, getFollowedBusinessIds, subscribeToUserFollows,
-    addFavorite, removeFavorite, subscribeToUserFavorites
+    toggleFollowBusiness, getFollowedBusinessIds, subscribeToUserFollows, subscribeToBusinessFollowers,
+    addFavorite, removeFavorite, subscribeToUserFavorites,
+    purgeAllReferencePoints
 } from '../services/firestoreService';
 import { generateEventDescription } from '../services/geminiService';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -45,7 +46,9 @@ interface DataContextType {
         instagram: string;
         category: BusinessCategory;
         coordinates?: [number, number];
-        plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf';
+        plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
+        isReference?: boolean;
+        email: string;
     };
     setBizForm: React.Dispatch<React.SetStateAction<{
         name: string;
@@ -59,7 +62,9 @@ interface DataContextType {
         instagram: string;
         category: BusinessCategory;
         coordinates?: [number, number];
-        plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf';
+        plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
+        isReference?: boolean;
+        email: string;
     }>>;
     rsvpStatus: Record<string, boolean>;
     setRsvpStatus: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
@@ -68,7 +73,7 @@ interface DataContextType {
     handleRSVP: (id: string) => Promise<void>;
     handleDeleteEvent: (id: string) => Promise<void>;
     handleSaveEvent: () => Promise<void>;
-    handleOpenNewEventWizard: () => void;
+    handleOpenNewEventWizard: (initialDate?: Date) => void;
     handleEditEvent: (event: MontanitaEvent) => void;
     handleCheckEmailBlur: () => Promise<void>;
     showHostWizard: boolean;
@@ -85,8 +90,16 @@ interface DataContextType {
     toggleFavorite: (id: string, e?: React.MouseEvent) => void;
     agendaRange: 'day' | 'week' | 'month';
     setAgendaRange: (range: 'day' | 'week' | 'month') => void;
+    isCalendarFilterActive: boolean;
+    setIsCalendarFilterActive: (active: boolean) => void;
     calendarBaseDate: Date;
     setCalendarBaseDate: (date: Date) => void;
+    showCalendarModal: boolean;
+    setShowCalendarModal: (show: boolean) => void;
+    showPulseModal: boolean;
+    showPulsePassModal: boolean;
+    setShowPulsePassModal: (show: boolean) => void;
+    setShowPulseModal: (show: boolean) => void;
     sectorPolygons: Record<Sector, [number, number][]>;
     setSectorPolygons: React.Dispatch<React.SetStateAction<Record<Sector, [number, number][]>>>;
     sectorLabels: Record<string, string>;
@@ -96,6 +109,8 @@ interface DataContextType {
     setCurrentLocality: (locality: any) => void;
     selectedSector: Sector | null;
     setSelectedSector: (sector: Sector | null) => void;
+    sectorFocusCoords: [number, number] | null;
+    setSectorFocusCoords: (coords: [number, number] | null) => void;
     activeFilter: string;
     setActiveFilter: (filter: string) => void;
     notifications: PulseNotification[];
@@ -105,7 +120,13 @@ interface DataContextType {
     setSearchQuery: (query: string) => void;
     selectedMood: Vibe | null;
     setSelectedMood: (mood: Vibe | null) => void;
+    user: UserProfile | null;
+    isAdmin: boolean;
+    isSuperUser: boolean;
+    isSuperAdmin: boolean;
     filteredEvents: MontanitaEvent[];
+    filteredBusinesses: Business[];
+    pastEvents: MontanitaEvent[];
     journeyCards: any[];
     setJourneyCards: React.Dispatch<React.SetStateAction<any[]>>;
     toggleSector: (sector: Sector) => void;
@@ -114,6 +135,8 @@ interface DataContextType {
     // UI & CRUD State
     showBusinessEdit: boolean;
     setShowBusinessEdit: (show: boolean) => void;
+    showProfileEdit: boolean;
+    setShowProfileEdit: (show: boolean) => void;
     editingBusinessId: string | null;
     setEditingBusinessId: (id: string | null) => void;
     showPaymentEdit: boolean;
@@ -133,10 +156,12 @@ interface DataContextType {
     handleUpdatePaymentDetails: () => Promise<void>;
     handleBusinessImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleDeleteBusiness: (id: string) => Promise<void>;
-    handleCreateBusinessOnMap: (lat: number, lng: number) => Promise<void>;
+    handleCreateBusinessOnMap: (lat: number, lng: number, isReference?: boolean) => Promise<void>;
     handleUpdateBusinessLocation: (id: string, lat: number, lng: number) => Promise<void>;
     isPanelMinimized: boolean;
     setIsPanelMinimized: (min: boolean) => void;
+    isNearbyMinimized: boolean;
+    setIsNearbyMinimized: (min: boolean) => void;
     isEditorFocus: boolean;
     setIsEditorFocus: (focus: boolean) => void;
     editingEventId: string | null;
@@ -156,21 +181,27 @@ interface DataContextType {
     handleRedeemPoints: (amount: number) => Promise<void>;
     handleTogglePulsePass: (active: boolean) => Promise<void>;
     messages: ChatMessage[];
-    handleSendMessage: (content: string, type?: 'text' | 'image' | 'system') => Promise<void>;
+    handleSendMessage: (content: string, asBusiness?: boolean, type?: 'text' | 'image' | 'system') => Promise<void>;
     services: ServiceCategory[];
     handleUpdateServices: (services: ServiceCategory[]) => Promise<void>;
     handleToggleFollow: (businessId: string) => Promise<void>;
     isBusinessFollowed: (businessId: string) => boolean;
+    followedBusinessIds: string[];
+    businessFollowers: string[];
+    updateBusiness: (id: string, data: Partial<Business>) => Promise<void>;
+    handlePurgeAllReferences: () => Promise<void>;
+    setActiveView: (view: ViewType) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { authUser, user, setUser, isAdmin } = useAuthContext();
+    const { authUser, user, setUser, isAdmin, isSuperAdmin, isSuperUser } = useAuthContext();
     const { showToast, showConfirm, showPrompt } = useToast();
     const navigate = useNavigate();
     const [events, setEvents] = useState<MontanitaEvent[]>([]);
     const [businesses, setBusinesses] = useState<Business[]>([]);
+    const rawBusinessesRef = useRef<Business[]>([]);
     const [rsvpCounts, setRsvpCounts] = useState<Record<string, number>>({});
     const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
     const [favorites, setFavorites] = useState<string[]>([]);
@@ -183,8 +214,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const [agendaRange, setAgendaRange] = useState<'day' | 'week' | 'month'>('day');
     const [calendarBaseDate, setCalendarBaseDate] = useState(new Date());
+    const [isCalendarFilterActive, setIsCalendarFilterActive] = useState(false);
+    const [showCalendarModal, setShowCalendarModal] = useState(false);
+    const [showPulseModal, setShowPulseModal] = useState(false);
+    const [showPulsePassModal, setShowPulsePassModal] = useState(false);
 
     const [showBusinessEdit, setShowBusinessEdit] = useState(false);
+    const [showProfileEdit, setShowProfileEdit] = useState(false);
     const [editingBusinessId, setEditingBusinessId] = useState<string | null>(null);
     const [showPaymentEdit, setShowPaymentEdit] = useState(false);
     const [showMigrationPanel, setShowMigrationPanel] = useState(false);
@@ -195,7 +231,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [showLogin, setShowLogin] = useState(false);
     const [showHostWizard, setShowHostWizard] = useState(false);
     const [regForm, setRegForm] = useState({ name: '', email: '', vibe: Vibe.RELAX, role: 'visitor' as 'visitor' | 'host' });
-    const [bizForm, setBizForm] = useState({
+    const INITIAL_BIZ_FORM = {
         name: '',
         locality: LOCALITIES[0].name,
         sector: Sector.CENTRO,
@@ -206,12 +242,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         phone: '',
         instagram: '',
         category: BusinessCategory.RESTAURANTE,
-        coordinates: undefined,
-        plannerCategory: undefined
-    });
+        coordinates: null as any,
+        plannerCategory: null,
+        isReference: false,
+        email: ''
+    };
+
+    const [bizForm, setBizForm] = useState(INITIAL_BIZ_FORM);
     const [followedBusinessIds, setFollowedBusinessIds] = useState<string[]>([]);
+    const [businessFollowers, setBusinessFollowers] = useState<string[]>([]);
     const [rsvpStatus, setRsvpStatus] = useState<Record<string, boolean>>({});
     const [isPanelMinimized, setIsPanelMinimized] = useState(false);
+    const [isNearbyMinimized, setIsNearbyMinimized] = useState(true);
     const [isEditorFocus, setIsEditorFocus] = useState(false);
     const [editingEventId, setEditingEventId] = useState<string | null>(null);
     const [newEvent, setNewEvent] = useState({
@@ -230,6 +272,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const [currentLocality, setCurrentLocality] = useState(LOCALITIES[0]);
     const [selectedSector, setSelectedSector] = useState<Sector | null>(null);
+    const [sectorFocusCoords, setSectorFocusCoords] = useState<[number, number] | null>(null);
     const [activeFilter, setActiveFilter] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMood, setSelectedMood] = useState<Vibe | null>(null);
@@ -278,11 +321,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [journeyCards, setJourneyCards] = useState(() => {
         const saved = localStorage.getItem('montapulse_journey_cards_v3');
         if (saved) return JSON.parse(saved);
-        return [
-            { id: 'CENTRO', label: 'CENTRO', icon: 'zap', active: true, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
-            { id: 'LA PUNTA', label: 'PLAYA', icon: 'waves', active: true, color: 'text-sky-400', bg: 'bg-sky-500/10' },
-            { id: 'TIGRILLO', label: 'MONTAÑA', icon: 'leaf', active: true, color: 'text-emerald-400', bg: 'bg-emerald-500/10' }
-        ];
+        return [];
     });
 
     // Sector Polygons & Labels Persistence
@@ -335,6 +374,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         return () => unsubscribe();
     }, [authUser]);
+
+    useEffect(() => {
+        if (!user?.businessId) return;
+        
+        const unsubscribe = subscribeToBusinessFollowers(user.businessId, (followerIds) => {
+            setBusinessFollowers(followerIds);
+        });
+
+        return () => unsubscribe();
+    }, [user?.businessId]);
 
     useEffect(() => {
         localStorage.setItem('montapulse_polygons', JSON.stringify(sectorPolygons));
@@ -399,16 +448,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setEvents(data);
         });
         const unsubBusinesses = subscribeToBusinesses((data) => {
-            setBusinesses(data);
+            rawBusinessesRef.current = data;
+            const unique: Business[] = [];
+            const seen = new Set<string>();
+
+            data.forEach(b => {
+                const locality = b.locality || 'Montañita';
+                const lat = (b.location?.lat || b.coordinates?.[0] || 0).toFixed(3);
+                const lng = (b.location?.lng || b.coordinates?.[1] || 0).toFixed(3);
+                const normalizedPrefix = (b.name?.trim() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 5);
+                const key = `${normalizedPrefix}_${lat}_${lng}_${locality.toLowerCase()}`;
+
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    unique.push(b);
+                }
+            });
+
+            setBusinesses(unique);
             setLoading(false);
+            
+            if (data.length > unique.length && isSuperUser) {
+                console.log(`[Data] Found ${data.length - unique.length} hidden clones in businesses collection.`);
+            }
         });
         const unsubRSVPs = subscribeToRSVPCounts((counts) => {
             setRsvpCounts(counts);
         });
 
-        const unsubUsers = subscribeToUsers((data) => {
-            setAllUsers(data);
-        });
         const unsubPosts = subscribeToPosts((data) => {
             setPosts(data);
         });
@@ -420,11 +487,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             unsubEvents();
             unsubBusinesses();
             unsubRSVPs();
-            unsubUsers();
             unsubPosts();
             unsubMessages();
         };
     }, []);
+
+    // Only subscribe to ALL users if admin OR premium business owner 
+    // This allows premium hosts to see who follows them (follower details)
+    useEffect(() => {
+        const isPremiumHost = user?.businessId && businesses.find(b => b.id === user.businessId)?.plan === SubscriptionPlan.PREMIUM;
+        
+        if (!isAdmin && !isPremiumHost) {
+            setAllUsers([]);
+            return;
+        }
+        const unsubUsers = subscribeToUsers((data) => {
+            setAllUsers(data);
+        });
+        return () => unsubUsers();
+    }, [isAdmin, user?.businessId, businesses]);
 
 
     useEffect(() => {
@@ -453,17 +534,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [eventsWithLiveCounts, favorites]);
 
     const filteredEvents = useMemo(() => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
         let filtered = eventsWithLiveCounts.filter(e => {
             const biz = businesses.find(b => b.id === e.businessId);
             const eventLocality = e.locality || biz?.locality || 'Montañita';
             const matchesLocality = eventLocality === currentLocality.name;
             const matchesSector = !selectedSector || e.sector === selectedSector;
-            const matchesSearch = e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (e.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesSearch = !searchQuery ||
+                (e.title ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (e.description ?? '').toLowerCase().includes(searchQuery.toLowerCase());
             const matchesFilter = activeFilter === 'All' || e.vibe === activeFilter || e.category === activeFilter;
             const matchesMood = !selectedMood || e.vibe === selectedMood;
-            const isActive = new Date() <= new Date(e.endAt);
-            return matchesLocality && matchesSector && matchesSearch && matchesFilter && matchesMood && isActive;
+
+            // Calendar filtering
+            const eventDate = new Date(e.startAt);
+            const matchesCalendarDate = !isCalendarFilterActive || (
+                eventDate.getDate() === calendarBaseDate.getDate() &&
+                eventDate.getMonth() === calendarBaseDate.getMonth() &&
+                eventDate.getFullYear() === calendarBaseDate.getFullYear()
+            );
+
+            // "cada mes se actualicen los eventos" -> Solo mostrar eventos del mes actual o futuros
+            const isCurrentOrFutureMonth = eventDate >= startOfMonth;
+            const isActive = now <= new Date(e.endAt);
+
+            return matchesLocality && matchesSector && matchesSearch && matchesFilter && matchesMood && isCurrentOrFutureMonth && isActive && matchesCalendarDate;
         });
 
         // Boost premium events if they match mood
@@ -482,6 +579,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
     }, [eventsWithLiveCounts, businesses, currentLocality, selectedSector, searchQuery, activeFilter, selectedMood]);
 
+    const filteredBusinesses = useMemo(() => {
+        return businesses.filter(b => {
+            const locality = b.locality || 'Montañita';
+            const matchesLocality = locality === currentLocality.name;
+            const matchesSector = !selectedSector || b.sector === selectedSector;
+            const matchesSearch = !searchQuery || (b.name ?? '').toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesFilter = activeFilter === 'All' || b.category === activeFilter;
+
+            return matchesLocality && matchesSector && matchesSearch && matchesFilter;
+        });
+    }, [businesses, currentLocality, selectedSector, searchQuery, activeFilter]);
+
+    const pastEvents = useMemo(() => {
+        const now = new Date();
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const firstDayOfPastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+        return eventsWithLiveCounts
+            .filter(e => {
+                const eventDate = new Date(e.startAt);
+                // "los 10 del mes pasado se puedan ver en el historial"
+                // Obtenemos los eventos que ocurrieron ANTES de este mes pero DESPUÉS o EN el inicio del mes pasado
+                return eventDate < firstDayOfMonth && eventDate >= firstDayOfPastMonth;
+            })
+            .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime())
+            .slice(0, 10);
+    }, [eventsWithLiveCounts]);
+
     const location = useLocation();
     const activeView = useMemo(() => {
         const path = location.pathname;
@@ -495,6 +620,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (path === '/saved-events') return 'all-favorites';
         if (path === '/community') return 'community';
         if (path === '/chat') return 'chat';
+        if (path === '/info') return 'info';
         return 'explore';
     }, [location.pathname]);
 
@@ -565,7 +691,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [selectedEvent, navigationEvents]);
 
     const toggleSector = (sector: Sector) => {
-        setSelectedSector(prev => prev === sector ? null : sector);
+        setSelectedSector(prev => {
+            const newSector = prev === sector ? null : sector;
+            if (newSector && SECTOR_FOCUS_COORDS[currentLocality.name]?.[newSector]) {
+                setSectorFocusCoords(SECTOR_FOCUS_COORDS[currentLocality.name][newSector]);
+            } else if (!newSector) {
+                setSectorFocusCoords(null);
+            }
+            return newSector;
+        });
     };
 
     const toggleFavorite = async (id: string, e?: React.MouseEvent) => {
@@ -601,8 +735,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const business = businesses.find(b => b.id === targetBusinessId);
         if (!business) return;
 
+        // Validation: Mismo nombre, mismo sector (Ignore if it's a reference point)
+        const isRef = business.isReference || business.id?.startsWith('ref-');
+        const duplicateNameSector = !isRef && businesses.some(b => 
+            b.id !== targetBusinessId &&
+            !b.isReference &&
+            !b.id.startsWith('ref-') &&
+            b.name.toLowerCase().trim() === (business.name || '').toLowerCase().trim() && 
+            b.sector === business.sector
+        );
+
+        if (duplicateNameSector) {
+            showToast("Ya existe un negocio con este nombre en este sector.", "error");
+            return;
+        }
+
+        const isAdminUser = user?.role === 'admin';
+
         try {
-            await updateBusiness(targetBusinessId, {
+            const updatePayload: Partial<Business> = {
                 name: business.name || '',
                 description: business.description || '',
                 locality: business.locality || 'Montañita',
@@ -612,8 +763,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 phone: business.phone || '',
                 category: business.category || BusinessCategory.RESTAURANTE,
                 imageUrl: business.imageUrl || 'https://images.unsplash.com/photo-1550966871-3ed3c47e2ce2?auto=format&fit=crop&q=80&w=400',
-                coordinates: business.coordinates || [-1.8253, -80.7523]
-            });
+                coordinates: business.coordinates || [-1.8253, -80.7523],
+                plannerCategory: (business as any).plannerCategory || null
+            };
+
+            // Que los cambios como superusuario prevalezcan
+            if (isAdminUser || isSuperUser || business.isReference || business.id?.startsWith('ref-')) {
+                (updatePayload as any).isPublished = business.isPublished !== undefined ? business.isPublished : true;
+                (updatePayload as any).isReference = business.isReference || business.id?.startsWith('ref-') || false;
+                (updatePayload as any).isVerified = business.isVerified !== undefined ? business.isVerified : false;
+                (updatePayload as any).email = business.email || '';
+            }
+
+            await updateBusiness(targetBusinessId, updatePayload as any);
+            setBusinesses(prev => prev.map(b => b.id === targetBusinessId ? { ...b, ...(updatePayload as any) } : b));
             setShowBusinessEdit(false);
             setEditingBusinessId(null);
             showToast("Perfil de negocio actualizado.", "success");
@@ -678,39 +841,139 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleDeleteBusiness = async (id: string) => {
-        const confirmed = await showConfirm('¿Eliminar este negocio permanentemente?');
+        const confirmed = await showConfirm('¿Eliminar este punto (negocio o referencia) permanentemente? Esta acción limpiará todos los duplicados ocultos.');
         if (confirmed) {
-            await deleteBusiness(id);
-            showToast('Negocio eliminado.', 'success');
+            try {
+                const target = rawBusinessesRef.current.find(b => b.id === id);
+                if (target && (isSuperUser || isAdmin)) {
+                    const targetLat = (target.location?.lat || target.coordinates?.[0] || 0).toFixed(3);
+                    const targetLng = (target.location?.lng || target.coordinates?.[1] || 0).toFixed(3);
+                    const targetLocality = (target.locality || 'Montañita').toLowerCase();
+                    const targetPrefix = (target.name?.trim() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 5);
+
+                    // Find ALL clones in the raw list using the same fuzzy logic as unique de-duplication
+                    const clones = rawBusinessesRef.current.filter(b => 
+                        b.id !== id && 
+                        (b.locality || 'Montañita').toLowerCase() === targetLocality &&
+                        (b.location?.lat || b.coordinates?.[0] || 0).toFixed(3) === targetLat &&
+                        (b.location?.lng || b.coordinates?.[1] || 0).toFixed(3) === targetLng &&
+                        (b.name?.trim() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 5) === targetPrefix
+                    );
+
+                    if (clones.length > 0) {
+                        showToast(`Eliminando ${clones.length} duplicados adicionales...`, 'info');
+                        for (const clone of clones) {
+                            await deleteBusiness(clone.id);
+                        }
+                    }
+                }
+
+                await deleteBusiness(id);
+                showToast('Punto y duplicados eliminados permanentemente.', 'success');
+                setShowBusinessEdit(false);
+                setEditingBusinessId(null);
+            } catch (error) {
+                console.error('Error during deletion:', error);
+                showToast('Error al eliminar el punto.', 'error');
+            }
         }
     };
 
-    const handleCreateBusinessOnMap = async (lat: number, lng: number) => {
-        const name = await showPrompt('Introduce el nombre del nuevo punto comercial:', 'Ej. Mi Local', 'Nuevo Punto Comercial');
+    const handlePurgeAllReferences = async () => {
+        // If they are not super admin or admin, they shouldn't see it, but we check here too
+        if (!isSuperUser && !isAdmin) {
+            showToast('No tienes permisos suficientes.', 'error');
+            return;
+        }
+
+        // Search for anything that LOOKS like a reference point in the RAW list (to count clones)
+        const allRefPoints = rawBusinessesRef.current.filter(b => {
+            const id = (b.id || '').toLowerCase();
+            const name = (b.name || '').toLowerCase();
+            const category = (b.category as string || '').toLowerCase();
+            
+            return b.isReference || 
+                   id.startsWith('ref-') || 
+                   category.includes('referencia') ||
+                   category.includes('reference') ||
+                   name.includes('ref-') ||
+                   name.includes('referencia') ||
+                   name.includes('reference') ||
+                   name.includes('punto de');
+        });
+
+        const count = allRefPoints.length;
+        
+        if (count === 0) {
+            showToast('No se encontraron puntos de referencia registrados.', 'info');
+            return;
+        }
+        
+        const confirmed = await showConfirm(`⚠️ ACCIÓN CRÍTICA ⚠️\n\n¿BORRAR LOS ${count} PUNTOS DE REFERENCIA?\n\nEsta acción es irreversible y los eliminará de la base de datos para SIEMPRE.`);
+        if (confirmed) {
+            try {
+                showToast('Limpiando base de datos...', 'info');
+                const deletedCount = await purgeAllReferencePoints();
+                showToast(`Éxito: Se han eliminado ${deletedCount} puntos permanentemente.`, 'success');
+                // Force refresh businesses would be good, but they should auto-update via snapshot
+            } catch (error) {
+                console.error('Purge error:', error);
+                showToast('Error crítico durante la purga masiva.', 'error');
+            }
+        }
+    };
+
+    const handleCreateBusinessOnMap = async (lat: number, lng: number, isReference?: boolean) => {
+        const label = isReference ? 'punto de referencia' : 'negocio';
+        const name = await showPrompt(
+            `Introduce el nombre del nuevo ${label}:`,
+            isReference ? 'Ej. Mirador Norte' : 'Ej. Mi Local',
+            isReference ? 'Nuevo Punto de Referencia' : 'Nuevo Negocio'
+        );
         if (!name) return;
+        
+        // Mismo nombre, mismo sector en la localidad actual (Ignore if it's a reference point)
+        const duplicateNameSector = !isReference && businesses.some(b => 
+            !b.isReference &&
+            b.name.toLowerCase().trim() === name.toLowerCase().trim() && 
+            b.locality === currentLocality.name
+        );
+
+        if (duplicateNameSector) {
+            showToast("Ya existe un negocio con este nombre en este sector.", "error");
+            return;
+        }
+
         const newBiz: Omit<Business, 'id'> = {
             name,
             ownerId: authUser?.uid || 'admin',
             locality: currentLocality.name,
             sector: Sector.CENTRO,
-            icon: 'palmtree',
-            description: 'Nuevo punto añadido por Administrador',
+            icon: isReference ? 'mappin' : 'palmtree',
+            description: isReference
+                ? 'Punto de referencia añadido por Administrador'
+                : 'Nuevo negocio añadido por Administrador',
             isVerified: true,
+            isPublished: true, // Superusers create published points directly
+            isReference: isReference || false,
             coordinates: [lat, lng],
             imageUrl: 'https://images.unsplash.com/photo-1574672280600-4accfa5b6f98?auto=format&fit=crop&q=80&w=400',
+            category: BusinessCategory.OTRO,
             plan: SubscriptionPlan.BASIC,
             monthlyEventCount: 0,
-            lastResetDate: new Date().toISOString()
+            lastResetDate: new Date().toISOString(),
+            plannerCategory: null
         };
         const id = await createBusiness(newBiz);
         setEditingBusinessId(id);
         setShowBusinessEdit(true);
-        showToast('Negocio creado en el mapa.', 'success');
+        showToast(`${isReference ? 'Punto de referencia' : 'Negocio'} creado en el mapa.`, 'success');
     };
 
     const handleUpdateBusinessLocation = async (id: string, lat: number, lng: number) => {
-        await updateBusiness(id, { coordinates: [lat, lng] });
-        showToast('Ubicación del negocio actualizada.', 'success');
+        setBusinesses(prev => prev.map(b => b.id === id ? { ...b, coordinates: [lat, lng], location: { lat, lng } } : b));
+        await updateBusiness(id, { coordinates: [lat, lng], location: { lat, lng } });
+        showToast('Ubicación actualizada y guardada.', 'success');
     };
 
     return (
@@ -731,6 +994,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setCurrentLocality,
             selectedSector,
             setSelectedSector,
+            sectorFocusCoords,
+            setSectorFocusCoords,
             activeFilter,
             setActiveFilter,
             searchQuery,
@@ -792,26 +1057,51 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             handleBusinessRegister: async (e: React.FormEvent) => {
                 e.preventDefault();
                 if (!authUser) return;
-                const isSuperAdmin = user?.role === 'admin';
-                const hasBusiness = businesses.some(b => b.ownerId === authUser.uid);
-                if (hasBusiness && !isSuperAdmin) {
-                    showToast("Solo puedes tener un negocio asociado a tu cuenta.", "info");
+                const isSuperAdmin = user?.role === 'admin' || isSuperUser || isAdmin;
+                
+                // Mismo nombre, mismo sector (Ignore if it's a reference point)
+                const duplicateNameSector = !bizForm.isReference && businesses.some(b => 
+                    !b.isReference &&
+                    b.name.toLowerCase().trim() === bizForm.name.toLowerCase().trim() && 
+                    b.sector === bizForm.sector
+                );
+
+                if (duplicateNameSector) {
+                    showToast("Ya existe un negocio con este nombre en este sector.", "error");
                     return;
                 }
+
+                // Un correo un negocio (Ignore if it's a reference point or if user is superuser)
+                const isReferenceItem = !!bizForm.isReference;
+                const hasBusinessByOwner = businesses.some(b => b.ownerId === authUser.uid && !b.isReference && !b.id.startsWith('ref-'));
+                const hasBusinessByEmail = businesses.some(b => 
+                    b.email?.toLowerCase().trim() === user?.email?.toLowerCase().trim() && 
+                    !b.isReference && 
+                    !b.id.startsWith('ref-')
+                );
+                
+                if (!isReferenceItem && (hasBusinessByOwner || hasBusinessByEmail) && !isSuperUser && !isSuperAdmin) {
+                    showToast("Solo puedes tener un negocio asociado a tu cuenta.", "error");
+                    return;
+                }
+
                 const locObj = LOCALITIES.find(l => l.name === bizForm.locality) || LOCALITIES[0];
                 const businessData = {
                     ...bizForm,
                     ownerId: isSuperAdmin ? 'admin' : authUser.uid,
+                    email: bizForm.email || user?.email || '',
                     isVerified: isSuperAdmin,
+                    isPublished: isSuperAdmin,
                     coordinates: bizForm.coordinates || locObj.coords,
                     plan: SubscriptionPlan.BASIC,
                     monthlyEventCount: 0,
-                    lastResetDate: new Date().toISOString()
+                    lastResetDate: new Date().toISOString(),
+                    plannerCategory: bizForm.plannerCategory || null,
+                    isReference: !!bizForm.isReference
                 };
+                
                 // Firestore rejects undefined values — strip them before saving
-                const sanitize = (obj: Record<string, any>) =>
-                    Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
-                const newBusinessId = await createBusiness(sanitize(businessData) as any);
+                const newBusinessId = await createBusiness(businessData as any);
                 if (!isSuperAdmin) {
                     const newUserProfile: UserProfile = {
                         id: authUser.uid,
@@ -835,6 +1125,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 setBusinesses(prev => [...prev, { id: newBusinessId, ...businessData } as any]);
                 setShowBusinessReg(false);
+                setBizForm(INITIAL_BIZ_FORM);
                 showToast('Negocio registrado exitosamente.', 'success');
             },
             handleRSVP: async (id: string) => {
@@ -882,8 +1173,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             },
             handleSaveEvent: async () => {
-                if (!user?.businessId && !isAdmin) return;
-                const bizId = user?.businessId || businesses.find(b => b.ownerId === authUser?.uid)?.id || 'admin';
+                if (!user) return;
+                
+                const userBusiness = user.businessId ? businesses.find(b => b.id === user.businessId) : null;
+                const isPremium = userBusiness?.plan === SubscriptionPlan.PREMIUM;
+                const eventLimit = isPremium ? Infinity : 7;
+                
+                if (!editingEventId && eventLimit !== Infinity) {
+                    const businessEvents = events.filter(e => e.businessId === userBusiness?.id);
+                    if (businessEvents.length >= eventLimit) {
+                        showToast("Has alcanzado el límite de eventos de tu plan. ¡Actualiza a Premium!", "error");
+                        return;
+                    }
+                }
+
+                const bizId = user?.businessId || businesses.find(b => b.ownerId === authUser?.uid)?.id || user.id;
 
                 const eventData = {
                     title: newEvent.title || 'Evento sin nombre',
@@ -932,7 +1236,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     setIsGeneratingDesc(false);
                 }
             },
-            handleOpenNewEventWizard: () => {
+            handleOpenNewEventWizard: (initialDate?: Date) => {
+                const baseDate = initialDate || new Date();
                 setNewEvent({
                     title: '',
                     locality: LOCALITIES[0].name,
@@ -941,8 +1246,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     category: 'Fiesta',
                     description: '',
                     imageUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&q=80&w=600',
-                    startAt: new Date().toISOString().slice(0, 16),
-                    endAt: new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 16)
+                    startAt: new Date(baseDate.getTime() - baseDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+                    endAt: new Date(baseDate.getTime() + 3 * 3600000 - baseDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
                 });
                 setEditingEventId(null);
                 setGeneratedDesc('');
@@ -990,8 +1295,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             toggleFavorite,
             agendaRange,
             setAgendaRange,
+            isCalendarFilterActive,
+            setIsCalendarFilterActive,
             calendarBaseDate,
             setCalendarBaseDate,
+            showCalendarModal,
+            setShowCalendarModal,
             sectorPolygons,
             setSectorPolygons,
             sectorLabels,
@@ -999,6 +1308,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             loading,
             showBusinessEdit,
             setShowBusinessEdit,
+            showProfileEdit,
+            setShowProfileEdit,
             editingBusinessId,
             setEditingBusinessId,
             showPaymentEdit,
@@ -1019,6 +1330,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setPublicProfileType,
             isPanelMinimized,
             setIsPanelMinimized,
+            isNearbyMinimized,
+            setIsNearbyMinimized,
             isEditorFocus,
             setIsEditorFocus,
             editingEventId,
@@ -1065,20 +1378,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 await togglePulsePass(authUser.uid, active);
             },
             messages,
-            handleSendMessage: async (content: string, type: 'text' | 'image' | 'system' = 'text') => {
+            handleSendMessage: async (content: string, asBusiness: boolean = false, type: 'text' | 'image' | 'system' = 'text') => {
                 if (!authUser) return;
-                const authorProfile = user || {
-                    id: authUser.uid,
-                    name: authUser.displayName?.split(' ')[0] || 'User',
-                    surname: authUser.displayName?.split(' ').slice(1).join(' ') || '',
-                    avatarUrl: authUser.photoURL || undefined
-                };
+                
+                const userPlan = user?.plan || SubscriptionPlan.VISITOR;
+                let senderId = authUser.uid;
+                let senderName = user ? `${user.name} ${user.surname}` : (authUser.displayName || 'User');
+                let senderAvatar = user?.avatarUrl || authUser.photoURL || undefined;
+
+                if (asBusiness && user?.businessId && userPlan === SubscriptionPlan.PREMIUM) {
+                    const business = businesses.find(b => b.id === user.businessId);
+                    if (business) {
+                        senderId = business.id;
+                        senderName = business.name;
+                        senderAvatar = business.imageUrl;
+                    }
+                }
+
                 await sendMessage({
-                    authorId: authUser.uid,
-                    authorName: `${authorProfile.name} ${authorProfile.surname}`,
-                    authorAvatar: authorProfile.avatarUrl || undefined,
-                    content,
-                    type
+                    senderId,
+                    senderName,
+                    senderAvatar,
+                    text: content,
+                    type,
+                    isBusinessMessage: asBusiness
                 });
             },
             services,
@@ -1098,10 +1421,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 );
             },
             filteredEvents,
+            filteredBusinesses,
+            pastEvents,
+            followedBusinessIds,
+            businessFollowers,
             isBusinessFollowed: (businessId: string) => followedBusinessIds.includes(businessId),
             notifications,
             markAllAsRead,
             unreadNotificationsCount,
+            user,
+            isAdmin,
+            showPulseModal,
+            setShowPulseModal,
+            showPulsePassModal,
+            setShowPulsePassModal,
+            updateBusiness,
+            handlePurgeAllReferences,
+            isSuperUser,
+            isSuperAdmin,
+            setActiveView: (view: ViewType) => {
+                const paths: Record<string, string> = {
+                    'explore': '/',
+                    'calendar': '/calendar',
+                    'community': '/community',
+                    'host': '/host',
+                    'favorites': '/passport',
+                    'history': '/history',
+                    'plans': '/plans',
+                    'all-favorites': '/saved-events'
+                };
+                if (paths[view]) navigate(paths[view]);
+            }
         }}>
             {children}
         </DataContext.Provider>

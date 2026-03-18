@@ -26,15 +26,10 @@ export const useAuth = () => {
                     try {
                         const profile = await getUser(authUser.uid);
                         if (profile && profile.role) {
-                            // Si en la base de datos dice admin pero no es el correo autorizado, 
-                            // lo bajamos a visitor por seguridad (opcional, pero buena práctica)
-                            if (profile.role === 'admin') {
-                                setUserRole('visitor'); // Nadie más puede ser admin
-                                setIsAdmin(false);
-                            } else {
-                                setUserRole(profile.role as UserRole);
-                                setIsAdmin(false);
-                            }
+                            // Si es admin en la BD o es super admin por correo
+                            const role = profile.role as UserRole;
+                            setUserRole(role);
+                            setIsAdmin(role === 'admin' || superAdmin);
                         } else {
                             // Si no tiene perfil, es un visitante
                             setUserRole('visitor');
@@ -57,5 +52,5 @@ export const useAuth = () => {
         return () => unsubscribe();
     }, []);
 
-    return { user, loading, isAdmin, userRole };
+    return { user, loading, isAdmin, userRole, isSuperAdmin: isSuperAdmin(user?.email) };
 };

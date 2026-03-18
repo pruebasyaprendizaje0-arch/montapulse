@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User } from 'firebase/auth';
 import { UserProfile, Vibe, SubscriptionPlan } from '../types';
 import { useAuth } from '../hooks/useAuth';
-import { getUser, createUser } from '../services/firestoreService';
+import { getUser, createUser, getBusinessByEmail, updateUser } from '../services/firestoreService';
 import { isSuperAdmin, logout as firebaseLogout } from '../services/authService';
 
 interface AuthContextType {
@@ -10,6 +10,8 @@ interface AuthContextType {
     authUser: User | null;
     isAdmin: boolean;
     isSuperAdmin: boolean;
+    isSuperUser: boolean;
+    toggleSuperUser: () => void;
     userRole: string;
     loading: boolean;
     logout: () => Promise<void>;
@@ -22,6 +24,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { user: authUser, loading: authLoading, isAdmin: isAuthAdmin, userRole: authUserRole } = useAuth();
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isSuperUser, setIsSuperUser] = useState(() => {
+        return localStorage.getItem('montapulse_superuser') === 'true';
+    });
+
+    const toggleSuperUser = () => {
+        setIsSuperUser(prev => {
+            const next = !prev;
+            localStorage.setItem('montapulse_superuser', String(next));
+            return next;
+        });
+    };
 
     useEffect(() => {
         const syncUserProfile = async () => {
@@ -32,6 +45,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!authUser) {
                 setUser(null);
                 setLoading(false);
+                setIsSuperUser(false);
+                localStorage.removeItem('montapulse_superuser');
                 return;
             }
 
@@ -49,14 +64,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         secureRole = 'admin';
                     }
 
+                    const profileUpdates: Partial<UserProfile> = {};
+                    let hasUpdates = false;
+
+                    // Automatically associate business by email if not assigned
+                    if (!profile.businessId && authUser.email && secureRole !== 'admin') {
+                        const matchingBusiness = await getBusinessByEmail(authUser.email);
+                        if (matchingBusiness) {
+                            profileUpdates.businessId = matchingBusiness.id;
+                            secureRole = 'host';
+                            hasUpdates = true;
+                        }
+                    }
+
+                    if (profile.role !== secureRole) {
+                        profileUpdates.role = secureRole as any;
+                        hasUpdates = true;
+                    }
+
+                    if (hasUpdates) {
+                        await updateUser(authUser.uid, profileUpdates);
+                    }
+
                     setUser({
                         ...profile,
+                        ...profileUpdates,
                         role: secureRole as any
                     });
                 } else {
                     // If no profile exists, create a default one
                     const isMaster = isSuperAdmin(authUser.email);
-                    const defaultRole = isMaster ? 'admin' : (isAuthAdmin ? 'admin' : 'visitor');
+                    let defaultRole = isMaster ? 'admin' : (isAuthAdmin ? 'admin' : 'visitor');
+                    let assignedBusinessId: string | undefined = undefined;
+
+                    if (!isMaster && authUser.email) {
+                        const matchingBusiness = await getBusinessByEmail(authUser.email);
+                        if (matchingBusiness) {
+                            assignedBusinessId = matchingBusiness.id;
+                            defaultRole = 'host';
+                        }
+                    }
 
                     const newUser: UserProfile = {
                         id: authUser.uid,
@@ -66,7 +113,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         role: defaultRole as any,
                         preferredVibe: Vibe.RELAX,
                         avatarUrl: authUser.photoURL || undefined,
-                        plan: defaultRole === 'admin' ? SubscriptionPlan.PREMIUM : SubscriptionPlan.VISITOR
+                        plan: defaultRole === 'admin' ? SubscriptionPlan.PREMIUM : SubscriptionPlan.VISITOR,
+                        businessId: assignedBusinessId
                     };
 
                     await createUser(authUser.uid, newUser);
@@ -85,6 +133,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const logout = async () => {
         await firebaseLogout();
         setUser(null);
+        setIsSuperUser(false);
+        localStorage.removeItem('montapulse_superuser');
     };
 
     return (
@@ -93,6 +143,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             authUser,
             isAdmin: isAuthAdmin,
             isSuperAdmin: isSuperAdmin(authUser?.email),
+            isSuperUser: isSuperUser && isAuthAdmin, // Only truly superuser if also auth admin
+            toggleSuperUser,
             userRole: authUserRole,
             loading: loading || authLoading,
             logout,

@@ -26,9 +26,9 @@ export const Header: React.FC = () => {
                     <span className="text-[9px] font-black tracking-[0.4em] text-orange-500 leading-none mt-1">PREMIUM</span>
                 </div>
                 {!isOnline && (
-                    <div className="ml-2 flex items-center gap-1.5 px-2 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg animate-pulse">
-                        <WifiOff className="w-3 h-3 text-rose-500" />
-                        <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Offline</span>
+                    <div className="ml-2 flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg animate-pulse">
+                        <WifiOff className="w-3 h-3 text-amber-500" />
+                        <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Offline</span>
                     </div>
                 )}
             </div>

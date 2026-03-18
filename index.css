@@ -1,15 +1,20 @@
+@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800;900&display=swap');
 
 :root {
     --bg-dark: #0f172a;
     --bg-darker: #020617;
-    --primary: #0ea5e9;
-    --primary-glow: rgba(14, 165, 233, 0.4);
-    --secondary: #10b981;
-    --accent: #f43f5e;
-    --glass: rgba(30, 41, 59, 0.7);
+    --brand: #f97316;
+    --primary: #f97316; /* Making Orange the primary brand color for consistency */
+    --primary-glow: rgba(249, 115, 22, 0.4);
+    --secondary: #0ea5e9; /* Sky Blue */
+    --secondary-glow: rgba(14, 165, 233, 0.4);
+    --accent: #f43f5e; /* Rose */
+    --success: #10b981; /* Emerald */
+    --glass: rgba(15, 23, 42, 0.7);
     --glass-border: rgba(255, 255, 255, 0.08);
     --text-dim: #94a3b8;
+    --text-main: #f8fafc;
 }
 
 * {

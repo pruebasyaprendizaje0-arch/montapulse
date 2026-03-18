@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
     ChevronLeft, Edit3, LogOut, CheckCircle, MapPin, Store, Palmtree, Mountain,
     Zap, Star, Sparkles, MessageCircle, Navigation, CreditCard, Banknote, Mail,
-    BarChart2, Eye, Users, TrendingUp, Award, Phone, User, X, Camera, ImageIcon, Upload, ShieldCheck
+    BarChart2, Eye, Users, TrendingUp, Award, Phone, User, X, Camera, ImageIcon, Upload, ShieldCheck, Plus, Activity
 } from 'lucide-react';
 import { UserProfile, Business, MontanitaEvent, Vibe, SubscriptionPlan, Sector, BusinessCategory } from '../types.ts';
+import { Calendar, Clock } from 'lucide-react';
 import { EventCard } from '../components/EventCard.tsx';
-import { getAppSettings, updateAppSettings, createUser, createFlashOffer } from '../services/firestoreService.ts';
-import { logout } from '../services/authService.ts';
-import { updateUser as updateUserProfile } from '../services/firestoreService.ts';
+import { createUser, updateUser, getAppSettings, updateAppSettings } from '../services/firestoreService.ts';
+import { logout, updateUserProfile as updateAuthProfile } from '../services/authService.ts';
 import { LOCALITY_SECTORS, MAP_ICONS, LOCALITIES } from '../constants.ts';
 import { compressImage } from '../utils/imageUtils';
 
@@ -18,10 +18,14 @@ import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 
-export const Passport: React.FC = () => {
+interface PassportProps {
+    onNavigate?: (view: any) => void;
+}
+
+export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { user, setUser, logout, isAdmin, loading: authLoading } = useAuthContext();
+    const { user, setUser, authUser, logout, isAdmin, loading: authLoading } = useAuthContext();
     const {
         events,
         businesses,
@@ -32,13 +36,32 @@ export const Passport: React.FC = () => {
         setShowPaymentEdit,
         setShowBusinessEdit,
         setEditingBusinessId,
-        loading: dataLoading
+        setShowBusinessReg,
+        followedBusinessIds,
+        isBusinessFollowed,
+        handleToggleFollow,
+        setShowPublicProfile,
+        setPublicProfileId,
+        setPublicProfileType,
+        loading: dataLoading,
+        showHostWizard,
+        handleOpenNewEventWizard,
+        showPulseModal,
+        setShowPulseModal,
+        businessFollowers,
+        allUsers
     } = useData();
     const { showToast, showConfirm } = useToast();
     const [showProfileEdit, setShowProfileEdit] = useState(false);
+    const [showAllPulses, setShowAllPulses] = useState(false);
+    const [showAllFollowers, setShowAllFollowers] = useState(false);
     const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [showAboutEdit, setShowAboutEdit] = useState(false);
+    const [showPreferences, setShowPreferences] = useState(false);
+    const [showSecurity, setShowSecurity] = useState(false);
+    const [showHelp, setShowHelp] = useState(false);
+    const [showPulsePass, setShowPulsePass] = useState(false);
     const [aboutContent, setAboutContent] = useState({
         description: 'Tu guía definitiva para no perderte nada en la costa. Descubre eventos, conecta con la comunidad y vive el pulso real de Montañita.',
         feature1: 'Ver eventos',
@@ -49,6 +72,24 @@ export const Passport: React.FC = () => {
 
     const profileFileInputRef = useRef<HTMLInputElement>(null);
     const profileCameraInputRef = useRef<HTMLInputElement>(null);
+
+    const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
+    
+    const businessEvents = useMemo(() => {
+        if (!userBusiness) return [];
+        return events.filter(e => e.businessId === userBusiness.id);
+    }, [events, userBusiness]);
+
+    const userStats = useMemo(() => {
+        const eventsCount = favoritedEvents.length;
+        const friendsCount = followedBusinessIds.length;
+        const impactCount = businessEvents.reduce((sum, e) => sum + (e.interestedCount || 0), 0);
+        return { eventsCount, friendsCount, impactCount };
+    }, [favoritedEvents, followedBusinessIds, businessEvents]);
+
+    const eventLimit = userBusiness?.plan === SubscriptionPlan.PREMIUM ? 7 : userBusiness?.plan === SubscriptionPlan.BASIC ? 3 : 0;
+    const eventsUsed = businessEvents.length;
+    const eventsRemaining = eventLimit === Infinity ? null : eventLimit - eventsUsed;
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -87,41 +128,22 @@ export const Passport: React.FC = () => {
     };
 
     const handleUpdateUserProfile = async () => {
-        if (!editingUser) return;
+        if (!editingUser || !user) return;
         setIsSavingProfile(true);
         try {
-            await createUser(editingUser.id, {
-                name: editingUser.name,
-                surname: editingUser.surname,
-                email: editingUser.email,
-                preferredVibe: editingUser.preferredVibe,
-                avatarUrl: editingUser.avatarUrl || null,
-                role: editingUser.role,
-                businessId: editingUser.businessId || null,
-                plan: editingUser.plan || SubscriptionPlan.VISITOR,
-                points: editingUser.points || 0,
-                pulsePassActive: editingUser.pulsePassActive !== undefined ? editingUser.pulsePassActive : true
-            });
-            // Update Firebase Auth Profile (Session / Cache)
-            // This part is tricky as `updateUserProfile` from authService.ts expects authUser and display name/photoURL
-            // Assuming `updateUserProfile` is meant to update the Firestore document and the local user state.
-            // If it's for Firebase Auth, it needs `authUser` from context.
-            // For now, I'll keep the original logic of updating Firestore and then setting local state.
-            // The `updateUserProfile` from `authService.ts` is for Firebase Auth, not Firestore.
-            // The original code had `if (authUser) { await updateUserProfile(authUser, ...); }`
-            // The provided diff for `handleUpdateUserProfile` changes the first line to `await updateUserProfile(editingUser.id, editingUser);`
-            // This implies `updateUserProfile` is now a Firestore update function, or a combined one.
-            // Given the context, I'll assume `updateUserProfile` from `authService.ts` is now meant to update the Firestore document directly.
-            // This is a deviation from typical `authService` functions, but I must follow the diff.
-            // If `updateUserProfile` is from `authService.ts`, it usually updates Firebase Auth profile.
-            // The `createUser` function is for Firestore.
-            // The diff provided for `handleUpdateUserProfile` is:
-            // `await updateUserProfile(editingUser.id, editingUser);`
-            // This line replaces the `createUser` call and the `updateUserProfile` (Firebase Auth) call.
-            // This means `updateUserProfile` from `authService.ts` is now expected to handle both.
-            // This is a significant change in `updateUserProfile`'s signature and responsibility.
-            // I will apply the diff faithfully, assuming `updateUserProfile` is updated elsewhere to match this signature.
-            await updateUserProfile(editingUser.id, editingUser);
+            // 1. Update Firestore document (Primary)
+            await updateUser(editingUser.id, editingUser);
+
+            // 2. Update Firebase Auth profile if possible (Optional but good for consistency)
+            if (authUser) {
+                await updateAuthProfile(
+                    authUser,
+                    `${editingUser.name} ${editingUser.surname}`.trim(),
+                    editingUser.avatarUrl
+                );
+            }
+
+            // 3. Update local state
             setUser(editingUser);
             setShowProfileEdit(false);
             showToast('Perfil actualizado con éxito', 'success');
@@ -214,9 +236,9 @@ export const Passport: React.FC = () => {
                     {/* Stats Grid */}
                     <div className="w-full grid grid-cols-3 gap-4 px-4">
                         {[
-                            { label: 'Events', value: '12', icon: MapPin },
-                            { label: 'Friends', value: '1.2k', icon: Users },
-                            { label: 'Impact', value: '240', icon: Zap }
+                            { label: 'Events', value: userStats.eventsCount.toString(), icon: MapPin },
+                            { label: 'Following', value: userStats.friendsCount.toString(), icon: Users },
+                            { label: 'Impact', value: userStats.impactCount.toString(), icon: Zap }
                         ].map((stat, i) => (
                             <div key={i} className="flex flex-col items-center gap-1">
                                 <span className="text-xl font-black text-white">{stat.value}</span>
@@ -226,26 +248,48 @@ export const Passport: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Pulse Window Quick Access */}
+                <div className="px-8 mb-8">
+                    <button
+                        onClick={() => setShowPulseModal(true)}
+                        className="w-full relative overflow-hidden rounded-[2.5rem] bg-gradient-to-r from-violet-500/20 to-indigo-500/20 border border-violet-500/30 p-6 flex items-center justify-between group hover:border-violet-500/50 transition-all"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="flex items-center gap-4 relative z-10">
+                            <div className="w-14 h-14 rounded-2xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
+                                <Activity className="w-7 h-7 text-violet-400" />
+                            </div>
+                            <div className="text-left">
+                                <h3 className="text-lg font-black text-white tracking-tight">Ventana de Pulse</h3>
+                                <p className="text-xs font-medium text-violet-400">Actividad en tiempo real</p>
+                            </div>
+                        </div>
+                        <div className="w-10 h-10 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center group-hover:bg-violet-500 group-hover:scale-110 transition-all">
+                            <Sparkles className="w-5 h-5 text-violet-400 group-hover:text-white transition-colors" />
+                        </div>
+                    </button>
+                </div>
+
                 {/* My Upcoming Pulses */}
                 <div className="mb-12">
                     <div className="px-8 flex items-center justify-between mb-6">
                         <h3 className="text-lg font-black tracking-tight">My Upcoming Pulses</h3>
-                        <button className="text-[11px] font-black text-orange-500 uppercase tracking-widest">View All</button>
+                        {favoritedEvents.length > 3 && (
+                            <button 
+                                onClick={() => setShowAllPulses(!showAllPulses)}
+                                className="text-[11px] font-black text-orange-500 uppercase tracking-widest"
+                            >
+                                {showAllPulses ? 'Show Less' : 'View All'}
+                            </button>
+                        )}
                     </div>
-                    <div className="flex gap-4 overflow-x-auto no-scrollbar px-8">
-                        {favoritedEvents.slice(0, 3).map((event) => (
-                            <div key={event.id} className="min-w-[280px] w-[280px] shrink-0 transform transition-all hover:scale-[1.02] active:scale-95 text-left">
-                                <div className="relative h-40 rounded-[2.5rem] overflow-hidden border border-white/5 shadow-2xl group">
-                                    <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-                                    <div className="absolute bottom-4 left-6 right-6">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-[9px] font-black bg-orange-500 text-white px-2 py-0.5 rounded-full uppercase">{event.category}</span>
-                                            <span className="text-[9px] font-black text-white/60 uppercase">{event.sector}</span>
-                                        </div>
-                                        <h4 className="text-base font-black text-white leading-tight truncate">{event.title}</h4>
-                                    </div>
-                                </div>
+                    <div className="flex gap-4 overflow-x-auto no-scrollbar px-8 pb-4">
+                        {favoritedEvents.slice(0, showAllPulses ? favoritedEvents.length : 3).map((event) => (
+                            <div key={event.id} className="min-w-[280px] w-[280px] shrink-0">
+                                <EventCard 
+                                    event={event} 
+                                    onClick={(e) => setSelectedEvent(e)}
+                                />
                             </div>
                         ))}
                         {favoritedEvents.length === 0 && (
@@ -257,13 +301,264 @@ export const Passport: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Following Section */}
+                {followedBusinessIds.length > 0 && (
+                    <div className="mb-12">
+                        <div className="px-8 flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-black tracking-tight">Siguiendo</h3>
+                        </div>
+                        <div className="flex gap-4 overflow-x-auto no-scrollbar px-8 pb-4">
+                            {followedBusinessIds.map(bizId => {
+                                const biz = businesses.find(b => b.id === bizId);
+                                if (!biz) return null;
+                                return (
+                                    <div 
+                                        key={biz.id}
+                                        onClick={() => {
+                                            setPublicProfileId(biz.id);
+                                            setShowPublicProfile(true);
+                                        }}
+                                        className="min-w-[140px] w-[140px] shrink-0 cursor-pointer"
+                                    >
+                                        <div className="relative">
+                                            <div className="w-24 h-24 mx-auto rounded-full overflow-hidden border-4 border-orange-500/30 shadow-lg">
+                                                <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
+                                            </div>
+                                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center border-2 border-black">
+                                                <MapPin className="w-3 h-3 text-white" />
+                                            </div>
+                                        </div>
+                                        <p className="text-center mt-3 text-xs font-black text-white truncate px-2">{biz.name}</p>
+                                        <p className="text-center text-[9px] text-slate-500">{biz.category}</p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* Mi Negocio Section */}
+                <div className="px-8 mb-12">
+                    <h3 className="text-lg font-black tracking-tight mb-6">Mi Negocio</h3>
+                    
+                    {user?.businessId ? (
+                        businesses.find(b => b.id === user.businessId) ? (
+                            <div
+                                onClick={() => {
+                                    setShowBusinessEdit(true);
+                                    setEditingBusinessId(user.businessId);
+                                }}
+                                className="w-full relative overflow-hidden rounded-[2.5rem] bg-[#111111] border border-white/5 cursor-pointer group shadow-2xl"
+                            >
+                                <div className="absolute inset-0">
+                                    <img 
+                                        src={businesses.find(b => b.id === user.businessId)?.imageUrl} 
+                                        alt="Business" 
+                                        className="w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-700" 
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/20" />
+                                </div>
+                                <div className="relative p-6 flex flex-col gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-16 h-16 rounded-2xl bg-black/50 backdrop-blur-md p-1 border border-white/10 shadow-2xl overflow-hidden shrink-0">
+                                            {businesses.find(b => b.id === user.businessId)?.icon ? (
+                                                <img 
+                                                    src={businesses.find(b => b.id === user.businessId)?.icon} 
+                                                    alt="Icon" 
+                                                    className="w-full h-full object-cover rounded-xl" 
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center bg-orange-500/20 rounded-xl">
+                                                    <Store className="w-8 h-8 text-orange-500" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col text-left">
+                                            <span className="text-white font-black text-xl leading-none mb-1">{businesses.find(b => b.id === user.businessId)?.name}</span>
+                                            <span className="text-sm font-medium text-slate-400">{businesses.find(b => b.id === user.businessId)?.category} · {businesses.find(b => b.id === user.businessId)?.sector}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-2 pt-4 border-t border-white/10">
+                                        <span className="text-xs font-black text-orange-500 uppercase tracking-widest">Gestionar Negocio</span>
+                                        <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/5 group-hover:bg-orange-500 group-hover:border-orange-400 transition-colors">
+                                            <Edit3 className="w-4 h-4 text-white" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null
+                    ) : (
+                        <button
+                            onClick={() => setShowBusinessReg(true)}
+                            className="w-full p-8 bg-[#111111] rounded-[2.5rem] border border-dashed border-white/10 hover:bg-white/5 hover:border-white/20 transition-all flex flex-col items-center justify-center gap-3 active:scale-95"
+                        >
+                            <div className="p-4 bg-white/5 rounded-2xl">
+                                <Plus className="w-8 h-8 text-slate-400" />
+                            </div>
+                            <span className="font-black text-slate-300">Añadir tu Negocio</span>
+                        </button>
+                    )}
+                </div>
+
+                {/* Me Siguen Section */}
+                {userBusiness && (
+                    <div className="px-8 mb-12">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-black tracking-tight">Me Siguen</h3>
+                            {businessFollowers.length > 0 && (
+                                <div className="flex items-center gap-4">
+                                    {businessFollowers.length > 8 && (
+                                        <button 
+                                            onClick={() => setShowAllFollowers(!showAllFollowers)}
+                                            className="text-[11px] font-black text-amber-500 uppercase tracking-widest"
+                                        >
+                                            {showAllFollowers ? 'Ver Menos' : 'Ver Todos'}
+                                        </button>
+                                    )}
+                                    <div className="px-4 py-2 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center gap-2">
+                                        <Users className="w-4 h-4 text-amber-400" />
+                                        <span className="text-xs font-black uppercase tracking-widest text-amber-400">
+                                            {businessFollowers.length} {businessFollowers.length === 1 ? 'seguidor' : 'seguidores'}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {businessFollowers.length > 0 ? (
+                            <div className={`flex ${showAllFollowers ? 'flex-wrap' : 'overflow-x-auto no-scrollbar'} gap-3 pb-2`}>
+                                {(showAllFollowers ? businessFollowers : businessFollowers.slice(0, 8)).map((followerId) => {
+                                    const follower = allUsers.find(u => u.id === followerId);
+                                    if (!follower) {
+                                        const followedBiz = businesses.find(b => b.id === followerId);
+                                        if (!followedBiz) return null;
+                                        return (
+                                            <div 
+                                                key={followerId}
+                                                onClick={() => {
+                                                    setPublicProfileId(followerId);
+                                                    setPublicProfileType('business');
+                                                    setShowPublicProfile(true);
+                                                }}
+                                                className="min-w-[80px] w-[80px] shrink-0 flex flex-col items-center gap-2 cursor-pointer group"
+                                            >
+                                                <div className="w-16 h-16 rounded-full border-2 border-amber-500/30 p-0.5 group-hover:border-amber-500/60 transition-colors overflow-hidden">
+                                                    <img 
+                                                        src={followedBiz.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(followedBiz.name)}&background=random&color=fff`} 
+                                                        className="w-full h-full rounded-full object-cover"
+                                                        alt={followedBiz.name}
+                                                    />
+                                                </div>
+                                                <span className="text-[9px] font-black text-slate-400 text-center truncate w-full group-hover:text-amber-400 transition-colors">
+                                                    {followedBiz.name.split(' ')[0]}
+                                                </span>
+                                            </div>
+                                        );
+                                    }
+                                    const followerName = follower.name || 'Member';
+                                    return (
+                                        <div 
+                                            key={followerId}
+                                            onClick={() => {
+                                                setPublicProfileId(followerId);
+                                                setPublicProfileType('user');
+                                                setShowPublicProfile(true);
+                                            }}
+                                            className="min-w-[80px] w-[80px] shrink-0 flex flex-col items-center gap-2 cursor-pointer group"
+                                        >
+                                            <div className="w-16 h-16 rounded-full border-2 border-amber-500/30 p-0.5 group-hover:border-amber-500/60 transition-colors">
+                                                <img 
+                                                    src={follower.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(followerName)}&background=random&color=fff`} 
+                                                    className="w-full h-full rounded-full object-cover"
+                                                    alt={followerName}
+                                                />
+                                            </div>
+                                            <span className="text-[9px] font-black text-slate-400 text-center truncate w-full group-hover:text-amber-400 transition-colors">
+                                                {followerName.split(' ')[0]}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="py-8 text-center bg-[#111111] rounded-[2.5rem] border border-dashed border-white/10">
+                                <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                                <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Aún no te siguen</p>
+                                <p className="text-[10px] text-slate-600 mt-1">Comparte tu negocio para atraer seguidores</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Eventos del Negocio */}
+                {userBusiness && (
+                    <div className="px-8 mb-12">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-black tracking-tight">Mis Eventos</h3>
+                            {eventLimit === Infinity ? (
+                                <div className="px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center gap-2">
+                                    <Zap className="w-4 h-4 text-emerald-400" />
+                                    <span className="text-xs font-black uppercase tracking-widest text-emerald-400">Ilimitados</span>
+                                </div>
+                            ) : (
+                                <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 ${eventsRemaining <= 2 ? 'bg-red-500/20 border border-red-500/30' : 'bg-orange-500/20 border border-orange-500/30'}`}>
+                                    <Calendar className={`w-4 h-4 ${eventsRemaining <= 2 ? 'text-red-400' : 'text-orange-400'}`} />
+                                    <span className={`text-xs font-black uppercase tracking-widest ${eventsRemaining <= 2 ? 'text-red-400' : 'text-orange-400'}`}>
+                                        {eventsUsed}/{eventLimit} {eventsRemaining === 1 ? 'restante' : 'restantes'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {businessEvents.length > 0 ? (
+                            <>
+                                <div className="flex justify-end mb-4">
+                                    <button
+                                        onClick={() => handleOpenNewEventWizard()}
+                                        disabled={eventsRemaining !== null && eventsRemaining <= 0}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${eventsRemaining !== null && eventsRemaining <= 0 ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-500/20'}`}
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Crear Evento
+                                    </button>
+                                </div>
+                                <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4">
+                                    {businessEvents.slice(0, 5).map((event) => (
+                                        <div key={event.id} className="min-w-[260px] w-[260px] shrink-0">
+                                            <EventCard 
+                                                event={event} 
+                                                onClick={(e) => setSelectedEvent(e)}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="w-full py-8 bg-[#111111] rounded-[2.5rem] border border-dashed border-white/10 flex flex-col items-center justify-center gap-4">
+                                <Sparkles className="w-8 h-8 text-slate-600" />
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No hay eventos creados</p>
+                                <button
+                                    onClick={() => handleOpenNewEventWizard()}
+                                    className="flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Crear Primer Evento
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+
+
                 {/* Options List */}
                 <div className="px-8 space-y-3 mb-12">
                     {[
                         { label: 'Edit Profile', icon: User, color: 'text-blue-400', action: onEditProfile },
-                        { label: 'Preferences', icon: Sparkles, color: 'text-purple-400', action: () => { } },
-                        { label: 'Security', icon: ShieldCheck, color: 'text-emerald-400', action: () => { } },
-                        { label: 'Help & Support', icon: MessageCircle, color: 'text-orange-400', action: () => { } }
+                        { label: 'Pulse Pass', icon: Zap, color: 'text-rose-400', action: () => setShowPulsePass(true) },
+                        { label: 'Preferences', icon: Sparkles, color: 'text-purple-400', action: () => setShowPreferences(true) },
+                        { label: 'Security', icon: ShieldCheck, color: 'text-emerald-400', action: () => setShowSecurity(true) },
+                        { label: 'Help & Support', icon: MessageCircle, color: 'text-orange-400', action: () => setShowHelp(true) }
                     ].map((option, i) => (
                         <button
                             key={i}
@@ -305,6 +600,14 @@ export const Passport: React.FC = () => {
                     {isAdmin && (
                         <div className="flex flex-col gap-3 mt-8">
                             <button
+                                onClick={() => navigate('/admin-users')}
+                                className="w-full bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black py-4 rounded-2xl hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
+                            >
+                                <Users className="w-5 h-5" />
+                                <span>Administrar Usuarios</span>
+                            </button>
+
+                            <button
                                 onClick={() => setShowMigrationPanel(true)}
                                 className="w-full bg-gradient-to-r from-orange-500 to-pink-500 text-white font-black py-4 rounded-2xl hover:from-orange-600 hover:to-pink-600 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
                             >
@@ -317,7 +620,7 @@ export const Passport: React.FC = () => {
                                 className="w-full bg-[#111111] text-sky-400 font-black py-4 rounded-2xl border border-sky-500/30 flex items-center justify-center gap-2 hover:bg-white/5 transition-all uppercase tracking-[0.2em] text-[10px]"
                             >
                                 <ShieldCheck className="w-5 h-5" />
-                                <span>MODO SUPERUSUARIO</span>
+                                <span>Modo SuperUsuario</span>
                             </button>
                         </div>
                     )}
@@ -500,7 +803,185 @@ export const Passport: React.FC = () => {
                                     'Guardar Cambios'
                                 )}
                             </button>
+
+                            {!userBusiness && (
+                                <button
+                                    onClick={() => { setShowProfileEdit(false); setShowBusinessReg(true); }}
+                                    className="w-full mt-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black py-4 rounded-2xl hover:from-amber-400 hover:to-orange-400 transition flex items-center justify-center gap-3 shadow-lg shadow-amber-500/20 uppercase tracking-[0.2em] text-xs"
+                                >
+                                    <Store className="w-5 h-5" />
+                                    Crear Mi Negocio
+                                </button>
+                            )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Preferences Modal */}
+            {showPreferences && (
+                <div className="fixed inset-0 z-[2100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setShowPreferences(false)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-black text-white">Preferencias</h3>
+                            <button onClick={() => setShowPreferences(false)} className="p-2 rounded-xl bg-white/5 hover:bg-white/10">
+                                <X className="w-5 h-5 text-slate-400" />
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl">
+                                <span className="text-sm font-bold text-white">Notificaciones</span>
+                                <div className="w-12 h-7 bg-orange-500 rounded-full p-1">
+                                    <div className="w-5 h-5 bg-white rounded-full ml-5"></div>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl">
+                                <span className="text-sm font-bold text-white">Sonidos</span>
+                                <div className="w-12 h-7 bg-slate-700 rounded-full p-1">
+                                    <div className="w-5 h-5 bg-slate-400 rounded-full"></div>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl">
+                                <span className="text-sm font-bold text-white">Modo Oscuro</span>
+                                <div className="w-12 h-7 bg-orange-500 rounded-full p-1">
+                                    <div className="w-5 h-5 bg-white rounded-full ml-5"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={() => setShowPreferences(false)} className="w-full mt-6 py-4 bg-orange-500 text-white font-black rounded-2xl uppercase text-xs tracking-widest hover:bg-orange-600">
+                            Guardar
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Security Modal */}
+            {showSecurity && (
+                <div className="fixed inset-0 z-[2100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setShowSecurity(false)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-black text-white">Seguridad</h3>
+                            <button onClick={() => setShowSecurity(false)} className="p-2 rounded-xl bg-white/5 hover:bg-white/10">
+                                <X className="w-5 h-5 text-slate-400" />
+                            </button>
+                        </div>
+                        <div className="space-y-3">
+                            <button className="w-full flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
+                                <span className="text-sm font-bold text-white">Cambiar Contraseña</span>
+                                <ChevronLeft className="w-5 h-5 text-slate-500 rotate-180" />
+                            </button>
+                            <button className="w-full flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
+                                <span className="text-sm font-bold text-white">Autenticación 2FA</span>
+                                <ChevronLeft className="w-5 h-5 text-slate-500 rotate-180" />
+                            </button>
+                            <button className="w-full flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
+                                <span className="text-sm font-bold text-white">Sesiones Activas</span>
+                                <ChevronLeft className="w-5 h-5 text-slate-500 rotate-180" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Help & Support Modal */}
+            {showHelp && (
+                <div className="fixed inset-0 z-[2100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setShowHelp(false)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-black text-white">Ayuda y Soporte</h3>
+                            <button onClick={() => setShowHelp(false)} className="p-2 rounded-xl bg-white/5 hover:bg-white/10">
+                                <X className="w-5 h-5 text-slate-400" />
+                            </button>
+                        </div>
+                        <div className="space-y-3">
+                            <a href="mailto:contacto@montapulse.com" className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
+                                <span className="text-sm font-bold text-white">Enviar Email</span>
+                                <Mail className="w-5 h-5 text-slate-500" />
+                            </a>
+                            <a href="https://wa.me/593999999999" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
+                                <span className="text-sm font-bold text-white">WhatsApp</span>
+                                <MessageCircle className="w-5 h-5 text-slate-500" />
+                            </a>
+                            <button onClick={() => showToast('FAQ disponible pronto', 'info')} className="w-full flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
+                                <span className="text-sm font-bold text-white">Preguntas Frecuentes</span>
+                                <ChevronLeft className="w-5 h-5 text-slate-500 rotate-180" />
+                            </button>
+                            <button onClick={() => showToast('Términos y condiciones disponible pronto', 'info')} className="w-full flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
+                                <span className="text-sm font-bold text-white">Términos y Condiciones</span>
+                                <ChevronLeft className="w-5 h-5 text-slate-500 rotate-180" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+ 
+            {/* Pulse Pass Modal */}
+            {showPulsePass && (
+                <div className="fixed inset-0 z-[2100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setShowPulsePass(false)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-rose-500 rounded-xl">
+                                    <Zap className="w-5 h-5 text-white" />
+                                </div>
+                                <h3 className="text-xl font-black text-white">Pulse Pass</h3>
+                            </div>
+                            <button onClick={() => setShowPulsePass(false)} className="p-2 rounded-xl bg-white/5 hover:bg-white/10">
+                                <X className="w-5 h-5 text-slate-400" />
+                            </button>
+                        </div>
+                        <div className="space-y-3">
+                            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl">
+                                <CheckCircle className="w-4 h-4 text-green-400 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-white">Publicar eventos ilimitados</p>
+                                    <p className="text-[10px] text-slate-500">Crea tantos eventos como quieras</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl">
+                                <CheckCircle className="w-4 h-4 text-green-400 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-white">Destacar en el mapa</p>
+                                    <p className="text-[10px] text-slate-500">Tu negocio aparece primero</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl">
+                                <CheckCircle className="w-4 h-4 text-green-400 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-white">Métricas avanzadas</p>
+                                    <p className="text-[10px] text-slate-500">Ver visitas y engagement</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl">
+                                <CheckCircle className="w-4 h-4 text-green-400 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-white">Badge premium</p>
+                                    <p className="text-[10px] text-slate-500">Icono exclusivo en tu perfil</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl">
+                                <CheckCircle className="w-4 h-4 text-green-400 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-white">Soporte prioritario</p>
+                                    <p className="text-[10px] text-slate-500">Atención preferente 24/7</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3 p-3 bg-rose-500/10 rounded-xl border border-rose-500/20">
+                                <CheckCircle className="w-4 h-4 text-rose-400 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-white">10% de descuento en negocios</p>
+                                    <p className="text-[10px] text-rose-300">En todos los negocios de la comunidad</p>
+                                </div>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => {
+                                showToast('Próximamente disponible', 'info');
+                            }}
+                            className="w-full py-3 bg-rose-500 hover:bg-rose-400 text-white font-black text-sm rounded-xl transition-colors mt-6"
+                        >
+                            Obtener Pulse Pass
+                        </button>
                     </div>
                 </div>
             )}

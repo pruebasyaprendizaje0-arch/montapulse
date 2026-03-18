@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, ShieldCheck, Flame, Star, Search, Filter, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react';
+import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, ShieldCheck, Flame, Star, Search, Filter, Layers, ChevronDown, ChevronUp, TrendingUp, Clock, Trash2, ArrowRight } from 'lucide-react';
 import { MapView } from '../components/Map/MapView';
 import { EventCard } from '../components/EventCard';
 import { Sector, MontanitaEvent, Business, BusinessCategory, Vibe, SubscriptionPlan } from '../types';
 import { LOCALITIES, LOCALITY_SECTORS, SECTOR_INFO, LOCALITY_POLYGONS } from '../constants';
-import { getPlannerRecommendations, PlannerSection } from '../services/geminiService';
+import { getPlannerRecommendations, PlannerSection, getRecommendationForUser } from '../services/geminiService';
 import { deleteBusiness, createBusiness, updateBusiness, incrementBusinessViewCount } from '../services/firestoreService';
 import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
@@ -13,16 +13,20 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { PulseFeed } from '../components/Social/PulseFeed';
 import { ItineraryModal } from '../components/Modals/ItineraryModal';
+import { AIRecommendationModal } from '../components/Modals/AIRecommendationModal';
 
 interface ExploreProps {
     onEditBusiness?: (id: string) => void;
+    userBusinessId?: string;
 }
 
 export const Explore: React.FC<ExploreProps> = ({
-    onEditBusiness
+    onEditBusiness,
+    userBusinessId
 }) => {
     const navigate = useNavigate();
     const { user, authUser, isAdmin, isSuperAdmin } = useAuthContext();
+    const isPremiumUser = user?.plan === SubscriptionPlan.PREMIUM;
     const {
         events,
         businesses,
@@ -58,15 +62,24 @@ export const Explore: React.FC<ExploreProps> = ({
         setBizForm,
         bizForm,
         posts,
-        eventsWithLiveCounts // Assuming this comes from useData now
+        eventsWithLiveCounts, // Assuming this comes from useData now
+        handlePurgeAllReferences
     } = useData();
+    const userBusinessIdResolved = userBusinessId || businesses.find(b => b.ownerId === authUser?.uid)?.id;
     const { t } = useTranslation();
-    const { showConfirm } = useToast();
+    const { showConfirm, showPrompt } = useToast();
 
     // Local state for AI only (if not moved to context)
     const [aiRecData, setAiRecData] = useState<PlannerSection[] | null>(null);
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [showItinerary, setShowItinerary] = useState(false);
+
+    // Ask Anything State
+    const [askRecData, setAskRecData] = useState<PlannerSection[] | null>(null);
+    const [isAskLoading, setIsAskLoading] = useState(false);
+    const [showAskModal, setShowAskModal] = useState(false);
+    const [showLocalityMenu, setShowLocalityMenu] = useState(false);
+    const [showFilterMenu, setShowFilterMenu] = useState(false);
 
     const handleAiAsk = async () => {
         setIsAiLoading(true);
@@ -76,17 +89,34 @@ export const Explore: React.FC<ExploreProps> = ({
         setIsAiLoading(false);
     };
 
+    const handleAskAnything = async (initialQuery?: string) => {
+        const question = initialQuery || await showPrompt('¿Qué estás buscando hoy?', 'Ej: Un lugar tranquilo para ver el atardecer', 'Pregunta a la IA');
+        if (!question) return;
+
+        setIsAskLoading(true);
+        setShowAskModal(true);
+        try {
+            const results = await getRecommendationForUser(events, question);
+            setAskRecData(results);
+        } catch (error) {
+            console.error("AI Ask error:", error);
+        } finally {
+            setIsAskLoading(false);
+        }
+    };
+
     // Map Handlers (Admin Logic moved here or passed via props? Some logic needs Auth/Admin checks which are passed)
-    const handleAddBusinessOnMap = async (lat: number, lng: number) => {
+    const handleAddBusinessOnMap = async (lat: number, lng: number, isReference?: boolean) => {
         setBizForm({
             ...bizForm,
-            name: 'Nuevo Punto',
+            name: isReference ? 'Nuevo Punto de Referencia' : 'Nuevo Negocio',
             coordinates: [lat, lng],
             locality: currentLocality.name,
             sector: Sector.CENTRO,
-            icon: 'palmtree',
-            description: 'Punto de referencia añadido por el administrador.',
-            category: BusinessCategory.RESTAURANTE
+            icon: isReference ? 'palmtree' : 'store',
+            description: isReference ? 'Punto de referencia añadido por el administrador.' : 'Negocio añadido por el administrador.',
+            category: isReference ? BusinessCategory.REFERENCIA : BusinessCategory.RESTAURANTE,
+            isReference: isReference
         });
         setShowBusinessReg(true);
     };
@@ -106,7 +136,8 @@ export const Explore: React.FC<ExploreProps> = ({
     };
 
     const filteredEvents = useMemo(() => {
-        let result = eventsWithLiveCounts;
+        const now = new Date();
+        let result = eventsWithLiveCounts.filter(e => e.endAt > now); // Solo eventos futuros o actuales
         if (activeFilter !== 'All') { // Changed from 'all' to 'All' to match usage
             result = result.filter(e => e.category === activeFilter);
         }
@@ -119,6 +150,12 @@ export const Explore: React.FC<ExploreProps> = ({
         }
         return result;
     }, [eventsWithLiveCounts, activeFilter, searchQuery]);
+
+    // Eventos futuros para el mapa
+    const upcomingEvents = useMemo(() => {
+        const now = new Date();
+        return events.filter(e => e.endAt > now);
+    }, [events]);
 
     const popularVibe = useMemo(() => {
         const counts = filteredEvents.reduce((acc, e) => {
@@ -135,54 +172,224 @@ export const Explore: React.FC<ExploreProps> = ({
             <div className="h-full relative flex flex-col bg-[#020617] overflow-hidden">
                 <PulseFeed />
 
-                {/* AI Itinerary Trigger (Floating Premium Button) */}
-                <div className="absolute top-20 left-6 z-40">
-                    <button
-                        onClick={() => setShowItinerary(true)}
-                        className="group relative flex items-center gap-3 p-1 pr-6 bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl hover:bg-slate-800 transition-all shadow-2xl hover:scale-105 active:scale-95"
-                    >
-                        <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:rotate-12 transition-transform">
-                            <Sparkles className="w-5 h-5 text-white" />
-                        </div>
-                        <div className="flex flex-col items-start">
-                            <span className="text-[10px] font-black text-white italic tracking-tight">PLAN MY DAY</span>
-                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">AI Itinerary</span>
-                        </div>
-                        {/* Glow effect */}
-                        <div className="absolute inset-0 bg-indigo-500/10 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                </div>
-
-                {/* Nearby Pulses Overlay - High Fidelity Mockup */}
-                <div className="absolute bottom-[88px] left-0 right-0 z-40 bg-gradient-to-t from-black via-black/40 to-transparent pt-12">
-                    <div className="px-6 mb-4 flex items-center justify-between">
-                        <h2 className="text-xl font-black tracking-tight">Nearby Pulses</h2>
-                        <button className="text-[11px] font-black text-orange-500 uppercase tracking-widest">See All</button>
-                    </div>
-                    <div className="flex gap-4 overflow-x-auto no-scrollbar px-6 pb-6">
-                        {businesses.slice(0, 5).map((biz) => (
-                            <div key={biz.id} className="min-w-[240px] w-[240px] h-[120px] bg-[#111111] rounded-3xl border border-white/5 p-3 flex gap-4 hover:border-orange-500/30 transition-all cursor-pointer group shadow-2xl">
-                                <div className="w-24 h-full rounded-2xl overflow-hidden border border-white/10 shrink-0">
-                                    <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                                </div>
-                                <div className="flex-1 flex flex-col justify-between py-1">
-                                    <div className="flex flex-col gap-0.5">
-                                        <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">{biz.category}</span>
-                                        <h3 className="text-sm font-black truncate tracking-tight">{biz.name}</h3>
+                {/* Search Bar & Admin Tools */}
+                <div className="absolute top-6 inset-x-0 z-50 flex flex-col items-center gap-4 pointer-events-none px-6">
+                    <div className="w-full max-w-xl pointer-events-auto relative group">
+                        <div className="relative flex items-center bg-[#020617]/40 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-1.5 shadow-2xl shadow-black/60 ring-1 ring-white/5 transition-all group-focus-within:border-sky-500/30 group-hover:bg-[#020617]/60">
+                            {/* Selector de Localidad */}
+                            <div className="relative">
+                                <button 
+                                    onClick={() => setShowLocalityMenu(!showLocalityMenu)}
+                                    className="flex items-center gap-2 pl-4 pr-3 py-2 text-white hover:bg-white/10 rounded-l-[1.8rem] transition-colors border-r border-white/10 mr-2 group/loc"
+                                >
+                                    <MapPin className="w-4 h-4 text-sky-400 group-hover/loc:scale-110 transition-transform" />
+                                    <span className="text-sm font-bold truncate max-w-[100px]">{currentLocality.name}</span>
+                                    <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showLocalityMenu ? 'rotate-180' : ''}`} />
+                                </button>
+                                
+                                {showLocalityMenu && (
+                                    <div className="absolute top-[calc(100%+12px)] left-0 w-48 bg-[#020617]/95 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl py-2 z-[60] animate-in fade-in slide-in-from-top-2">
+                                        <div className="px-3 py-1.5 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Cambiar Zona</div>
+                                        {LOCALITIES.map(loc => (
+                                            <button
+                                                key={loc.name}
+                                                onClick={() => {
+                                                    setCurrentLocality(loc);
+                                                    setShowLocalityMenu(false);
+                                                }}
+                                                className={`w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium transition-colors hover:bg-white/10 ${currentLocality.name === loc.name ? 'text-sky-400 bg-sky-400/10' : 'text-slate-300'}`}
+                                            >
+                                                {loc.name}
+                                                {currentLocality.name === loc.name && <ShieldCheck className="w-4 h-4" />}
+                                            </button>
+                                        ))}
                                     </div>
-                                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
-                                        <div className="flex items-center gap-1">
-                                            <MapPin className="w-3 h-3" />
-                                            <span>0.4 km</span>
+                                )}
+                            </div>
+
+                            <Search className="w-4 h-4 text-slate-400 group-focus-within:text-sky-400 transition-colors" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Busca eventos, locales o experiencias..."
+                                className="flex-1 bg-transparent border-none outline-none px-4 text-sm font-bold text-white placeholder:text-slate-500 placeholder:font-black placeholder:uppercase placeholder:text-[10px] placeholder:tracking-widest"
+                            />
+                            {searchQuery && (
+                                <button 
+                                    onClick={() => setSearchQuery('')}
+                                    className="p-2.5 mr-1 hover:bg-white/10 rounded-full text-slate-500 hover:text-white transition-all pointer-events-auto"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                             <div className="relative">
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowFilterMenu(!showFilterMenu);
+                                    }}
+                                    className={`w-11 h-11 rounded-full flex items-center justify-center border border-white/10 mr-1 shadow-lg transition-all hover:bg-slate-700 active:scale-95 ${showFilterMenu ? 'bg-sky-500 border-sky-400 text-white' : 'bg-gradient-to-br from-slate-800 to-slate-900 text-slate-400'}`}
+                                >
+                                    <Filter className={`w-4 h-4 ${showFilterMenu ? 'text-white' : 'text-slate-400'}`} />
+                                </button>
+                                
+                                {showFilterMenu && (
+                                    <div className="absolute top-[calc(100%+12px)] right-0 w-64 bg-[#020617]/95 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl py-3 z-[60] animate-in fade-in slide-in-from-top-2">
+                                        <div className="px-4 py-2 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 border-b border-white/5 flex items-center justify-between">
+                                            Categorías
+                                            {activeFilter !== 'All' && (
+                                                <button 
+                                                    onClick={() => setActiveFilter('All')}
+                                                    className="text-rose-400 hover:text-rose-300 transition-colors"
+                                                >
+                                                    Limpiar
+                                                </button>
+                                            )}
                                         </div>
-                                        <div className="flex items-center gap-1">
-                                            <TrendingUp className="w-3 h-3 text-emerald-500" />
-                                            <span className="text-emerald-500">120</span>
+                                        <div className="max-h-[300px] overflow-y-auto no-scrollbar">
+                                            {Object.values(BusinessCategory).map(cat => (
+                                                <button
+                                                    key={cat}
+                                                    onClick={() => {
+                                                        setActiveFilter(cat === activeFilter ? 'All' : cat);
+                                                        setShowFilterMenu(false);
+                                                    }}
+                                                    className={`w-full flex items-center gap-3 px-5 py-3 text-sm font-medium transition-colors hover:bg-white/10 ${activeFilter === cat ? 'text-sky-400 bg-sky-400/10' : 'text-slate-300'}`}
+                                                >
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${activeFilter === cat ? 'bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.6)]' : 'bg-slate-700'}`} />
+                                                    {cat}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Search Results Dropdown */}
+                        {searchQuery.length > 1 && (
+                            <div className="absolute top-full left-0 right-0 mt-3 bg-[#020617]/95 backdrop-blur-3xl border border-white/10 rounded-[2rem] overflow-hidden shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300 z-[3000]">
+                                <div className="p-2 max-h-[450px] overflow-y-auto no-scrollbar">
+                                    <div className="space-y-1">
+                                        {[...businesses, ...events]
+                                            .filter(item => {
+                                                const locality = 'locality' in item ? item.locality : businesses.find(b => b.id === (item as any).businessId)?.locality;
+                                                const matchesLocality = (locality || 'Montañita') === currentLocality.name;
+                                                const matchesSearch = (('name' in item ? item.name : item.title).toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                                                    (item as any).category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                                                    (item as any).sector?.toLowerCase().includes(searchQuery.toLowerCase()));
+                                                return matchesLocality && matchesSearch;
+                                            })
+                                            .slice(0, 6)
+                                            .map((item, i) => (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => {
+                                                        const lat = 'location' in item ? item.location?.lat : (item as any).coordinates?.[0];
+                                                        const lng = 'location' in item ? item.location?.lng : (item as any).coordinates?.[1];
+                                                        setSearchQuery('');
+                                                        if ('name' in item) {
+                                                            incrementBusinessViewCount(item.id);
+                                                            setPublicProfileId(item.id);
+                                                            setPublicProfileType('business');
+                                                            setShowPublicProfile(true);
+                                                        } else {
+                                                            setSelectedEvent(item as any);
+                                                        }
+                                                    }}
+                                                    className="w-full flex items-center justify-between p-3.5 hover:bg-white/5 rounded-2xl transition-all group"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-sky-400 group-hover:bg-sky-400/10 transition-colors text-lg">
+                                                            {('name' in item) ? (
+                                                                (item as any).category === 'Restaurante' ? '🍱' : 
+                                                                (item as any).category === 'Bar' ? '🍹' : '🏪'
+                                                            ) : '✨'}
+                                                        </div>
+                                                        <div className="text-left">
+                                                            <div className="text-xs font-bold text-white group-hover:text-sky-400 transition-colors">
+                                                                {'name' in item ? item.name : item.title}
+                                                            </div>
+                                                            <div className="text-[9px] text-slate-500 uppercase tracking-widest font-black">
+                                                                {(item as any).category || (item as any).sector || 'Evento'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-sky-400 group-hover:translate-x-1 transition-all" />
+                                                </button>
+                                            ))
+                                        }
+
+                                        <div className="px-2 pt-2 border-t border-white/5">
+                                            <button 
+                                                onClick={() => handleAskAnything(searchQuery)}
+                                                className="w-full p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-between group/ai transition-all hover:bg-sky-500/20"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-sky-500 rounded-lg shadow-lg shadow-sky-500/20">
+                                                        <Sparkles className="w-3.5 h-3.5 text-white" />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <p className="text-[10px] font-black text-white uppercase tracking-widest">Pulse IA</p>
+                                                        <p className="text-[9px] text-sky-400 font-bold">Consultar sobre "{searchQuery}"</p>
+                                                    </div>
+                                                </div>
+                                                <ArrowRight className="w-4 h-4 text-sky-500 group-hover/ai:translate-x-1 transition-transform" />
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                        )}
+                    </div>
+
+                    {/* Quick Tools Bar */}
+                    <div className="flex items-center gap-2 pointer-events-auto">
+                        <button
+                            onClick={() => handleAskAnything()}
+                            className="px-6 py-2.5 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl flex items-center gap-2.5 hover:bg-slate-900 transition-all shadow-xl hover:scale-105 active:scale-95 group"
+                        >
+                            <div className="relative">
+                                <Sparkles className="w-4 h-4 text-sky-400 fill-sky-400 font-black animate-pulse" />
+                                <div className="absolute inset-0 bg-sky-400/20 blur-md rounded-full" />
+                            </div>
+                            <span className="text-[10px] font-black text-white italic tracking-tighter uppercase tracking-widest">IA Chat</span>
+                        </button>
+
+                        <button
+                            onClick={() => setShowItinerary(true)}
+                            className="px-6 py-2.5 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl flex items-center gap-2.5 hover:bg-slate-900 transition-all shadow-xl hover:scale-105 active:scale-95 group"
+                        >
+                            <div className="relative">
+                                <Zap className="w-4 h-4 text-amber-500 font-black" />
+                                <div className="absolute inset-0 bg-amber-500/10 blur-sm rounded-full" />
+                            </div>
+                            <span className="text-[10px] font-black text-white italic tracking-tighter uppercase tracking-widest">24h Planner</span>
+                        </button>
+
+                        {(isAdmin || isSuperAdmin) && (
+                            <button
+                                onClick={async () => {
+                                    const msg = await showPrompt("Escribe el mensaje del aviso global:", "Aviso Importante", "BROADCAST");
+                                    if (msg) alert("Aviso enviado a la comunidad (Simulado)");
+                                }}
+                                className="px-4 py-2.5 bg-amber-500/10 backdrop-blur-2xl border border-amber-500/20 rounded-2xl text-amber-500 hover:bg-amber-500/20 transition-all shadow-xl hover:scale-105"
+                                title="Global Broadcast"
+                            >
+                                <Layers className="w-5 h-5" />
+                            </button>
+                        )}
+
+                        {isSuperAdmin && (
+                            <button
+                                onClick={handlePurgeAllReferences}
+                                className="px-4 py-2.5 bg-rose-600/10 backdrop-blur-2xl border border-rose-500/20 rounded-2xl text-rose-500 hover:bg-rose-600/20 transition-all shadow-xl hover:scale-105"
+                                title="Purge"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -201,18 +408,21 @@ export const Explore: React.FC<ExploreProps> = ({
                         onFilterChange={setActiveFilter}
                         isAdmin={isAdmin}
                         isSuperAdmin={isSuperAdmin}
+                        isPremiumUser={isPremiumUser}
+                        userBusinessId={userBusinessIdResolved}
+                        userId={authUser?.uid}
                         onAddBusiness={handleAddBusinessOnMap}
                         onDeleteBusiness={handleDeleteBusinessByAdmin}
                         onUpdateBusiness={handleUpdateBusinessLocation}
                         onEditBusiness={onEditBusiness}
                         onUpdateSector={handleUpdateSectorGeometry}
                         businesses={businesses}
-                        events={events}
+                        events={upcomingEvents}
                         sectorPolygons={sectorPolygons}
                         posts={posts}
                         isEditorFocus={isEditorFocus}
                         onToggleEditorFocus={() => setIsEditorFocus(!isEditorFocus)}
-                        isPanelMinimized={true} // Default to minimized or hidden in this mockup style
+                        isPanelMinimized={true}
                         onTogglePanel={() => setIsPanelMinimized(!isPanelMinimized)}
                         hideUI={true}
                         localityName={currentLocality.name}
@@ -342,32 +552,6 @@ export const Explore: React.FC<ExploreProps> = ({
                                     </button>
                                 ))}
                             </div>
-                        </div>
-
-                        {/* Quick Navigation Cards */}
-                        <div className="grid grid-cols-3 gap-3 mb-8">
-                            {journeyCards.map((card) => {
-                                const Icon = card.icon === 'zap' ? Store : card.icon === 'waves' ? Waves : card.icon === 'leaf' ? Leaf : MapPin;
-                                return (
-                                    <div
-                                        key={card.id}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (card.id === 'CENTRO') setSelectedSector(Sector.CENTRO);
-                                            else if (card.id === 'LA PUNTA') setSelectedSector(Sector.LA_PUNTA);
-                                            else if (card.id === 'TIGRILLO') setSelectedSector(Sector.TIGRILLO);
-                                            else if (card.label === 'PLAYA') setSelectedSector(Sector.PLAYA);
-                                            else if (card.label === 'MONTAÑA') setSelectedSector(Sector.MONTANA);
-                                        }}
-                                        className={`cursor-pointer hover:scale-105 transition-transform flex flex-col items-center gap-3 p-4 rounded-[2rem] border border-white/5 bg-slate-900/40 relative group hover:bg-white/5 ${selectedSector === (card.id === 'LA PUNTA' ? Sector.LA_PUNTA : card.id === 'TIGRILLO' ? Sector.TIGRILLO : Sector.CENTRO) ? 'ring-2 ring-sky-500' : ''}`}
-                                    >
-                                        <div className={`p-3 rounded-full ${card.bg}`}>
-                                            <Icon className={`w-6 h-6 ${card.color}`} />
-                                        </div>
-                                        <span className="text-[10px] font-black uppercase text-white tracking-tighter text-center">{card.label}</span>
-                                    </div>
-                                );
-                            })}
                         </div>
 
                         {aiRecData && (
@@ -513,6 +697,9 @@ export const Explore: React.FC<ExploreProps> = ({
                     <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-bottom duration-500">
                         <button
                             onClick={() => {
+                                setSelectedSector(null);
+                                setActiveFilter('All');
+                                setSearchQuery('');
                                 setIsPanelMinimized(false);
                                 setIsEditorFocus(false);
                             }}
@@ -522,41 +709,6 @@ export const Explore: React.FC<ExploreProps> = ({
                             Pulse of Today
                             <span className="text-base">⚡</span>
                         </button>
-                    </div>
-                )
-            }
-
-            {/* Floating Sector Filters */}
-            {
-                !isEditorFocus && (
-                    <div className="fixed bottom-28 left-0 right-0 px-4 z-40 animate-in slide-in-from-bottom duration-500">
-
-
-                        <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
-                            {(LOCALITY_SECTORS[currentLocality.name] || Object.values(Sector)).map((sector) => {
-                                const info = SECTOR_INFO[sector];
-                                const isActive = selectedSector === sector;
-                                if (!info) return null;
-                                return (
-                                    <button
-                                        key={sector}
-                                        onClick={() => {
-                                            toggleSector(sector);
-                                            setActiveFilter('All');
-                                        }}
-                                        className={`flex flex-col items-center justify-center gap-1 px-6 py-2.5 rounded-2xl whitespace-nowrap border-2 transition-all duration-300 backdrop-blur-md ${isActive
-                                            ? `${info.bg} border-${info.color.split('-')[1]}-500 shadow-xl scale-105`
-                                            : 'bg-slate-900/60 border-white/5 text-slate-500 hover:bg-slate-800'
-                                            }`}
-                                    >
-                                        <div className={`w-2 h-2 rounded-full ${isActive ? info.color.replace('text-', 'bg-') : 'bg-slate-700'}`}></div>
-                                        <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-white' : ''}`}>
-                                            {sectorLabels[sector] || sector}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
                     </div>
                 )
             }

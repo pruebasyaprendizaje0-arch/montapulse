@@ -38,7 +38,19 @@
         "featured": "Negocios Destacados",
         "trendingNow": "Tendencia Ahora",
         "trendingLive": "LIVE",
-        "popularVibe": "Vibe Popular"
+        "popularVibe": "Vibe Popular",
+        "nearbyPulses": "Pulses Cercanos",
+        "viewPast": "Ver Historial",
+        "referencePoints": "Puntos de Referencia",
+        "searchPlaceholder": "Buscar locales, eventos...",
+        "trendingTitle": "Siéntelo"
+    },
+    "history": {
+        "title": "Historial",
+        "subTitle": "Eventos del mes pasado",
+        "noHistory": "No hay historial disponible",
+        "noHistoryDesc": "Los eventos del mes pasado aparecerán aquí.",
+        "top10Note": "Solo mostramos los 10 mejores"
     },
     "community": {
         "muro": "Muro",

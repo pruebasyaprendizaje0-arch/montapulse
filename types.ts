@@ -2,11 +2,19 @@
 export enum Sector {
   PLAYA = 'Playa',
   CENTRO = 'Centro',
-  TIGRILLO = 'El Tigrillo',
-  LA_PUNTA = 'La Punta',
-  MONTANA = 'Montaña',
-  OLON = 'Olón',
-  MANGLARALTO = 'Manglaralto'
+  MONTANA = 'Montaña'
+}
+
+export interface CommunityPost {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string;
+  content: string;
+  imageUrl?: string;
+  timestamp: string;
+  likes: number;
+  comments: number;
 }
 
 export enum Vibe {
@@ -16,6 +24,29 @@ export enum Vibe {
   FAMILIA = 'Familia',
   WELLNESS = 'Wellness',
   FIESTA = 'Fiesta'
+}
+
+export enum BusinessCategory {
+  RESTAURANTE = 'Restaurante',
+  BAR_DISCOTECA = 'Bar / Discoteca',
+  HOSPAJE = 'Hospedaje',
+  CENTRO_SURF = 'Centro de Surf',
+  TOUR_OPERATOR = 'Operador Turistico',
+  SHOPPING = 'Tienda / Shopping',
+  TRANSPORT = 'Transporte / Taxi',
+  BAR = 'Bar',
+  DISCOTECA = 'Discoteca',
+  HOTEL = 'Hotel',
+  HOSTAL = 'Hostal',
+  ESCUELA_SURF = 'Escuela de Surf',
+  REFERENCIA = 'Punto de Referencia',
+  PARQUE = 'Parque',
+  CANCHA = 'Cancha',
+  MALECON = 'Malecón',
+  MERCADO = 'Mercado',
+  PARADA_TAXI = 'Parada de Taxis',
+  PLAYA = 'Playa',
+  OTRO = 'Otro'
 }
 
 export enum SubscriptionPlan {
@@ -34,6 +65,8 @@ export interface UserProfile {
   avatarUrl?: string;
   businessId?: string;
   plan: SubscriptionPlan;
+  pulsePassActive?: boolean;
+  locality?: string;
 }
 
 export interface Business {
@@ -45,12 +78,23 @@ export interface Business {
   icon?: string;
   isVerified: boolean;
   coordinates: [number, number];
+  location?: { lat: number; lng: number }; // For compatibility
   imageUrl: string;
+  category: BusinessCategory;
+  email?: string;
   whatsapp?: string;
   phone?: string;
+  instagram?: string;
+  ownerId?: string;
   plan: SubscriptionPlan;
   monthlyEventCount?: number;
-  lastResetDate?: string; // To track when the monthly count should reset
+  lastResetDate?: string;
+  isPublished?: boolean;
+  followerCount?: number;
+  reviewCount?: number;
+  rating?: number;
+  isReference?: boolean;
+  plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
 }
 
 export interface MontanitaEvent {
@@ -66,6 +110,72 @@ export interface MontanitaEvent {
   sector: Sector;
   imageUrl: string;
   interestedCount: number;
+  coordinates?: [number, number];
+  isFlashOffer?: boolean;
+  isPremium?: boolean;
+  viewCount?: number;
+  ownerId?: string;
 }
 
-export type ViewType = 'explore' | 'calendar' | 'favorites' | 'host' | 'history' | 'all-favorites' | 'plans';
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  text: string;
+  imageUrl?: string;
+  timestamp: any;
+  roomId: string;
+  isBusinessMessage?: boolean;
+}
+
+export interface ChatRoom {
+  id: string;
+  name: string;
+  type: 'group' | 'direct';
+  participants: string[];
+  lastMessage?: string;
+  lastMessageTime?: any;
+  avatar?: string;
+  unreadCount?: number;
+  status?: 'orange' | 'green' | 'none';
+}
+
+export interface BusinessReview {
+  id?: string;
+  businessId: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  rating: number;
+  comment: string;
+  timestamp?: any;
+}
+
+export interface PulseNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'system' | 'community' | 'offer';
+  read: boolean;
+  createdAt: any;
+}
+
+export interface ServiceItem {
+  name: string;
+  desc: string;
+  contact: string;
+}
+
+export interface ServiceCategory {
+  title: string;
+  icon: string;
+  color: string;
+  bg: string;
+  items: ServiceItem[];
+}
+
+export type AgendaRange = 'day' | 'week' | 'month';
+
+export type ViewType = 'explore' | 'calendar' | 'favorites' | 'host' | 'history' | 'all-favorites' | 'plans' | 'community' | 'chat' | 'admin-users' | 'info';

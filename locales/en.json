@@ -39,7 +39,10 @@
         "featured": "Featured Businesses",
         "trendingNow": "Trending Now",
         "trendingLive": "LIVE",
-        "popularVibe": "Popular Vibe"
+        "popularVibe": "Popular Vibe",
+        "referencePoints": "Reference Points",
+        "searchPlaceholder": "Search places, events...",
+        "trendingTitle": "Feel it"
     },
     "community": {
         "muro": "Wall",

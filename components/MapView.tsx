@@ -1,17 +1,50 @@
 import React, { useEffect, useRef, useState } from 'react';
+import ReactDOMServer from 'react-dom/server';
 import L from 'leaflet';
-import { Search, SlidersHorizontal, Navigation, Layers, Plus, Minus, X, Clock, CheckCircle, Edit3, Settings, Trash2, MapPin, Zap } from 'lucide-react';
-import { Business, Sector, Vibe } from '../types.ts';
+import { Search, SlidersHorizontal, Navigation, Layers, Plus, Minus, X, Clock, CheckCircle, Edit3, Settings, Trash2, MapPin, Zap, Palmtree, Music, Leaf, Waves, Mountain, Hotel, UtensilsCrossed, Church, Bus, ShoppingBag, TreePine, Coffee, Camera, Wine, Beer, IceCream, Dumbbell, Sparkles, Tent, Anchor, Ship, Sunrise, Sun, Moon, PartyPopper, Flame, Heart, Star, Smile, Banknote, Car, Store } from 'lucide-react';
+import { Business, Sector, Vibe, SubscriptionPlan, BusinessCategory } from '../types.ts';
 import { SECTOR_INFO, LOCALITIES, MAP_ICONS } from '../constants.ts';
+import { useToast } from '../context/ToastContext';
+
+const getIconForBusiness = (business: Business): { icon: React.ReactNode; color: string } => {
+  const iconId = business.icon || '';
+  
+  if (iconId === 'palmtree' || business.category === BusinessCategory.PLAYA) 
+    return { icon: <Palmtree className="w-6 h-6" />, color: '#22d3ee' };
+  if (iconId === 'music' || business.category === BusinessCategory.BAR || business.category === BusinessCategory.DISCOTECA || business.category === BusinessCategory.BAR_DISCOTECA) 
+    return { icon: <Music className="w-6 h-6" />, color: '#f472b6' };
+  if (iconId === 'leaf' || business.category === BusinessCategory.PARQUE) 
+    return { icon: <Leaf className="w-6 h-6" />, color: '#4ade80' };
+  if (iconId === 'waves' || business.category === BusinessCategory.ESCUELA_SURF || business.category === BusinessCategory.CENTRO_SURF) 
+    return { icon: <Waves className="w-6 h-6" />, color: '#38bdf8' };
+  if (iconId === 'mountain' || business.category === BusinessCategory.TOUR_OPERATOR) 
+    return { icon: <Mountain className="w-6 h-6" />, color: '#a78bfa' };
+  if (iconId === 'food' || business.category === BusinessCategory.RESTAURANTE || business.category === BusinessCategory.MERCADO) 
+    return { icon: <UtensilsCrossed className="w-6 h-6" />, color: '#fb923c' };
+  if (iconId === 'hotel' || business.category === BusinessCategory.HOTEL || business.category === BusinessCategory.HOSTAL || business.category === BusinessCategory.HOSPAJE) 
+    return { icon: <Hotel className="w-6 h-6" />, color: '#fbbf24' };
+  if (iconId === 'church' || business.category === BusinessCategory.MALECON) 
+    return { icon: <Church className="w-6 h-6" />, color: '#a8a29e' };
+  if (iconId === 'bus' || business.category === BusinessCategory.TRANSPORT || business.category === BusinessCategory.PARADA_TAXI) 
+    return { icon: <Bus className="w-6 h-6" />, color: '#94a3b8' };
+  if (iconId === 'shopping' || business.category === BusinessCategory.SHOPPING) 
+    return { icon: <ShoppingBag className="w-6 h-6" />, color: '#c084fc' };
+  if (iconId === 'park') 
+    return { icon: <TreePine className="w-6 h-6" />, color: '#22c55e' };
+  if (iconId === 'cocktail' || iconId === 'wine') 
+    return { icon: <Wine className="w-6 h-6" />, color: '#ec4899' };
+  if (iconId === 'coffee') 
+    return { icon: <Coffee className="w-6 h-6" />, color: '#d97706' };
+  if (iconId === 'camera') 
+    return { icon: <Camera className="w-6 h-6" />, color: '#8b5cf6' };
+  
+  return { icon: <MapPin className="w-6 h-6" />, color: '#eab308' };
+};
 
 const FLOATING_LEMAS = {
   [Sector.PLAYA]: "Diversión al Sol • Sports & Vibe",
   [Sector.CENTRO]: "Calle de los Cócteles • 24/7",
-  [Sector.TIGRILLO]: "Eco-Chill & Paisajes",
-  [Sector.LA_PUNTA]: "Surf & Sunset Vibes",
-  [Sector.MONTANA]: "Vistas Épicas & Aventura",
-  [Sector.OLON]: "Gastronomía & Relax Familiar",
-  [Sector.MANGLARALTO]: "Manglares & Tradición"
+  [Sector.MONTANA]: "Vistas Épicas & Aventura"
 };
 
 interface MapViewProps {
@@ -22,7 +55,7 @@ interface MapViewProps {
   activeFilter: string;
   onFilterChange: (filter: string) => void;
   isAdmin?: boolean;
-  onAddBusiness?: (lat: number, lng: number) => void;
+  onAddBusiness?: (lat: number, lng: number, isReference: boolean) => void;
   onDeleteBusiness?: (id: string) => void;
   onUpdateBusiness?: (id: string, lat: number, lng: number) => void;
   onEditBusiness?: (id: string) => void;
@@ -37,9 +70,14 @@ interface MapViewProps {
   hideUI?: boolean;
   sectorLabels?: Record<string, string>;
   mapCenter?: [number, number] | null;
+  sectorFocusCoords?: [number, number] | null;
   localityName?: string;
   onLocalityChange?: (name: string) => void;
   onResetFilters?: () => void;
+  isSuperUser?: boolean;
+  isMovingBusiness?: boolean;
+  movingBusinessId?: string;
+  onMoveBusinessComplete?: () => void;
 }
 
 export const MapView: React.FC<MapViewProps> = ({
@@ -62,12 +100,18 @@ export const MapView: React.FC<MapViewProps> = ({
   hideUI,
   sectorLabels,
   mapCenter,
+  sectorFocusCoords,
   onLocalityChange,
   onResetFilters,
   onTogglePanel,
   onToggleEditorFocus,
-  localityName = 'Montañita'
+  localityName = 'Montañita',
+  isSuperUser,
+  isMovingBusiness = false,
+  movingBusinessId,
+  onMoveBusinessComplete
 }: MapViewProps) => {
+  const { showToast, showConfirm, showPrompt } = useToast();
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
@@ -79,7 +123,12 @@ export const MapView: React.FC<MapViewProps> = ({
   const [tempCoords, setTempCoords] = useState<[number, number][]>([]);
   const [mousePos, setMousePos] = useState<[number, number] | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  const previewPolylineRef = useRef<L.Polyline | null>(null);
+    const [isAddingPoint, setIsAddingPoint] = useState(false);
+    const [addingPointType, setAddingPointType] = useState<'business' | 'reference'>('business');
+    const [adminSelectedBusiness, setAdminSelectedBusiness] = useState<Business | null>(null);
+    const [showQuickEdit, setShowQuickEdit] = useState(false);
+    const [quickEditBusiness, setQuickEditBusiness] = useState<Business | null>(null);
+    const previewPolylineRef = useRef<L.Polyline | null>(null);
 
   // 1. Initialize Map (One-time)
   useEffect(() => {
@@ -106,16 +155,38 @@ export const MapView: React.FC<MapViewProps> = ({
     // Initial tile layer
     updateTiles(map, mapMode);
 
-    // Initial resize trigger
-    setTimeout(() => map.invalidateSize(), 150);
+    // Staggered invalidateSize — store IDs to cancel on unmount
+    let alive = true;
+    const timers = [50, 150, 400, 800, 1500].map(delay =>
+      setTimeout(() => {
+        if (alive && mapRef.current) mapRef.current.invalidateSize({ animate: false });
+      }, delay)
+    );
+
+    // ResizeObserver: re-invalidate on container resize
+    let resizeObserver: ResizeObserver | null = null;
+    if (containerRef.current && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        if (mapRef.current) mapRef.current.invalidateSize({ animate: false });
+      });
+      resizeObserver.observe(containerRef.current);
+    }
+
+    const onResize = () => { if (mapRef.current) mapRef.current.invalidateSize({ animate: false }); };
+    window.addEventListener('resize', onResize);
 
     return () => {
+      alive = false;
+      timers.forEach(clearTimeout);
+      window.removeEventListener('resize', onResize);
+      resizeObserver?.disconnect();
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
       }
     };
   }, []);
+
 
   // 2. Update Tiles when mapMode changes
   useEffect(() => {
@@ -131,9 +202,12 @@ export const MapView: React.FC<MapViewProps> = ({
 
     const url = mode === 'dark'
       ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
+      : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
-    tileLayerRef.current = L.tileLayer(url, { maxZoom: 20 }).addTo(map);
+    tileLayerRef.current = L.tileLayer(url, {
+      maxZoom: 20,
+      attribution: mode === 'dark' ? '&copy; CartoDB' : '&copy; Esri'
+    }).addTo(map);
   };
 
   // 3. Update Markers and Polygons when data changes
@@ -165,56 +239,85 @@ export const MapView: React.FC<MapViewProps> = ({
 
     // Render Markers
     businesses.forEach(business => {
-      const isRef = business.id.startsWith('ref-');
+      const isRef = business.isReference || business.id.startsWith('ref-');
       const matchesLocality = business.locality === localityName;
       const matchesSector = !selectedSector || business.sector === selectedSector;
-      const matchesSearch = business.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        business.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = !searchQuery || 
+        (business.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (business.description ?? '').toLowerCase().includes(searchQuery.toLowerCase());
 
       if (!isRef && (!matchesLocality || !matchesSector || !matchesSearch)) return;
       if (isRef && !matchesLocality) return;
       if (!business.coordinates || business.coordinates.some(isNaN)) return;
 
       const info = SECTOR_INFO[business.sector] || SECTOR_INFO[Sector.CENTRO];
-      const vibeClass = activeFilter === 'Party' ? 'vibe-party' :
+      const vibeClass = activeFilter === 'Party' ? 'vibe-party' : 
         activeFilter === 'Relax' ? 'vibe-relax' : 'vibe-default';
 
-      const displayIcon = MAP_ICONS.find(i => i.id === business.icon)?.emoji || '📍';
+      const { icon: iconNode, color: iconColor } = getIconForBusiness(business);
+      const isPremium = business.plan === SubscriptionPlan.PREMIUM;
+
+      // Color logic based on category and type
+      let markerBg: string, markerBorder: string, markerGlow: string;
+      
+      if (isRef) {
+        markerBg = 'linear-gradient(135deg, #0369a1, #0284c7)';
+        markerBorder = '#38bdf8';
+        markerGlow = '0 0 18px rgba(56,189,248,0.6)';
+      } else if (isPremium) {
+        markerBg = 'linear-gradient(135deg, #b45309, #d97706)';
+        markerBorder = '#fbbf24';
+        markerGlow = '0 0 20px rgba(251,191,36,0.5)';
+      } else {
+        markerBg = `linear-gradient(135deg, ${iconColor}, ${iconColor}cc)`;
+        markerBorder = iconColor;
+        markerGlow = `0 0 16px ${iconColor}66`;
+      }
+
+      const iconSvg = ReactDOMServer.renderToString(
+        React.cloneElement(iconNode as React.ReactElement<{ className?: string; style?: React.CSSProperties }>, { className: 'w-6 h-6', style: { color: 'white', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' } })
+      );
 
       const customIcon = L.divIcon({
         className: 'custom-marker',
-        html: `<div class="relative group">
-                 <div class="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 bg-slate-900/90 backdrop-blur-md border border-white/20 rounded-lg text-[10px] font-black text-white whitespace-nowrap opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none shadow-xl z-[1001]">
-                   ${business.name}
-                   <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r border-b border-white/20 rotate-45"></div>
-                 </div>
+        html: `
+          <div class="relative group">
+            <div class="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 bg-slate-900/90 backdrop-blur-md border border-white/20 rounded-lg text-[10px] font-black text-white whitespace-nowrap opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none shadow-xl z-[1001]">
+              ${business.name}
+              <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r border-b border-white/20 rotate-45"></div>
+            </div>
 
-                 <div class="w-12 h-12 rounded-full border-2 border-white/40 bg-slate-900/80 flex items-center justify-center shadow-[0_0_20px_${info.hex}66] backdrop-blur-md transform transition-all duration-300 group-hover:scale-125 group-hover:border-white ${vibeClass}">
-                   <span class="text-xl drop-shadow-lg">${displayIcon}</span>
-                   <div class="absolute -bottom-1 w-2 h-2 rounded-full border border-white/20" style="background-color: ${info.hex}"></div>
-                 </div>
-               </div>`,
+            <div class="w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg backdrop-blur-md transform transition-all duration-300 group-hover:scale-125 group-hover:border-white ${vibeClass} ${isEditorFocus ? 'cursor-grab active:cursor-grabbing' : ''}" 
+                 style="background: ${markerBg}; border-color: ${markerBorder}; box-shadow: ${markerGlow}">
+              <div class="drop-shadow-lg">${iconSvg}</div>
+              ${isPremium ? '<div class="absolute inset-0 rounded-full animate-pulse ring-4 ring-amber-400/30"></div>' : ''}
+              ${isRef ? '<div class="absolute inset-0 rounded-full animate-pulse ring-4 ring-sky-400/20"></div>' : ''}
+            </div>
+          </div>`,
         iconSize: [48, 48],
         iconAnchor: [24, 24]
       });
 
       const marker = L.marker(business.coordinates as L.LatLngExpression, {
         icon: customIcon,
-        draggable: !!isAdmin && !isRef
+        draggable: !!(isAdmin || isSuperUser) && !!isEditorFocus
       }).addTo(markersLayerRef.current!);
 
       marker.on('dragend', (e) => {
         const { lat, lng } = e.target.getLatLng();
         onUpdateBusiness?.(business.id, lat, lng);
+        showToast(`Ubicación de ${business.name} actualizada.`, 'success');
       });
 
       marker.on('click', (e) => {
-        if (isAdmin) {
-          L.DomEvent.stopPropagation(e as any);
-          const action = prompt(`SUPER USER - ${business.name}\n1. Editar Detalles\n2. Eliminar Punto\n(Escribe 1 o 2)`);
-          if (action === '1') onEditBusiness?.(business.id);
-          else if (action === '2') {
-            if (confirm(`¿Eliminar ${business.name}?`)) onDeleteBusiness?.(business.id);
+        L.DomEvent.stopPropagation(e as any);
+        if (isAdmin || isSuperUser) {
+          // Right click for quick edit, left click for selection
+          if ((e as any).originalEvent?.button === 2 || e.originalEvent?.ctrlKey) {
+            setQuickEditBusiness(business);
+            setShowQuickEdit(true);
+          } else {
+            setAdminSelectedBusiness(business);
           }
         } else {
           onBusinessSelect(business);
@@ -230,11 +333,14 @@ export const MapView: React.FC<MapViewProps> = ({
           map.flyToBounds(bounds, { padding: [50, 50], duration: 1.2 });
         }
       }
+      if (sectorFocusCoords) {
+        map.flyTo(sectorFocusCoords as L.LatLngExpression, 16, { duration: 1.2 });
+      }
     } else if (mapCenter) {
       map.flyTo(mapCenter, 15, { duration: 1.2 });
     }
 
-  }, [businesses, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, editingSector, tempCoords, mapCenter, localityName]);
+  }, [businesses, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, isSuperUser, editingSector, tempCoords, mapCenter, sectorFocusCoords, localityName, isEditorFocus]);
 
   // 4. Handle Map Events (Click, Mousemove)
   useEffect(() => {
@@ -245,8 +351,15 @@ export const MapView: React.FC<MapViewProps> = ({
       const { lat, lng } = e.latlng;
       if (editingSector) {
         setTempCoords(prev => [...prev, [lat, lng]]);
-      } else if (isAdmin && onAddBusiness) {
-        onAddBusiness(lat, lng);
+      } else if (isAdmin && isAddingPoint && onAddBusiness) {
+        onAddBusiness(lat, lng, addingPointType === 'reference');
+        setIsAddingPoint(false);
+      } else if (isMovingBusiness && movingBusinessId && onUpdateBusiness) {
+        onUpdateBusiness(movingBusinessId, lat, lng);
+        onMoveBusinessComplete?.();
+        showToast('Ubicación actualizada', 'success');
+      } else {
+        setAdminSelectedBusiness(null);
       }
     };
 
@@ -258,12 +371,14 @@ export const MapView: React.FC<MapViewProps> = ({
 
     map.on('click', onClick);
     map.on('mousemove', onMouseMove);
+    map.on('contextmenu', (e) => e.preventDefault());
 
     return () => {
       map.off('click', onClick);
       map.off('mousemove', onMouseMove);
+      map.off('contextmenu', (e) => e.preventDefault());
     };
-  }, [isAdmin, editingSector, onAddBusiness]);
+  }, [isAdmin, editingSector, isAddingPoint, addingPointType, onAddBusiness]);
 
   // 5. Handle Resize and Keyboard
   useEffect(() => {
@@ -271,7 +386,10 @@ export const MapView: React.FC<MapViewProps> = ({
     const map = mapRef.current;
 
     const refresh = () => {
-      map.invalidateSize();
+      if (!mapRef.current) return;
+      try {
+        map.invalidateSize();
+      } catch (_) { }
     };
 
     const resizeObserver = new ResizeObserver(() => {
@@ -282,10 +400,10 @@ export const MapView: React.FC<MapViewProps> = ({
     resizeObserver.observe(containerRef.current);
     window.addEventListener('resize', refresh);
 
-    // Multi-stage refresh for mobile stability
-    [50, 250, 600, 1200, 2500].forEach(delay => setTimeout(refresh, delay));
+    const timeouts = [50, 250, 600, 1200, 2500].map(delay => setTimeout(refresh, delay));
 
     return () => {
+      timeouts.forEach(id => clearTimeout(id));
       resizeObserver.disconnect();
       window.removeEventListener('resize', refresh);
     };
@@ -322,55 +440,34 @@ export const MapView: React.FC<MapViewProps> = ({
   const zoomOut = () => mapRef.current?.zoomOut();
 
   return (
-    <div ref={containerRef} className="w-full h-full relative bg-[#020617] overflow-hidden">
+    <div
+      ref={containerRef}
+      className={`bg-[#020617] overflow-hidden ${isAddingPoint ? 'cursor-crosshair' : ''}`}
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+    >
       {/* Map UI Overlay */}
       <div className="absolute inset-x-0 top-20 z-[1000] p-4 pointer-events-none">
         <div className="max-w-xl mx-auto space-y-6">
           {/* Locality Selector */}
           {!hideUI && (
             <div className="flex justify-center">
-              <div className="bg-slate-900/90 backdrop-blur-2xl border border-white/10 rounded-full p-1.5 flex items-center shadow-2xl ring-1 ring-white/5 pointer-events-auto">
+              <div className="bg-black/60 backdrop-blur-2xl border border-white/8 rounded-full p-1 flex items-center shadow-2xl shadow-black/40 ring-1 ring-white/5 pointer-events-auto">
                 {LOCALITIES.map((loc) => (
                   <button
                     key={loc.name}
                     onClick={() => onLocalityChange?.(loc.name)}
-                    className={`px-6 py-2 rounded-full text-[11px] font-black uppercase tracking-[0.15em] transition-all duration-300 ${localityName === loc.name
-                      ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/40 transform scale-105 active:scale-95'
-                      : 'text-slate-400 hover:text-slate-200'
+                    className={`relative px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.18em] transition-all duration-300 ${localityName === loc.name
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-amber-500/30'
+                      : 'text-slate-500 hover:text-slate-300'
                       }`}
                   >
+                    {localityName === loc.name && (
+                      <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full opacity-70" />
+                    )}
                     {loc.name}
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Search Bar */}
-          {!hideUI && (
-            <div className="flex gap-2 pointer-events-auto">
-              <div className="flex-1 bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 flex items-center shadow-2xl ring-1 ring-white/5">
-                <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center">
-                  <Search className="w-5 h-5 text-sky-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Find spots, events, vibes..."
-                  className="flex-1 bg-transparent border-none outline-none text-white text-sm font-medium placeholder:text-slate-500 px-3"
-                  value={searchQuery}
-                  onFocus={() => {
-                    setTimeout(() => mapRef.current?.invalidateSize(), 300);
-                    setTimeout(() => mapRef.current?.invalidateSize(), 800);
-                  }}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                />
-              </div>
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${showFilters ? 'bg-sky-500 text-white' : 'bg-slate-900/80 text-slate-400'} border border-white/10 backdrop-blur-xl shadow-2xl`}
-              >
-                <SlidersHorizontal className="w-5 h-5" />
-              </button>
             </div>
           )}
 
@@ -391,13 +488,66 @@ export const MapView: React.FC<MapViewProps> = ({
 
       {/* Admin Controls */}
       {isAdmin && !hideUI && (
-        <div className="absolute right-4 top-24 z-[1000] flex flex-col gap-2">
+        <div className="absolute right-4 top-24 z-[1000] flex flex-col gap-3">
+          {/* Add Point Toggle */}
           <button
-            onClick={() => setEditingSector(editingSector ? null : Sector.CENTRO)}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-2xl border border-white/10 backdrop-blur-xl transition-all ${editingSector ? 'bg-rose-500 text-white animate-pulse' : 'bg-slate-900/80 text-slate-400 hover:text-white'}`}
+            onClick={() => {
+              setIsAddingPoint(!isAddingPoint);
+              if (!isAddingPoint) showToast(
+                addingPointType === 'reference'
+                  ? 'Clic en el mapa para colocar el punto de referencia.'
+                  : 'Clic en el mapa para ubicar el nuevo negocio.',
+                'info'
+              );
+              setEditingSector(null);
+            }}
+            className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-2xl border transition-all duration-300 scale-110 ${isAddingPoint ? 'bg-orange-500 border-white text-white rotate-45 shadow-orange-500/40' : 'bg-slate-950 border-white/10 text-slate-400 hover:text-white'}`}
+            title="Añadir Punto en el Mapa"
+          >
+            <Plus className="w-7 h-7" />
+          </button>
+
+          {/* Type Selector: Negocio vs. Punto de Referencia */}
+          <div className="flex flex-col gap-1.5">
+            <button
+              onClick={() => {
+                setAddingPointType('business');
+                if (!isAddingPoint) { setIsAddingPoint(true); setEditingSector(null); }
+              }}
+              title="Añadir Negocio"
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-200 text-lg shadow-xl ${addingPointType === 'business' && isAddingPoint
+                ? 'bg-amber-500 border-amber-400 text-white shadow-amber-500/40'
+                : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-amber-400 hover:border-amber-400/40'
+                }`}
+            >
+              🏪
+            </button>
+            <button
+              onClick={() => {
+                setAddingPointType('reference');
+                if (!isAddingPoint) { setIsAddingPoint(true); setEditingSector(null); }
+              }}
+              title="Añadir Punto de Referencia"
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-200 text-lg shadow-xl ${addingPointType === 'reference' && isAddingPoint
+                ? 'bg-sky-500 border-sky-400 text-white shadow-sky-500/40'
+                : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-sky-400 hover:border-sky-400/40'
+                }`}
+            >
+              📍
+            </button>
+          </div>
+
+          {/* Sector Overlay Toggle */}
+          <button
+            onClick={() => {
+              setEditingSector(editingSector ? null : Sector.CENTRO);
+              setIsAddingPoint(false);
+            }}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-2xl border border-white/10 backdrop-blur-xl transition-all ${editingSector ? 'bg-orange-500 text-white animate-pulse shadow-orange-500/30' : 'bg-slate-900/80 text-slate-400 hover:text-white'}`}
           >
             <Layers className="w-5 h-5" />
           </button>
+
           {editingSector && (
             <button
               onClick={() => {
@@ -406,60 +556,99 @@ export const MapView: React.FC<MapViewProps> = ({
                   setEditingSector(null);
                   setTempCoords([]);
                 } else {
-                  alert('Need at least 3 points');
+                  showToast('Se necesitan al menos 3 puntos para crear un polígono.', 'error');
                 }
               }}
-              className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg"
+              className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30"
             >
               <CheckCircle className="w-5 h-5" />
             </button>
           )}
-        </div>
-      )}
 
-      {/* Floating Pulse of Today Reset - Visible ONLY in Full Screen Map Mode */}
-      {isEditorFocus && (
-        <div className="absolute bottom-52 left-1/2 -translate-x-1/2 z-[1000] animate-in slide-in-from-bottom duration-500 pointer-events-none">
+          {/* Editor Focus Toggle */}
           <button
-            onClick={() => onResetFilters?.()}
-            className="pointer-events-auto flex items-center gap-3 px-8 py-3.5 bg-rose-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(244,63,94,0.4)] hover:scale-105 active:scale-95 transition-all border-2 border-white/20 whitespace-nowrap"
+            onClick={onToggleEditorFocus}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-2xl border border-white/10 transition-all ${isEditorFocus ? 'bg-sky-500 text-white shadow-sky-500/30' : 'bg-slate-900/80 text-slate-400 hover:text-white'}`}
+            title="Modo Edición (Arrastrar Puntos)"
           >
-            <div className="relative">
-              <Zap className="w-4 h-4 fill-current" />
-              <div className="absolute inset-0 bg-white blur-md animate-pulse opacity-50"></div>
-            </div>
-            PULSE OF TODAY
-            {(selectedSector || activeFilter !== 'All' || searchQuery) && (
-              <X className="w-3.5 h-3.5 ml-1 opacity-60" />
-            )}
+            <Settings className="w-5 h-5" />
           </button>
         </div>
       )}
 
-      {/* Floating Sector Indicators removed as per user request */}
+      {/* Admin Context Menu / Card for Selected Business */}
+      {isAdmin && adminSelectedBusiness && (
+        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-[1001] w-[90%] max-w-sm animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="bg-slate-950/90 backdrop-blur-2xl border border-white/20 p-6 rounded-[2.5rem] shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center border border-white/10 text-2xl shadow-xl">
+                  {MAP_ICONS.find(i => i.id === adminSelectedBusiness.icon)?.emoji || '📍'}
+                </div>
+                <div>
+                  <h4 className="text-lg font-black text-white italic truncate max-w-[180px]">{adminSelectedBusiness.name}</h4>
+                  <p className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">{adminSelectedBusiness.id.startsWith('ref-') ? 'Punto de Referencia' : 'Negocio'}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAdminSelectedBusiness(null)}
+                className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full text-slate-500 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  onEditBusiness?.(adminSelectedBusiness.id);
+                  setAdminSelectedBusiness(null);
+                }}
+                className="flex items-center justify-center gap-2 py-3 bg-white/10 hover:bg-sky-500/20 text-white rounded-2xl border border-white/10 hover:border-sky-500/40 transition-all text-xs font-black uppercase tracking-wider"
+              >
+                <Edit3 className="w-4 h-4" />
+                Editar
+              </button>
+              <button
+                onClick={async () => {
+                  if (await showConfirm(`¿Eliminar ${adminSelectedBusiness.name} permanentemente?`, 'Confirmar eliminación')) {
+                    onDeleteBusiness?.(adminSelectedBusiness.id);
+                    setAdminSelectedBusiness(null);
+                  }
+                }}
+                className="flex items-center justify-center gap-2 py-3 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-2xl border border-orange-500/20 hover:border-orange-500/40 transition-all text-xs font-black uppercase tracking-wider"
+              >
+                <Trash2 className="w-4 h-4" />
+                Eliminar
+              </button>
+            </div>
+            <p className="text-[9px] text-slate-500 text-center font-bold uppercase tracking-widest">
+              {isEditorFocus ? 'Puedes arrastrar el punto para cambiar su ubicación.' : 'Activa el modo edición para mover este punto.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Map Controls */}
       <div className="absolute right-4 bottom-24 z-[1000] flex flex-col gap-2">
-        {/* Restore Pulse Window Button */}
+        {/* Pulse of Today - Siempre visible en la parte inferior */}
+        <button
+          onClick={() => onResetFilters?.()}
+          className="w-12 h-12 rounded-2xl bg-orange-600 text-white flex items-center justify-center shadow-[0_4px_20px_rgba(234,88,12,0.4)] border border-white/20 hover:scale-110 active:scale-95 transition-all pointer-events-auto"
+          title="Pulse of Today"
+        >
+          <Zap className="w-6 h-6 fill-white" />
+        </button>
         {(isPanelMinimized || isEditorFocus) && (
           <button
             onClick={() => {
               if (isEditorFocus && onToggleEditorFocus) onToggleEditorFocus();
-              // Only toggle panel if it IS minimized. If it's already open (but hidden by focus), we don't flip it.
-              // Logic: If focus is ON, turn it OFF.
-              // If focus is OFF and panel is minimized, toggle it (to open).
-              // If focus is ON, panel might be minimized or not. We want to ensure it ends up OPEN.
-              // App 'onTogglePanel' blindly toggles. So we shouldn't just call it if we don't know state.
-              // But 'isPanelMinimized' tells us state.
               if (isPanelMinimized && onTogglePanel) onTogglePanel();
             }}
-            className="w-12 h-12 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-[0_4px_20px_rgba(244,63,94,0.4)] border border-white/20 hover:scale-110 active:scale-95 transition-all pointer-events-auto mb-2 relative group"
+            className="w-12 h-12 rounded-2xl bg-orange-600 text-white flex items-center justify-center shadow-[0_4px_20px_rgba(234,88,12,0.4)] border border-white/20 hover:scale-110 active:scale-95 transition-all pointer-events-auto mb-2 relative group"
             title="Restaurar Pulse of Today"
           >
             <Zap className="w-6 h-6 fill-white" />
-            <span className="absolute right-full mr-3 px-3 py-1 bg-slate-900/90 text-white text-[10px] font-bold uppercase rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-              Pulse of Today
-            </span>
           </button>
         )}
         <button onClick={zoomIn} className="w-12 h-12 rounded-2xl bg-slate-900/80 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl shadow-2xl hover:bg-slate-800 transition-all pointer-events-auto">

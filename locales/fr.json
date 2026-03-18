@@ -36,7 +36,10 @@
         "featured": "En Vedette",
         "trendingNow": "Tendance Actuelle",
         "trendingLive": "EN DIRECT",
-        "popularVibe": "Vibe Populaire"
+        "popularVibe": "Vibe Populaire",
+        "referencePoints": "Points de Référence",
+        "searchPlaceholder": "Chercher des lieux, événements...",
+        "trendingTitle": "Ressentez-le"
     },
     "community": {
         "muro": "Mur",

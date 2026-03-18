@@ -8,39 +8,46 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    // Helper: is the user an Admin?
+    // Helper: is the user the Super Admin?
+    function isSuperAdmin() {
+      return isSignedIn() && request.auth.token.email == "pruebasyaprendizaje0@gmail.com";
+    }
+
+    // Helper: does the user have the admin role?
+    // Note: This requires getting the user document which costs a read
+    function hasAdminRole() {
+      return isSignedIn() && get(/databases/$(database)/documents/users_v2/$(request.auth.uid)).data.role == "admin";
+    }
+
     function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == "frank.p.6@gmail.com" || 
-        request.auth.token.email == "montapulse@gmail.com" ||
-        request.auth.token.email == "fhernandezcalle@gmail.com" ||
-        request.auth.token.email == "pruebasyaprendizaje0@gmail.com"
-      );
+      return isSuperAdmin() || hasAdminRole();
     }
 
     // Users: Only owner or admin can read/write
     match /users_v2/{userId} {
-      allow read, write: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
+      allow read: if isSignedIn();
+      allow write: if (isSignedIn() && request.auth.uid == userId) || isSuperAdmin();
     }
 
-    // Events: Public read, authenticated write
+    // Events: Public read, owner or admin write
     match /events/{eventId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update, delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
     }
 
-    // Businesses: Public read, authenticated write
+    // Businesses: Public read, owner or admin write
     match /businesses/{bizId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isSignedIn(); // Anyone can create a business initially
+      allow update, delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
     }
 
     // Favorites: Only owner can manage their favorites
     match /favorites/{favId} {
-      allow read, write: if isSignedIn() && (
-        request.auth.uid == request.resource.data.userId || 
-        (resource != null && request.auth.uid == resource.data.userId)
-      );
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
 
     // Settings: Public read, Admin only write

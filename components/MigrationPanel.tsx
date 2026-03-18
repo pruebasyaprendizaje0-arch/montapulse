@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Upload, Download, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
 import { migrateLocalStorageToFirestore, backupLocalStorageData, clearLocalStorageData } from '../services/migrationService';
+import { useToast } from '../context/ToastContext';
 
 export const MigrationPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [status, setStatus] = useState<'idle' | 'migrating' | 'success' | 'error'>('idle');
     const [message, setMessage] = useState('');
+    const { showConfirm } = useToast();
 
     const handleMigrate = async () => {
         setStatus('migrating');
@@ -26,8 +28,8 @@ export const MigrationPanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
         setMessage('Backup downloaded successfully!');
     };
 
-    const handleClear = () => {
-        if (confirm('Are you sure you want to clear localStorage data? Make sure you have migrated to Firestore first!')) {
+    const handleClear = async () => {
+        if (await showConfirm('¿Estás seguro de que quieres borrar los datos de localStorage? ¡Asegúrate de haber migrado a Firestore primero!', 'Limpiar localstorage')) {
             clearLocalStorageData();
             setMessage('localStorage data cleared!');
         }
@@ -45,7 +47,7 @@ export const MigrationPanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
                     {/* Backup Button */}
                     <button
                         onClick={handleBackup}
-                        className="w-full flex items-center justify-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-2xl px-4 py-3 hover:bg-blue-500/20 transition"
+                        className="w-full flex items-center justify-center gap-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 rounded-2xl px-4 py-3 hover:bg-orange-500/20 transition"
                     >
                         <Download className="w-5 h-5" />
                         <span className="font-bold">Backup Data</span>
@@ -55,7 +57,7 @@ export const MigrationPanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
                     <button
                         onClick={handleMigrate}
                         disabled={status === 'migrating'}
-                        className="w-full flex items-center justify-center gap-2 bg-sky-500 text-white rounded-2xl px-4 py-3 hover:bg-sky-600 transition disabled:opacity-50 font-bold"
+                        className="w-full flex items-center justify-center gap-2 bg-orange-500 text-white rounded-2xl px-4 py-3 hover:bg-orange-600 transition disabled:opacity-50 font-bold"
                     >
                         <Upload className="w-5 h-5" />
                         <span>{status === 'migrating' ? 'Migrating...' : 'Migrate to Firestore'}</span>
@@ -74,8 +76,8 @@ export const MigrationPanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
                 {/* Status Message */}
                 {message && (
                     <div className={`mt-4 p-4 rounded-2xl border flex items-center gap-2 ${status === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' :
-                            status === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
-                                'bg-slate-800 border-slate-700 text-slate-300'
+                        status === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
+                            'bg-slate-800 border-slate-700 text-slate-300'
                         }`}>
                         {status === 'success' && <CheckCircle className="w-5 h-5" />}
                         {status === 'error' && <AlertCircle className="w-5 h-5" />}
