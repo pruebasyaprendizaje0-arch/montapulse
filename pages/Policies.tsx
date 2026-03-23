@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Lock, FileText, ChevronLeft, ArrowRight, Edit3, Save, X, Plus, Trash2 } from 'lucide-react';
+import { Shield, Lock, FileText, ChevronLeft, ArrowRight, Edit3, Save, X, Plus, Trash2, Share2, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
@@ -19,6 +19,31 @@ export const Policies: React.FC = () => {
     const handleSave = async () => {
         await handleUpdatePolicies(editForm);
         setIsEditing(false);
+    };
+
+    const handleShare = async () => {
+        const shareData = {
+            title: 'Políticas y Privacidad - Montapulse',
+            text: 'Consulta los Términos de Servicio y la Política de Privacidad de Montapulse.',
+            url: window.location.href
+        };
+
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                if (err instanceof Error && err.name !== 'AbortError') {
+                    copyToClipboard();
+                }
+            }
+        } else {
+            copyToClipboard();
+        }
+    };
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(window.location.href);
+        showToast('Enlace copiado al portapapeles', 'info');
     };
 
     const addSection = (type: 'terms' | 'privacy') => {
@@ -55,12 +80,12 @@ export const Policies: React.FC = () => {
     const renderSections = (sections: PolicySection[], colorClass: string, bgClass: string) => (
         <div className="space-y-6 text-slate-300 leading-relaxed">
             {sections.map((section, idx) => (
-                <div key={idx} className="space-y-3">
-                    <h4 className="text-white font-bold flex items-center gap-2">
-                        <div className={`w-1 h-4 ${bgClass} rounded-full`} />
+                <div key={idx} className="space-y-3 print-section">
+                    <h4 className={`text-white font-bold flex items-center gap-2 print-title ${colorClass}`}>
+                        <div className={`w-1 h-4 ${bgClass} rounded-full print:hidden`} />
                         {section.title}
                     </h4>
-                    <p className="text-sm pl-3 border-l border-white/10 whitespace-pre-wrap">
+                    <p className="text-sm pl-3 border-l border-white/10 whitespace-pre-wrap print-content">
                         {section.content}
                     </p>
                 </div>
@@ -69,7 +94,54 @@ export const Policies: React.FC = () => {
     );
 
     return (
-        <div className="h-auto bg-slate-950 text-white pb-32 selection:bg-orange-500/30">
+        <div className="h-auto bg-slate-950 text-white pb-32 selection:bg-orange-500/30 print:bg-white print:text-black print:pb-0">
+            <style>{`
+                @media print {
+                    /* Root-level resets to allow full document printing in a SPA */
+                    html, body, #root, #root > div {
+                        height: auto !important;
+                        overflow: visible !important;
+                        position: static !important;
+                        background: white !important;
+                    }
+
+                    .no-print {
+                        display: none !important;
+                    }
+
+                    .print-section {
+                        color: black !important;
+                        background: transparent !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                        margin-bottom: 2rem !important;
+                        padding: 0 !important;
+                        page-break-inside: avoid;
+                    }
+
+                    .print-title {
+                        color: black !important;
+                        font-size: 1.5rem !important;
+                        margin-bottom: 0.5rem !important;
+                    }
+
+                    .print-content {
+                        color: #333 !important;
+                        font-size: 1rem !important;
+                        line-height: 1.5 !important;
+                    }
+
+                    /* Hide nav bars and other chrome */
+                    nav, .sticky, footer, .fixed:not(.print-fixed) {
+                        display: none !important;
+                    }
+
+                    .max-w-3xl {
+                        max-width: 100% !important;
+                        padding: 0 !important;
+                    }
+                }
+            `}</style>
             {/* Background Decorative Elements */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-orange-500/10 blur-[120px] rounded-full" />
@@ -92,11 +164,11 @@ export const Policies: React.FC = () => {
                         v{policyData.version} • Última actualización: {policyData.lastUpdated}
                     </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 md:gap-3">
                     {isSuperUser && (
                         <button
                             onClick={() => setIsEditing(!isEditing)}
-                            className={`p-3 rounded-2xl transition-all active:scale-95 group flex items-center gap-2 ${
+                            className={`p-3 rounded-2xl transition-all active:scale-95 group flex items-center gap-2 no-print ${
                                 isEditing 
                                 ? 'bg-orange-500 text-white border-orange-400' 
                                 : 'bg-white/5 border border-white/5 text-slate-400 hover:text-white hover:bg-white/10'
@@ -106,13 +178,18 @@ export const Policies: React.FC = () => {
                         </button>
                     )}
                     <button
+                        onClick={handleShare}
+                        className="p-3 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 transition-all active:scale-95 group text-slate-400 hover:text-white no-print"
+                        title="Compartir enlace"
+                    >
+                        <Share2 className="w-5 h-5" />
+                    </button>
+                    <button
                         onClick={() => window.print()}
-                        className="p-3 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 transition-all active:scale-95 group text-slate-400 hover:text-white"
+                        className="p-3 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 transition-all active:scale-95 group text-slate-400 hover:text-white no-print"
                         title="Imprimir Políticas"
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
+                        <Printer className="w-5 h-5" />
                     </button>
                 </div>
             </div>
