@@ -1,5 +1,5 @@
 
-import { Sector, Vibe, Business, MontanitaEvent, SubscriptionPlan, BusinessCategory } from './types';
+import { Sector, Vibe, Business, MontanitaEvent, SubscriptionPlan, BusinessCategory, PolicyData } from './types';
 
 
 export const LOCALITIES = [
@@ -151,3 +151,46 @@ export const MAP_ICONS = [
   { id: 'school', emoji: '🏫', label: 'Escuela', icon: 'MdSchool' },
   { id: 'bank2', emoji: '🏛️', label: 'Banco', icon: 'GiGreekTemple' },
 ];
+
+export const DEFAULT_POLICIES: PolicyData = {
+  lastUpdated: 'Marzo 2024',
+  version: '2.0',
+  terms: [
+    {
+      title: '1. Requisitos de Acceso',
+      content: 'Para utilizar Montapulse, debes tener al menos 18 años o la mayoría de edad legal en tu jurisdicción. Al registrarte, garantizas que la información proporcionada es veraz, completa y actualizada en todo momento.'
+    },
+    {
+      title: '2. Responsabilidades del Negocio',
+      content: 'Los establecimientos registrados son responsables de la validez de los descuentos, horarios y servicios publicados. Montapulse actúa únicamente como vitrina publicitaria y no garantiza la ejecución de las ofertas por parte de terceros.'
+    },
+    {
+      title: '3. Suscripciones y Pagos',
+      content: 'Los planes Basic y Premium otorgan beneficios visuales y funcionales específicos. Las suscripciones son de renovación mensual. En caso de impago, el perfil será degradado automáticamente al plan gratuito transcurrido el periodo de gracia de 5 días.'
+    },
+    {
+      title: '4. Conducta Prohibida',
+      content: 'Queda estrictamente prohibido: publicar contenido falso, ofensivo o ilegal; realizar acciones de scraping o ingeniería inversa; y el uso de la plataforma para fines distintos al descubrimiento turístico y comercial autorizado.'
+    }
+  ],
+  privacy: [
+    {
+      title: '1. Recolección de Información',
+      content: 'Recolectamos datos de perfil (nombre, email), datos transaccionales, y datos de uso de la plataforma. La geolocalización se solicita exclusivamente para la funcionalidad del mapa en tiempo real y no se utiliza para rastreo secundario.'
+    },
+    {
+      title: '2. Uso de los Datos',
+      content: 'Tus datos se utilizan para: personalizar tu experiencia, mejorar la seguridad de la cuenta, y si lo autorizas, enviarte notificaciones sobre eventos relevantes en tu zona. Nunca venderemos tu información personal a terceros.'
+    },
+    {
+      title: '3. Derechos ARCO',
+      content: 'Como usuario, tienes derecho a Acceder, Rectificar, Cancelar u Oponerte al tratamiento de tus datos personales. Puedes solicitar la eliminación definitiva de tu cuenta y datos asociados contactando a nuestro soporte técnico.'
+    },
+    {
+      title: '4. Cookies y Terceros',
+      content: 'Utilizamos servicios de terceros como Google Maps (para geolocalización) y Firebase (para autenticación y base de datos). Estos servicios pueden utilizar cookies técnicas para el funcionamiento básico de la app y para mantener tu sesión activa.'
+    }
+  ],
+  disclaimer: '"Montapulse no garantiza que la plataforma esté libre de errores o interrupciones. El uso de la información y la asistencia a eventos publicados es bajo el propio riesgo del usuario. No seremos responsables por pérdidas directas o indirectas derivadas del uso de la aplicación."',
+  supportEmail: 'soporte@montapulse.com'
+};

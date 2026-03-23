@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef } from 'react';
-import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem } from '../types';
-import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES } from '../constants';
+import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData } from '../types';
+import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES } from '../constants';
 import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAppSettings,
     incrementViewCount, updateAppSettings, subscribeToUsers,
@@ -200,6 +200,8 @@ interface DataContextType {
     updateBusiness: (id: string, data: Partial<Business>) => Promise<void>;
     handlePurgeAllReferences: () => Promise<void>;
     setActiveView: (view: ViewType) => void;
+    policyData: PolicyData;
+    handleUpdatePolicies: (data: PolicyData) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -227,6 +229,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         { id: '4', label: 'Términos y Condiciones', type: 'toast', value: 'Términos y condiciones disponible pronto', icon: 'FileText' }
     ]);
     const [loading, setLoading] = useState(true);
+    const [policyData, setPolicyData] = useState<PolicyData>(DEFAULT_POLICIES);
 
     const [agendaRange, setAgendaRange] = useState<'day' | 'week' | 'month'>('day');
     const [calendarBaseDate, setCalendarBaseDate] = useState(new Date());
@@ -481,6 +484,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     useEffect(() => {
+        const unsubscribe = subscribeToAppSettings('policies', (data) => {
+            if (data) {
+                setPolicyData(data as PolicyData);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
         const unsubEvents = subscribeToEvents((data) => {
             setEvents(data);
         });
@@ -673,6 +685,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (path === '/community') return 'community';
         if (path === '/chat') return 'chat';
         if (path === '/info') return 'info';
+        if (path === '/policies') return 'policies';
         return 'explore';
     }, [location.pathname]);
 
@@ -1564,9 +1577,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     'favorites': '/passport',
                     'history': '/history',
                     'plans': '/plans',
-                    'all-favorites': '/saved-events'
+                    'all-favorites': '/saved-events',
+                    'policies': '/policies'
                 };
                 if (paths[view]) navigate(paths[view]);
+            },
+            policyData,
+            handleUpdatePolicies: async (data: PolicyData) => {
+                try {
+                    await updateAppSettings('policies', data);
+                    showToast('Políticas actualizadas con éxito', 'success');
+                } catch (error) {
+                    showToast('Error al actualizar políticas', 'error');
+                }
             }
         }}>
             {children}

@@ -198,3 +198,17 @@ export type AgendaRange = 'day' | 'week' | 'month';
 export type ViewType = 'explore' | 'calendar' | 'favorites' | 'host' | 'history' | 'all-favorites' | 'plans' | 'community' | 'chat'    | 'admin-users'
     | 'policies'
  | 'info';
+
+export interface PolicySection {
+  title: string;
+  content: string;
+}
+
+export interface PolicyData {
+  lastUpdated: string;
+  version: string;
+  terms: PolicySection[];
+  privacy: PolicySection[];
+  disclaimer: string;
+  supportEmail: string;
+}
