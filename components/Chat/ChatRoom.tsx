@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, ChevronLeft, MoreVertical, Image as ImageIcon, Smile, Paperclip, Check, CheckCheck, MessageCircle, Building2, User, ChevronDown, Zap, X, Camera, Upload, Search, Trash2 } from 'lucide-react';
 import { ChatRoom as ChatRoomType, ChatMessage } from '../../types';
-import { sendRoomMessage, subscribeToRoomMessages } from '../../services/firestoreService';
+import { sendRoomMessage, subscribeToRoomMessages, deleteOldRoomMessages, deleteRoomMessage } from '../../services/firestoreService';
 import { useAuthContext } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { SubscriptionPlan } from '../../types';
@@ -28,6 +28,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
     const imageInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [deletingMsgId, setDeletingMsgId] = useState<string | null>(null);
 
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
     const userPlan = user?.plan || SubscriptionPlan.VISITOR;
@@ -35,6 +36,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
     const canUsePremiumFeatures = userPlan === SubscriptionPlan.PREMIUM;
 
     useEffect(() => {
+        // Auto-clean messages older than 7 days on room open (client-side, Spark plan)
+        deleteOldRoomMessages(room.id);
         const unsubscribe = subscribeToRoomMessages(room.id, (newMessages) => {
             setMessages(newMessages);
         });
@@ -261,20 +264,46 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                                     </div>
                                 )}
 
-                                <div className={`relative px-5 py-3.5 rounded-[2rem] text-sm font-bold leading-relaxed shadow-2xl transition-all group-hover/msg:scale-[1.02] ${isMe
-                                    ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-tr-sm shadow-orange-600/20'
-                                    : 'bg-slate-800/80 backdrop-blur-md text-slate-100 rounded-tl-sm border border-white/5 shadow-black/40'
-                                    }`}>
-                                    {msg.imageUrl && (
-                                        <img src={msg.imageUrl} alt="Imagen" className="max-w-full rounded-xl mb-2 border border-white/10" />
+                                <div className={`relative flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                    {/* Delete button — only visible on hover for own messages */}
+                                    {isMe && (
+                                        <button
+                                            onClick={async () => {
+                                                if (window.confirm('¿Eliminar este mensaje?')) {
+                                                    setDeletingMsgId(msg.id);
+                                                    try {
+                                                        await deleteRoomMessage(room.id, msg.id);
+                                                    } catch {
+                                                        alert('No se pudo eliminar el mensaje.');
+                                                    } finally {
+                                                        setDeletingMsgId(null);
+                                                    }
+                                                }
+                                            }}
+                                            disabled={deletingMsgId === msg.id}
+                                            className="opacity-0 group-hover/msg:opacity-100 transition-opacity p-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 shrink-0 mb-1"
+                                            title="Eliminar mensaje"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
                                     )}
-                                    {msg.text && <p>{msg.text}</p>}
 
-                                    <div className={`mt-1.5 flex items-center gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                        <span className={`text-[9px] font-black uppercase tracking-tighter opacity-50 ${isMe ? 'text-white' : 'text-slate-400'}`}>
-                                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                        {isMe && <CheckCheck className="w-3 h-3 text-white/60" />}
+                                    <div className={`px-5 py-3.5 rounded-[2rem] text-sm font-bold leading-relaxed shadow-2xl transition-all ${
+                                        isMe
+                                            ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-tr-sm shadow-orange-600/20'
+                                            : 'bg-slate-800/80 backdrop-blur-md text-slate-100 rounded-tl-sm border border-white/5 shadow-black/40'
+                                        } ${deletingMsgId === msg.id ? 'opacity-40' : ''}`}>
+                                        {msg.imageUrl && (
+                                            <img src={msg.imageUrl} alt="Imagen" className="max-w-full rounded-xl mb-2 border border-white/10" />
+                                        )}
+                                        {msg.text && <p>{msg.text}</p>}
+
+                                        <div className={`mt-1.5 flex items-center gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                            <span className={`text-[9px] font-black uppercase tracking-tighter opacity-50 ${isMe ? 'text-white' : 'text-slate-400'}`}>
+                                                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                            {isMe && <CheckCheck className="w-3 h-3 text-white/60" />}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -63,7 +63,9 @@ export const Explore: React.FC<ExploreProps> = ({
         bizForm,
         posts,
         eventsWithLiveCounts, // Assuming this comes from useData now
-        handlePurgeAllReferences
+        handlePurgeAllReferences,
+        customLocalities,
+        handleAddCustomLocality
     } = useData();
     const userBusinessIdResolved = userBusinessId || businesses.find(b => b.ownerId === authUser?.uid)?.id;
     const { t } = useTranslation();
@@ -427,10 +429,14 @@ export const Explore: React.FC<ExploreProps> = ({
                         hideUI={true}
                         localityName={currentLocality.name}
                         mapCenter={currentLocality.coords}
+                        customLocalities={customLocalities}
                         onLocalityChange={(name) => {
-                            const loc = LOCALITIES.find(l => l.name === name);
+                            const loc = LOCALITIES.find(l => l.name === name) || customLocalities.find(l => l.name === name);
                             if (loc) setCurrentLocality(loc);
                         }}
+                        onAddLocality={isSuperAdmin ? async (name, coords) => {
+                            await handleAddCustomLocality(name, coords, [Sector.CENTRO, Sector.PLAYA, Sector.MONTANA]);
+                        } : undefined}
                         onResetFilters={() => {
                             setSelectedSector(null);
                             setActiveFilter('All');

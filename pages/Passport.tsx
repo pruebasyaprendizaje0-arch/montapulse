@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import {
     ChevronLeft, Edit3, LogOut, CheckCircle, MapPin, Store, Palmtree, Mountain,
     Zap, Star, Sparkles, MessageCircle, Navigation, CreditCard, Banknote, Mail,
-    BarChart2, Eye, Users, TrendingUp, Award, Phone, User, X, Camera, ImageIcon, Upload, ShieldCheck, Plus, Activity
+    BarChart2, Eye, Users, TrendingUp, Award, Phone, User, X, Camera, ImageIcon, Upload, ShieldCheck, Plus, Activity,
+    Info, FileText, ExternalLink, Trash2, Save, HelpCircle, Globe, Shield, Instagram, Facebook, Twitter, Link
 } from 'lucide-react';
 import { UserProfile, Business, MontanitaEvent, Vibe, SubscriptionPlan, Sector, BusinessCategory } from '../types.ts';
 import { Calendar, Clock } from 'lucide-react';
@@ -17,6 +18,11 @@ import { compressImage } from '../utils/imageUtils';
 import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
+
+const HELP_ICON_MAP: Record<string, any> = {
+    Mail, MessageCircle, Info, FileText, ExternalLink, Zap, Star, ShieldCheck, Activity,
+    HelpCircle, Globe, Shield, Phone, Instagram, Facebook, Twitter, Link
+};
 
 interface PassportProps {
     onNavigate?: (view: any) => void;
@@ -48,8 +54,12 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         handleOpenNewEventWizard,
         showPulseModal,
         setShowPulseModal,
+        helpSupport,
+        handleUpdateHelpSupport,
         businessFollowers,
-        allUsers
+        allUsers,
+        showLogin,
+        setShowLogin
     } = useData();
     const { showToast, showConfirm } = useToast();
     const [showProfileEdit, setShowProfileEdit] = useState(false);
@@ -61,6 +71,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const [showPreferences, setShowPreferences] = useState(false);
     const [showSecurity, setShowSecurity] = useState(false);
     const [showHelp, setShowHelp] = useState(false);
+    const [isEditingHelp, setIsEditingHelp] = useState(false);
+    const [tempHelpItems, setTempHelpItems] = useState<any[]>([]);
     const [showPulsePass, setShowPulsePass] = useState(false);
     const [aboutContent, setAboutContent] = useState({
         description: 'Tu guía definitiva para no perderte nada en la costa. Descubre eventos, conecta con la comunidad y vive el pulso real de Montañita.',
@@ -172,18 +184,47 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
     if (!user) {
         return (
-            <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
-                <div className="w-20 h-20 bg-slate-900 rounded-3xl flex items-center justify-center mb-6 border border-white/5">
-                    <User className="w-10 h-10 text-slate-500" />
+            <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-6 text-center">
+                {/* Logo grande */}
+                <div className="w-24 h-24 bg-gradient-to-br from-orange-500 to-amber-500 rounded-[3rem] flex items-center justify-center mb-8 shadow-2xl shadow-orange-500/30 animate-pulse">
+                    <Sparkles className="w-12 h-12 text-white" />
                 </div>
-                <h1 className="text-2xl font-black text-white mb-2">Mi Passport</h1>
-                <p className="text-slate-400 mb-8 max-w-xs">Inicia sesión para acceder a tu perfil, puntos y beneficios.</p>
-                <button
-                    onClick={() => navigate('/')}
-                    className="bg-sky-500 text-white font-black px-8 py-4 rounded-2xl shadow-lg shadow-sky-500/20 hover:bg-sky-600 transition-all flex items-center gap-2"
-                >
-                    <LogOut className="w-5 h-5" /> Ir al Inicio
-                </button>
+                
+                <h1 className="text-4xl font-black text-white mb-3 tracking-tight">Mi Passport</h1>
+                <p className="text-slate-400 mb-10 max-w-sm text-sm leading-relaxed">
+                    Accede a tu perfil, eventos guardados y beneficios exclusivos
+                </p>
+                
+                <div className="flex flex-col gap-4 w-full max-w-xs">
+                    <button
+                        onClick={() => setShowLogin(true)}
+                        className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black px-8 py-5 rounded-3xl shadow-2xl shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 text-lg tracking-wide"
+                    >
+                        <User className="w-6 h-6" /> Iniciar Sesión
+                    </button>
+                    <button
+                        onClick={() => navigate('/')}
+                        className="w-full bg-white/5 text-slate-300 font-bold px-8 py-4 rounded-3xl border border-white/10 hover:bg-white/10 hover:text-white transition-all"
+                    >
+                        Explorar sin cuenta
+                    </button>
+                </div>
+                
+                {/* Features */}
+                <div className="mt-16 grid grid-cols-3 gap-6 px-4">
+                    {[
+                        { icon: MapPin, label: 'Eventos', color: 'text-orange-400' },
+                        { icon: Star, label: 'Favoritos', color: 'text-amber-400' },
+                        { icon: Award, label: 'Premios', color: 'text-yellow-400' }
+                    ].map((f, i) => (
+                        <div key={i} className="flex flex-col items-center gap-2">
+                            <div className={`w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center ${f.color}`}>
+                                <f.icon className="w-6 h-6" />
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{f.label}</span>
+                        </div>
+                    ))}
+                </div>
             </div>
         );
     }
@@ -558,6 +599,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                         { label: 'Pulse Pass', icon: Zap, color: 'text-rose-400', action: () => setShowPulsePass(true) },
                         { label: 'Preferences', icon: Sparkles, color: 'text-purple-400', action: () => setShowPreferences(true) },
                         { label: 'Security', icon: ShieldCheck, color: 'text-emerald-400', action: () => setShowSecurity(true) },
+                        { label: 'Terms & Privacy', icon: Shield, color: 'text-orange-400', action: () => navigate('/policies') },
                         { label: 'Help & Support', icon: MessageCircle, color: 'text-orange-400', action: () => setShowHelp(true) }
                     ].map((option, i) => (
                         <button
@@ -889,27 +931,149 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-black text-white">Ayuda y Soporte</h3>
-                            <button onClick={() => setShowHelp(false)} className="p-2 rounded-xl bg-white/5 hover:bg-white/10">
-                                <X className="w-5 h-5 text-slate-400" />
-                            </button>
+                            <div className="flex gap-2">
+                                {isAdmin && (
+                                    <button 
+                                        onClick={() => {
+                                            if (isEditingHelp) {
+                                                handleUpdateHelpSupport(tempHelpItems);
+                                                setIsEditingHelp(false);
+                                                showToast('Soporte actualizado', 'success');
+                                            } else {
+                                                setTempHelpItems([...helpSupport]);
+                                                setIsEditingHelp(true);
+                                            }
+                                        }}
+                                        className={`p-2 rounded-xl ${isEditingHelp ? 'bg-orange-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                                    >
+                                        {isEditingHelp ? <Save className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />}
+                                    </button>
+                                )}
+                                <button onClick={() => { setShowHelp(false); setIsEditingHelp(false); }} className="p-2 rounded-xl bg-white/5 hover:bg-white/10">
+                                    <X className="w-5 h-5 text-slate-400" />
+                                </button>
+                            </div>
                         </div>
-                        <div className="space-y-3">
-                            <a href="mailto:contacto@montapulse.com" className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
-                                <span className="text-sm font-bold text-white">Enviar Email</span>
-                                <Mail className="w-5 h-5 text-slate-500" />
-                            </a>
-                            <a href="https://wa.me/593999999999" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
-                                <span className="text-sm font-bold text-white">WhatsApp</span>
-                                <MessageCircle className="w-5 h-5 text-slate-500" />
-                            </a>
-                            <button onClick={() => showToast('FAQ disponible pronto', 'info')} className="w-full flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
-                                <span className="text-sm font-bold text-white">Preguntas Frecuentes</span>
-                                <ChevronLeft className="w-5 h-5 text-slate-500 rotate-180" />
-                            </button>
-                            <button onClick={() => showToast('Términos y condiciones disponible pronto', 'info')} className="w-full flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
-                                <span className="text-sm font-bold text-white">Términos y Condiciones</span>
-                                <ChevronLeft className="w-5 h-5 text-slate-500 rotate-180" />
-                            </button>
+
+                        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                            {(isEditingHelp ? tempHelpItems : helpSupport).map((item, idx) => {
+                                const IconComponent = HELP_ICON_MAP[item.icon] || Info;
+                                
+                                if (isEditingHelp) {
+                                    return (
+                                        <div key={item.id} className="p-4 bg-white/5 rounded-2xl border border-white/10 space-y-3 relative group">
+                                            <div className="flex gap-3">
+                                                <div className="flex-1 space-y-2">
+                                                    <input 
+                                                        value={item.label}
+                                                        onChange={e => {
+                                                            const newItems = [...tempHelpItems];
+                                                            newItems[idx].label = e.target.value;
+                                                            setTempHelpItems(newItems);
+                                                        }}
+                                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-sm font-bold text-white"
+                                                        placeholder="Label"
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <select 
+                                                            value={item.type}
+                                                            onChange={e => {
+                                                                const newItems = [...tempHelpItems];
+                                                                newItems[idx].type = e.target.value as any;
+                                                                setTempHelpItems(newItems);
+                                                            }}
+                                                            className="bg-slate-800 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white"
+                                                        >
+                                                            <option value="email">Email</option>
+                                                            <option value="whatsapp">WhatsApp</option>
+                                                            <option value="link">Link</option>
+                                                            <option value="toast">Toast</option>
+                                                        </select>
+                                                        <select 
+                                                            value={item.icon}
+                                                            onChange={e => {
+                                                                const newItems = [...tempHelpItems];
+                                                                newItems[idx].icon = e.target.value;
+                                                                setTempHelpItems(newItems);
+                                                            }}
+                                                            className="bg-slate-800 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white"
+                                                        >
+                                                            {Object.keys(HELP_ICON_MAP).map(icon => (
+                                                                <option key={icon} value={icon}>{icon}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <input 
+                                                        value={item.value}
+                                                        onChange={e => {
+                                                            const newItems = [...tempHelpItems];
+                                                            newItems[idx].value = e.target.value;
+                                                            setTempHelpItems(newItems);
+                                                        }}
+                                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-xs text-slate-400 font-mono"
+                                                        placeholder="Value (URL, email, etc)"
+                                                    />
+                                                </div>
+                                                <button 
+                                                    onClick={() => setTempHelpItems(tempHelpItems.filter((_, i) => i !== idx))}
+                                                    className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-xl self-start"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                const content = (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-bold text-white">{item.label}</span>
+                                        <IconComponent className="w-5 h-5 text-slate-500" />
+                                    </div>
+                                );
+
+                                if (item.type === 'email') {
+                                    return (
+                                        <a key={item.id} href={`mailto:${item.value}`} className="block p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
+                                            {content}
+                                        </a>
+                                    );
+                                }
+                                if (item.type === 'whatsapp') {
+                                    const waLink = item.value.startsWith('http') ? item.value : `https://wa.me/${item.value.replace(/\D/g, '')}`;
+                                    return (
+                                        <a key={item.id} href={waLink} target="_blank" rel="noopener noreferrer" className="block p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
+                                            {content}
+                                        </a>
+                                    );
+                                }
+                                if (item.type === 'link') {
+                                    return (
+                                        <a key={item.id} href={item.value} target="_blank" rel="noopener noreferrer" className="block p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors">
+                                            {content}
+                                        </a>
+                                    );
+                                }
+                                return (
+                                    <button 
+                                        key={item.id}
+                                        onClick={() => showToast(item.value, 'info')} 
+                                        className="w-full text-left block p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors"
+                                    >
+                                        {content}
+                                    </button>
+                                );
+                            })}
+
+                            {isEditingHelp && (
+                                <button 
+                                    onClick={() => setTempHelpItems([...tempHelpItems, { id: Date.now().toString(), label: 'Nuevo Item', type: 'toast', value: 'Info...', icon: 'Info' }])}
+                                    className="w-full p-4 border-2 border-dashed border-white/10 rounded-2xl text-slate-500 hover:text-white hover:border-white/20 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    <span className="text-xs font-bold uppercase tracking-widest">Añadir soporte</span>
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

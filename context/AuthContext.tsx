@@ -114,7 +114,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         preferredVibe: Vibe.RELAX,
                         avatarUrl: authUser.photoURL || undefined,
                         plan: defaultRole === 'admin' ? SubscriptionPlan.PREMIUM : SubscriptionPlan.VISITOR,
-                        businessId: assignedBusinessId
+                        businessId: assignedBusinessId,
+                        acceptedTerms: true
                     };
 
                     await createUser(authUser.uid, newUser);

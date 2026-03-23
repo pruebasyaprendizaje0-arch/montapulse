@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef } from 'react';
-import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange } from '../types';
-import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS } from '../constants';
+import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem } from '../types';
+import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES } from '../constants';
 import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAppSettings,
     incrementViewCount, updateAppSettings, subscribeToUsers,
@@ -11,7 +11,8 @@ import {
     addPoints, redeemPoints, togglePulsePass,
     toggleFollowBusiness, getFollowedBusinessIds, subscribeToUserFollows, subscribeToBusinessFollowers,
     addFavorite, removeFavorite, subscribeToUserFavorites,
-    purgeAllReferencePoints
+    purgeAllReferencePoints,
+    getCustomLocalities, createCustomLocality, deleteCustomLocality
 } from '../services/firestoreService';
 import { generateEventDescription } from '../services/geminiService';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -124,6 +125,10 @@ interface DataContextType {
     isAdmin: boolean;
     isSuperUser: boolean;
     isSuperAdmin: boolean;
+    customLocalities: { name: string; coords: [number, number]; zoom: number }[];
+    customLocalitySectors: Record<string, Sector[]>;
+    handleAddCustomLocality: (name: string, coords: [number, number], sectors: Sector[]) => Promise<void>;
+    handleDeleteCustomLocality: (name: string) => Promise<void>;
     filteredEvents: MontanitaEvent[];
     filteredBusinesses: Business[];
     pastEvents: MontanitaEvent[];
@@ -141,6 +146,8 @@ interface DataContextType {
     setEditingBusinessId: (id: string | null) => void;
     showPaymentEdit: boolean;
     setShowPaymentEdit: (show: boolean) => void;
+    planPrices: Record<SubscriptionPlan, number>;
+    handleUpdatePlanPrices: (prices: Record<SubscriptionPlan, number>) => Promise<void>;
     showMigrationPanel: boolean;
     setShowMigrationPanel: (show: boolean) => void;
     showBusinessReg: boolean;
@@ -184,6 +191,8 @@ interface DataContextType {
     handleSendMessage: (content: string, asBusiness?: boolean, type?: 'text' | 'image' | 'system') => Promise<void>;
     services: ServiceCategory[];
     handleUpdateServices: (services: ServiceCategory[]) => Promise<void>;
+    helpSupport: HelpSupportItem[];
+    handleUpdateHelpSupport: (items: HelpSupportItem[]) => Promise<void>;
     handleToggleFollow: (businessId: string) => Promise<void>;
     isBusinessFollowed: (businessId: string) => boolean;
     followedBusinessIds: string[];
@@ -206,10 +215,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
     const [favorites, setFavorites] = useState<string[]>([]);
     const [paymentDetails, setPaymentDetails] = useState(DEFAULT_PAYMENT_DETAILS);
+    const [planPrices, setPlanPrices] = useState<Record<SubscriptionPlan, number>>(PLAN_PRICES);
     const [selectedEvent, setSelectedEvent] = useState<MontanitaEvent | null>(null);
     const [posts, setPosts] = useState<CommunityPost[]>([]);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [services, setServices] = useState<ServiceCategory[]>([]);
+    const [helpSupport, setHelpSupport] = useState<HelpSupportItem[]>([
+        { id: '1', label: 'Enviar Email', type: 'email', value: 'fhernandezcalle@gmail.com', icon: 'Mail' },
+        { id: '2', label: 'WhatsApp', type: 'whatsapp', value: '593994916012', icon: 'MessageCircle' },
+        { id: '3', label: 'Preguntas Frecuentes', type: 'toast', value: 'FAQ disponible pronto', icon: 'Info' },
+        { id: '4', label: 'Términos y Condiciones', type: 'toast', value: 'Términos y condiciones disponible pronto', icon: 'FileText' }
+    ]);
     const [loading, setLoading] = useState(true);
 
     const [agendaRange, setAgendaRange] = useState<'day' | 'week' | 'month'>('day');
@@ -277,6 +293,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMood, setSelectedMood] = useState<Vibe | null>(null);
     const [notifications, setNotifications] = useState<PulseNotification[]>([]);
+    
+    const [customLocalities, setCustomLocalities] = useState<{ name: string; coords: [number, number]; zoom: number }[]>([]);
+    const [customLocalitySectors, setCustomLocalitySectors] = useState<Record<string, Sector[]>>({});
 
     useEffect(() => {
         if (!user) {
@@ -435,9 +454,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     useEffect(() => {
+        const unsubscribe = subscribeToAppSettings('plan_prices', (data) => {
+            if (data && data.prices) {
+                setPlanPrices(data.prices);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
         const unsubscribe = subscribeToAppSettings('services_guide', (data) => {
             if (data && data.categories) {
                 setServices(data.categories);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToAppSettings('help_support', (data) => {
+            if (data && data.items) {
+                setHelpSupport(data.items);
             }
         });
         return () => unsubscribe();
@@ -482,6 +519,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const unsubMessages = subscribeToMessages(50, (data) => {
             setMessages(data);
         });
+
+        const loadCustomLocalities = async () => {
+            try {
+                const customs = await getCustomLocalities();
+                setCustomLocalities(customs.map(c => ({ name: c.name, coords: c.coords, zoom: c.zoom })));
+                const sectorsMap: Record<string, Sector[]> = {};
+                customs.forEach(c => {
+                    sectorsMap[c.name] = (c.sectors || [Sector.CENTRO, Sector.PLAYA, Sector.MONTANA]) as Sector[];
+                });
+                setCustomLocalitySectors(sectorsMap);
+            } catch (error) {
+                console.error('Error loading custom localities:', error);
+            }
+        };
+        loadCustomLocalities();
 
         return () => {
             unsubEvents();
@@ -789,11 +841,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const handleUpdatePaymentDetails = async () => {
         try {
             await updateAppSettings('payment_info', paymentDetails);
+            showToast('Información de pago actualizada correctamente', 'success');
             setShowPaymentEdit(false);
-            showToast("Información de pago actualizada.", "success");
         } catch (error) {
-            console.error("Error updating payment details:", error);
-            showToast("Error al actualizar información de pago.", "error");
+            console.error('Error updating payment details:', error);
+            showToast('Error al actualizar información de pago', 'error');
+        }
+    };
+
+    const handleUpdatePlanPrices = async (prices: Record<SubscriptionPlan, number>) => {
+        try {
+            await updateAppSettings('plan_prices', { prices });
+            showToast('Precios de planes actualizados correctamente', 'success');
+        } catch (error) {
+            console.error('Error updating plan prices:', error);
+            showToast('Error al actualizar precios de planes', 'error');
+            throw error;
         }
     };
 
@@ -1079,17 +1142,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     !b.isReference && 
                     !b.id.startsWith('ref-')
                 );
+                const hasReferenceByOwner = businesses.some(b => b.ownerId === authUser.uid && b.isReference);
                 
-                if (!isReferenceItem && (hasBusinessByOwner || hasBusinessByEmail) && !isSuperUser && !isSuperAdmin) {
-                    showToast("Solo puedes tener un negocio asociado a tu cuenta.", "error");
-                    return;
+                if (!isReferenceItem) {
+                    // Limitar a 1 negocio por usuario
+                    if ((hasBusinessByOwner || hasBusinessByEmail) && !isSuperUser && !isSuperAdmin) {
+                        showToast("Solo puedes tener un negocio asociado a tu cuenta.", "error");
+                        return;
+                    }
+                } else {
+                    // Limitar a 1 punto de referencia por usuario premium
+                    if (hasReferenceByOwner && !isSuperUser && !isSuperAdmin) {
+                        showToast("Solo puedes tener un punto de referencia en el mapa.", "error");
+                        return;
+                    }
                 }
 
                 const locObj = LOCALITIES.find(l => l.name === bizForm.locality) || LOCALITIES[0];
+                const userEmail = authUser?.email || user?.email || bizForm.email || '';
                 const businessData = {
                     ...bizForm,
                     ownerId: isSuperAdmin ? 'admin' : authUser.uid,
-                    email: bizForm.email || user?.email || '',
+                    email: userEmail,
                     isVerified: isSuperAdmin,
                     isPublished: isSuperAdmin,
                     coordinates: bizForm.coordinates || locObj.coords,
@@ -1314,6 +1388,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setEditingBusinessId,
             showPaymentEdit,
             setShowPaymentEdit,
+            planPrices,
+            handleUpdatePlanPrices,
             handleUpdateBusinessProfile,
             handleUpdatePaymentDetails,
             handleBusinessImageUpload,
@@ -1408,6 +1484,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             handleUpdateServices: async (newServices: ServiceCategory[]) => {
                 await updateAppSettings('services_guide', { categories: newServices });
             },
+            helpSupport,
+            handleUpdateHelpSupport: async (newItems: HelpSupportItem[]) => {
+                await updateAppSettings('help_support', { items: newItems });
+            },
             handleToggleFollow: async (businessId: string) => {
                 if (!authUser) {
                     setShowLogin(true);
@@ -1439,6 +1519,42 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             handlePurgeAllReferences,
             isSuperUser,
             isSuperAdmin,
+            customLocalities,
+            customLocalitySectors,
+            handleAddCustomLocality: async (name: string, coords: [number, number], sectors: Sector[]) => {
+                try {
+                    await createCustomLocality({
+                        name,
+                        coords,
+                        zoom: 15,
+                        sectors,
+                        createdBy: authUser?.uid || 'admin'
+                    });
+                    setCustomLocalities(prev => [...prev, { name, coords, zoom: 15 }]);
+                    setCustomLocalitySectors(prev => ({ ...prev, [name]: sectors }));
+                    showToast(`Localidad "${name}" creada exitosamente`, 'success');
+                } catch (error) {
+                    showToast('Error al crear localidad', 'error');
+                }
+            },
+            handleDeleteCustomLocality: async (name: string) => {
+                try {
+                    const customs = await getCustomLocalities();
+                    const toDelete = customs.find(c => c.name === name);
+                    if (toDelete?.id) {
+                        await deleteCustomLocality(toDelete.id);
+                    }
+                    setCustomLocalities(prev => prev.filter(l => l.name !== name));
+                    setCustomLocalitySectors(prev => {
+                        const newSectors = { ...prev };
+                        delete newSectors[name];
+                        return newSectors;
+                    });
+                    showToast(`Localidad "${name}" eliminada`, 'success');
+                } catch (error) {
+                    showToast('Error al eliminar localidad', 'error');
+                }
+            },
             setActiveView: (view: ViewType) => {
                 const paths: Record<string, string> = {
                     'explore': '/',

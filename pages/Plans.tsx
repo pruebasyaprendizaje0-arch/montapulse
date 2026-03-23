@@ -11,13 +11,32 @@ import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 
 export const Plans: React.FC = () => {
-    const { user, isAdmin } = useAuthContext();
+    const { user, isAdmin, isSuperAdmin } = useAuthContext();
     const {
         paymentDetails,
-        setShowPaymentEdit: onEditPaymentDetails
+        setShowPaymentEdit: onEditPaymentDetails,
+        planPrices,
+        handleUpdatePlanPrices
     } = useData();
-    const { showConfirm } = useToast();
+    const { showConfirm, showToast } = useToast();
     const navigate = useNavigate();
+
+    const [isEditingPrices, setIsEditingPrices] = React.useState(false);
+    const [tempPrices, setTempPrices] = React.useState<Record<SubscriptionPlan, number>>(planPrices);
+
+    // Sync temp prices when planPrices updates
+    React.useEffect(() => {
+        setTempPrices(planPrices);
+    }, [planPrices]);
+
+    const savePrices = async () => {
+        try {
+            await handleUpdatePlanPrices(tempPrices);
+            setIsEditingPrices(false);
+        } catch (error) {
+            // Error toast handled in context
+        }
+    };
 
     const onUpdatePlan = async (plan: SubscriptionPlan) => {
         if (plan === user?.plan) return;
@@ -54,12 +73,40 @@ export const Plans: React.FC = () => {
                         >
                             <ChevronLeft className="w-6 h-6 text-white" />
                         </button>
-                        <div>
+                        <div className="flex-1">
                             <h1 className="text-3xl font-black text-white tracking-tighter uppercase italic leading-none">
                                 Membresía <span className="text-orange-500">Pulse.</span>
                             </h1>
                             <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mt-2">Business Edition</p>
                         </div>
+                        {isSuperAdmin && (
+                            <div className="flex gap-2">
+                                {isEditingPrices ? (
+                                    <>
+                                        <button
+                                            onClick={() => { setIsEditingPrices(false); setTempPrices(planPrices); }}
+                                            className="px-4 py-2 rounded-xl bg-white/5 text-slate-400 text-[10px] font-black uppercase tracking-widest border border-white/5"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            onClick={savePrices}
+                                            className="px-4 py-2 rounded-xl bg-orange-500 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-500/20"
+                                        >
+                                            Guardar
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        onClick={() => setIsEditingPrices(true)}
+                                        className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all"
+                                        title="Editar Precios"
+                                    >
+                                        <Edit3 className="w-5 h-5 text-orange-500" />
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Intro Card */}
@@ -78,9 +125,22 @@ export const Plans: React.FC = () => {
                             <div className="absolute top-0 right-0 p-6">
                                 <CheckCircle className={`w-8 h-8 ${user?.plan === SubscriptionPlan.VISITOR ? 'text-orange-500' : 'text-slate-700'}`} />
                             </div>
-                            <h3 className="text-xl font-black text-white italic uppercase mb-2">Visitante</h3>
                             <div className="flex items-baseline gap-1 mb-6">
-                                <span className="text-4xl font-black text-white tracking-tighter">GRATIS</span>
+                                {isEditingPrices ? (
+                                    <div className="relative group/input">
+                                        <input
+                                            type="number"
+                                            value={tempPrices[SubscriptionPlan.VISITOR]}
+                                            onChange={(e) => setTempPrices(prev => ({ ...prev, [SubscriptionPlan.VISITOR]: parseFloat(e.target.value) || 0 }))}
+                                            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white font-black text-2xl w-32 outline-none focus:border-orange-500/50"
+                                        />
+                                        <div className="absolute -bottom-4 left-0 text-[8px] font-black text-orange-500 uppercase tracking-widest">Precio Visitante</div>
+                                    </div>
+                                ) : (
+                                    <span className="text-4xl font-black text-white tracking-tighter">
+                                        {planPrices[SubscriptionPlan.VISITOR] === 0 ? 'GRATIS' : `$${planPrices[SubscriptionPlan.VISITOR]}`}
+                                    </span>
+                                )}
                             </div>
                             <ul className="space-y-4 mb-8">
                                 <PlanFeature icon={Calendar} text="Ver eventos públicos" highlight={user?.plan === SubscriptionPlan.VISITOR} />
@@ -105,9 +165,25 @@ export const Plans: React.FC = () => {
                             </div>
                             <h3 className="text-xl font-black text-white italic uppercase mb-2">Plan Básico</h3>
                             <div className="flex items-baseline gap-1 mb-6">
-                                <span className="text-xs font-black text-white/60">$</span>
-                                <span className="text-4xl font-black text-white tracking-tighter">3.00</span>
-                                <span className="text-xs font-black text-white/40 italic">/mes</span>
+                                {isEditingPrices ? (
+                                    <div className="relative group/input">
+                                        <span className="text-xs font-black text-white/60 mr-1">$</span>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={tempPrices[SubscriptionPlan.BASIC]}
+                                            onChange={(e) => setTempPrices(prev => ({ ...prev, [SubscriptionPlan.BASIC]: parseFloat(e.target.value) || 0 }))}
+                                            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white font-black text-2xl w-32 outline-none focus:border-orange-500/50"
+                                        />
+                                        <div className="absolute -bottom-4 left-0 text-[8px] font-black text-orange-500 uppercase tracking-widest">Precio Básico</div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <span className="text-xs font-black text-white/60">$</span>
+                                        <span className="text-4xl font-black text-white tracking-tighter">{planPrices[SubscriptionPlan.BASIC].toFixed(2)}</span>
+                                        <span className="text-xs font-black text-white/40 italic">/mes</span>
+                                    </>
+                                )}
                             </div>
                             <ul className="space-y-4 mb-8">
                                 <PlanFeature icon={Calendar} text="Hasta 3 eventos mensuales" highlight={user?.plan === SubscriptionPlan.BASIC} />
@@ -137,9 +213,25 @@ export const Plans: React.FC = () => {
                                 <div className="px-2 py-0.5 bg-orange-500 text-[8px] font-black text-white rounded-full uppercase tracking-widest">PRO</div>
                             </div>
                             <div className="flex items-baseline gap-1 mb-6">
-                                <span className="text-xs font-black text-white/60">$</span>
-                                <span className="text-5xl font-black text-white tracking-tighter">14.99</span>
-                                <span className="text-xs font-black text-white/40 italic">/mes</span>
+                                {isEditingPrices ? (
+                                    <div className="relative group/input">
+                                        <span className="text-xs font-black text-white/60 mr-1">$</span>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={tempPrices[SubscriptionPlan.PREMIUM]}
+                                            onChange={(e) => setTempPrices(prev => ({ ...prev, [SubscriptionPlan.PREMIUM]: parseFloat(e.target.value) || 0 }))}
+                                            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white font-black text-2xl w-32 outline-none focus:border-orange-500/50"
+                                        />
+                                        <div className="absolute -bottom-4 left-0 text-[8px] font-black text-orange-500 uppercase tracking-widest">Precio Premium</div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <span className="text-xs font-black text-white/60">$</span>
+                                        <span className="text-5xl font-black text-white tracking-tighter">{planPrices[SubscriptionPlan.PREMIUM].toFixed(2)}</span>
+                                        <span className="text-xs font-black text-white/40 italic">/mes</span>
+                                    </>
+                                )}
                             </div>
                             <ul className="space-y-4 mb-8">
                                 <PlanFeature icon={Star} text="7 eventos mensuales" highlight={true} />

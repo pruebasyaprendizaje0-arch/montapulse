@@ -11,6 +11,10 @@ const VIBE_COLORS: Record<string, string> = {
     [Vibe.FAMILIA]: 'bg-yellow-400 text-black',
     [Vibe.WELLNESS]: 'bg-emerald-400 text-black',
     [Vibe.FIESTA]: 'bg-orange-600 text-white',
+    [Vibe.SURF]: 'bg-sky-400 text-white',
+    [Vibe.GASTRONOMIA]: 'bg-orange-500 text-white',
+    [Vibe.FUTBOL]: 'bg-green-500 text-white',
+    [Vibe.OTRO]: 'bg-slate-500 text-white',
 };
 
 // Generates mock avatar URLs for participant cluster

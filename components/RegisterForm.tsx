@@ -17,6 +17,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
         role: 'visitor' as 'visitor' | 'host',
         avatarUrl: ''
     });
+    const [termsAccepted, setTermsAccepted] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -46,6 +47,10 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
 
         if (formData.password.length < 6) {
             setError('Password must be at least 6 characters');
+            return;
+        }
+        if (!termsAccepted) {
+            setError('Debes aceptar los términos y condiciones');
             return;
         }
 
@@ -250,6 +255,34 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
                         minLength={6}
                     />
                 </div>
+            </div>
+            {/* Terms and Conditions */}
+            <div className="flex items-start gap-3 p-2">
+                <div className="flex items-center h-5">
+                    <input
+                        id="terms"
+                        type="checkbox"
+                        checked={termsAccepted}
+                        onChange={(e) => setTermsAccepted(e.target.checked)}
+                        className="w-4 h-4 bg-slate-800 border-slate-700 rounded text-orange-500 focus:ring-orange-500/20"
+                        required
+                    />
+                </div>
+                <label htmlFor="terms" className="text-xs text-slate-400 leading-tight select-none">
+                    He leído y acepto los <button
+                        type="button"
+                        onClick={() => window.open('/policies', '_blank')}
+                        className="text-orange-500 hover:text-orange-400 font-bold"
+                    >
+                        términos del servicio
+                    </button> y la <button
+                        type="button"
+                        onClick={() => window.open('/policies', '_blank')}
+                        className="text-orange-500 hover:text-orange-400 font-bold"
+                    >
+                        política de privacidad
+                    </button> de Montapulse.
+                </label>
             </div>
 
             {/* Error Message */}

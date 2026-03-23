@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MoreVertical, Sparkles, Edit3, MessageCircle, Users, Hash, ChevronRight, X, UserPlus, Heart, Zap, Building2, MapPin, User, ChevronDown, Smile, Camera, Upload, X as XIcon, Star } from 'lucide-react';
+import { Search, MoreVertical, Sparkles, Edit3, MessageCircle, Users, Hash, ChevronRight, X, UserPlus, Heart, Zap, Building2, MapPin, User, ChevronDown, Smile, Camera, Upload, X as XIcon, Star, Lock, Plus, CheckCircle, Trash2 } from 'lucide-react';
 import { useAuthContext } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ChatRoom as ChatRoomType, UserProfile, SubscriptionPlan } from '../types';
 import { ChatRoom } from '../components/Chat/ChatRoom';
-import { subscribeToChatRooms, subscribeToUsers, createChatRoom, sendMessage, sendRoomMessage } from '../services/firestoreService';
+import { subscribeToChatRooms, subscribeToUsers, createChatRoom, sendMessage, sendRoomMessage, deleteGlobalMessage } from '../services/firestoreService';
 import { useData } from '../context/DataContext';
 import { compressImage } from '../utils/imageUtils';
 import { LOCALITIES } from '../constants';
@@ -74,6 +74,11 @@ export const Community: React.FC = () => {
     const [massSendAsBusiness, setMassSendAsBusiness] = useState(false);
     const massImageInputRef = React.useRef<HTMLInputElement>(null);
     const massCameraInputRef = React.useRef<HTMLInputElement>(null);
+    // Group creation state (Premium businesses only)
+    const [showCreateGroup, setShowCreateGroup] = useState(false);
+    const [newGroupName, setNewGroupName] = useState('');
+    const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+    const [deletingGlobalMsgId, setDeletingGlobalMsgId] = useState<string | null>(null);
 
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
     const userPlan = user?.plan || SubscriptionPlan.VISITOR;
@@ -117,7 +122,8 @@ export const Community: React.FC = () => {
 
     const filteredBusinesses = useMemo(() => {
         const query = userSearchText.toLowerCase();
-        let results = (businesses || []).filter(b => b.id !== user?.businessId);
+        // Exclude reference points — they are not chat recipients
+        let results = (businesses || []).filter(b => b.id !== user?.businessId && !b.isReference);
         
         if (selectedLocality) {
             results = results.filter(b => b?.locality === selectedLocality);
@@ -224,6 +230,10 @@ export const Community: React.FC = () => {
         );
 
         if (existingRoom) {
+            // Verify current user is a participant before opening
+            const myIds = user.businessId ? [user.id, user.businessId] : [user.id];
+            const isParticipant = existingRoom.participants.some(p => myIds.includes(p));
+            if (!isParticipant) return;
             setSelectedRoom(existingRoom);
             setIsComposeOpen(false);
             return;
@@ -249,6 +259,8 @@ export const Community: React.FC = () => {
 
     const handleStartBusinessDM = async (business: any) => {
         if (!user) return;
+        // Reference points are never a valid DM target
+        if (business.isReference) return;
 
         const existingRoom = rooms.find(r =>
             r.type === 'direct' &&
@@ -257,6 +269,10 @@ export const Community: React.FC = () => {
         );
 
         if (existingRoom) {
+            // Verify current user is a participant before opening
+            const myIds = user.businessId ? [user.id, user.businessId] : [user.id];
+            const isParticipant = existingRoom.participants.some(p => myIds.includes(p));
+            if (!isParticipant) return;
             setSelectedRoom(existingRoom);
             setIsComposeOpen(false);
             return;
@@ -905,7 +921,7 @@ export const Community: React.FC = () => {
 
                                 const isMe = senderId === user?.id || (userBusiness && senderId === userBusiness.id);
                                 return (
-                                    <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} gap-1.5 animate-in slide-in-from-bottom-2 duration-300`}>
+                                    <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} gap-1.5 animate-in slide-in-from-bottom-2 duration-300 group/gmsg`}>
                                         {!isMe && (
                                             <div className="flex items-center gap-2 mb-0.5 ml-1">
                                                 <div className="relative">
@@ -921,11 +937,36 @@ export const Community: React.FC = () => {
                                                 </span>
                                             </div>
                                         )}
-                                        <div className={`relative px-5 py-3.5 rounded-[2rem] text-sm font-bold leading-relaxed shadow-2xl transition-all group-hover/msg:scale-[1.02] ${isMe
-                                            ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-tr-sm shadow-orange-600/20'
-                                            : 'bg-slate-800/80 backdrop-blur-md text-slate-100 rounded-tl-sm border border-white/5 shadow-black/40'
-                                            }`}>
-                                            {text}
+                                        <div className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                            {/* Delete button — only for own messages, visible on hover */}
+                                            {isMe && (
+                                                <button
+                                                    onClick={async () => {
+                                                        if (window.confirm('¿Eliminar este mensaje?')) {
+                                                            setDeletingGlobalMsgId(msg.id);
+                                                            try {
+                                                                await deleteGlobalMessage(msg.id);
+                                                            } catch {
+                                                                alert('No se pudo eliminar el mensaje.');
+                                                            } finally {
+                                                                setDeletingGlobalMsgId(null);
+                                                            }
+                                                        }
+                                                    }}
+                                                    disabled={deletingGlobalMsgId === msg.id}
+                                                    className="opacity-0 group-hover/gmsg:opacity-100 transition-opacity p-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 shrink-0 mb-1"
+                                                    title="Eliminar mensaje"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            <div className={`relative px-5 py-3.5 rounded-[2rem] text-sm font-bold leading-relaxed shadow-2xl transition-all ${
+                                                isMe
+                                                    ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-tr-sm shadow-orange-600/20'
+                                                    : 'bg-slate-800/80 backdrop-blur-md text-slate-100 rounded-tl-sm border border-white/5 shadow-black/40'
+                                                } ${deletingGlobalMsgId === msg.id ? 'opacity-40' : ''}`}>
+                                                {text}
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -1199,13 +1240,73 @@ export const Community: React.FC = () => {
                             </button>
                             <h2 className="text-2xl font-black text-white tracking-tight uppercase">Nuevo Chat</h2>
                         </div>
-                        <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 rounded-2xl border border-white/5 text-orange-500">
-                            <UserPlus className="w-5 h-5" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Grupo</span>
-                        </button>
+                        {/* Create Group — Premium Business only */}
+                        {isPremiumUser && userBusiness ? (
+                            <button
+                                onClick={() => setShowCreateGroup(!showCreateGroup)}
+                                className="flex items-center gap-2 px-4 py-2 bg-amber-500/20 border border-amber-500/40 rounded-2xl text-amber-400 hover:bg-amber-500/30 transition-all"
+                            >
+                                <Plus className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Grupo</span>
+                            </button>
+                        ) : (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-2xl opacity-50 cursor-not-allowed" title="Solo negocios Premium">
+                                <Lock className="w-4 h-4 text-slate-500" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Grupo</span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="p-6">
+                        {/* Group creation form — Premium Business only */}
+                        {showCreateGroup && isPremiumUser && userBusiness && (
+                            <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-3">
+                                <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Users className="w-3 h-3" /> Crear Grupo de Chat
+                                </p>
+                                <input
+                                    type="text"
+                                    value={newGroupName}
+                                    onChange={(e) => setNewGroupName(e.target.value)}
+                                    placeholder="Nombre del grupo (ej: Clientes VIP)..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50"
+                                    maxLength={40}
+                                />
+                                <button
+                                    disabled={!newGroupName.trim() || isCreatingGroup}
+                                    onClick={async () => {
+                                        if (!newGroupName.trim() || !user || !userBusiness) return;
+                                        setIsCreatingGroup(true);
+                                        try {
+                                            const groupParticipants = [user.id, userBusiness.id];
+                                            const roomId = await createChatRoom({
+                                                name: newGroupName.trim(),
+                                                type: 'group',
+                                                participants: groupParticipants,
+                                                avatar: userBusiness.imageUrl || 'https://i.pravatar.cc/100',
+                                                lastMessage: `Grupo creado por ${userBusiness.name}`,
+                                                status: 'orange'
+                                            });
+                                            setSelectedRoom({ id: roomId, name: newGroupName.trim(), type: 'group', participants: groupParticipants, avatar: userBusiness.imageUrl || 'https://i.pravatar.cc/100', status: 'orange' });
+                                            setIsComposeOpen(false);
+                                            setShowCreateGroup(false);
+                                            setNewGroupName('');
+                                        } catch (err) {
+                                            console.error('Error creating group:', err);
+                                        } finally {
+                                            setIsCreatingGroup(false);
+                                        }
+                                    }}
+                                    className={`w-full py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                                        newGroupName.trim() && !isCreatingGroup
+                                            ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
+                                            : 'bg-white/5 text-slate-500'
+                                    }`}
+                                >
+                                    {isCreatingGroup ? 'Creando...' : '✓ Crear Grupo'}
+                                </button>
+                            </div>
+                        )}
                         {canSendAsBusiness && (
                             <div className="flex items-center justify-between mb-4 px-2">
                                 <span className="text-[10px] text-slate-500 font-medium">Escribir como:</span>

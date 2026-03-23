@@ -26,6 +26,7 @@ import { Calendar as CalendarPage } from './pages/Calendar.tsx';
 import { History } from './pages/History.tsx';
 import { Plans } from './pages/Plans.tsx';
 import { AdminUsers } from './pages/AdminUsers.tsx';
+import { Policies } from './pages/Policies.tsx';
 import { BottomNav } from './components/Layout/BottomNav.tsx';
 import { Sidebar } from './components/Layout/Sidebar.tsx';
 // CalendarModal removed
@@ -202,6 +203,7 @@ const Dashboard: React.FC = () => {
     else if (path === '/saved-events') setActiveView('all-favorites');
     else if (path === '/admin-users') setActiveView('admin-users');
     else if (path === '/info') setActiveView('info');
+    else if (path === '/policies') setActiveView('policies');
   }, [location.pathname]);
 
   React.useEffect(() => {
@@ -295,7 +297,13 @@ const Dashboard: React.FC = () => {
     }
     // Fallback: search by ownerId
     if (authUser?.uid) {
-      return businesses.find(b => b.ownerId === authUser.uid) || null;
+      const byOwner = businesses.find(b => b.ownerId === authUser.uid);
+      if (byOwner) return byOwner;
+    }
+    // Fallback: search by email (for users who registered business with same email)
+    if (user?.email) {
+      const byEmail = businesses.find(b => b.email?.toLowerCase() === user.email?.toLowerCase());
+      if (byEmail) return byEmail;
     }
     return null;
   }, [user, businesses, authUser]);
@@ -331,8 +339,6 @@ const Dashboard: React.FC = () => {
       case 'explore':
         return <Explore 
           onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)} 
-          onAddBusiness={canEditAllBusiness ? handleAddBusinessMap : (canEditOwnBusiness ? handleAddBusinessMap : undefined)}
-          allowEditing={!!canEditAllBusiness || !!canEditOwnBusiness}
           userBusinessId={userBusiness?.id}
         />;
       case 'calendar':
@@ -348,6 +354,8 @@ const Dashboard: React.FC = () => {
         return <Community />;
       case 'admin-users':
         return <AdminUsers />;
+      case 'policies':
+        return <Policies />;
       default:
         return <Explore onEditBusiness={handleEditBusiness} />;
     }
@@ -423,7 +431,13 @@ const Dashboard: React.FC = () => {
       {showBusinessReg && (
         <BusinessEditModal 
           isRegistration 
-          onClose={() => setShowBusinessReg(false)} 
+          onClose={() => {
+            setShowBusinessReg(false);
+            // Forzar resize del mapa al cerrar el modal para recuperar los tiles
+            [50, 200, 500, 1000].forEach(delay =>
+              setTimeout(() => window.dispatchEvent(new Event('resize')), delay)
+            );
+          }} 
         />
       )}
 

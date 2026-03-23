@@ -14,7 +14,8 @@ import {
     setDoc,
     increment,
     orderBy,
-    limit
+    limit,
+    startAfter
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, BusinessReview } from '../types';
@@ -149,8 +150,21 @@ export const getEvents = async (): Promise<MontanitaEvent[]> => {
 };
 
 export const subscribeToEvents = (callback: (events: MontanitaEvent[]) => void) => {
+    // ─ OPTIMIZACIÓN: Filtramos en el SERVIDOR solo eventos del mes pasado hacia adelante.
+    // Antes: descargaba TODA la colección events sin importar la fecha.
+    // Ahorro estimado: ~70% de lecturas cuando la colección supera los 50 docs.
+    const now = new Date();
+    const firstDayOfPastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const cutoffTimestamp = Timestamp.fromDate(firstDayOfPastMonth);
+
     const eventsRef = collection(db, 'events');
-    return onSnapshot(eventsRef, (snapshot) => {
+    const q = query(
+        eventsRef,
+        where('endAt', '>=', cutoffTimestamp),
+        orderBy('endAt', 'asc'),
+        limit(150) // Tope de seguridad: máx 150 eventos activos
+    );
+    return onSnapshot(q, (snapshot) => {
         const events = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
@@ -387,8 +401,12 @@ export const getUserByEmail = async (email: string): Promise<UserProfile | null>
 };
 
 export const subscribeToUsers = (callback: (users: UserProfile[]) => void) => {
+    // ─ OPTIMIZACIÓN: Limitar a los 200 usuarios más recientes.
+    // Solo admin y premium hosts llegan a este query. El límite evita abrir
+    // una escucha sin tope sobre usuarios_v2 completos.
     const usersRef = collection(db, 'users_v2');
-    return onSnapshot(usersRef, (snapshot) => {
+    const q = query(usersRef, orderBy('createdAt', 'desc'), limit(200));
+    return onSnapshot(q, (snapshot) => {
         const users = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
@@ -565,8 +583,15 @@ export const subscribeToUserRSVPs = (userId: string, callback: (eventIds: string
 };
 
 export const subscribeToRSVPCounts = (callback: (counts: Record<string, number>) => void) => {
+    // ─ OPTIMIZACIÓN: Antes descargaba TODOS los RSVPs sin límite — el mayor gasto
+    // de lecturas de toda la app. Ahora limitamos a los 500 más recientes.
+    // La solución ideal a largo plazo es almacenar el conteo denormalizado
+    // directamente en cada documento de 'events' (campo interestedCount),
+    // que ya existe y se actualiza con increment() en toggleRSVP. En ese
+    // escenario, este listener puede eliminarse completamente.
     const rsvpsRef = collection(db, 'rsvps');
-    return onSnapshot(rsvpsRef, (snapshot) => {
+    const q = query(rsvpsRef, orderBy('createdAt', 'desc'), limit(500));
+    return onSnapshot(q, (snapshot) => {
         const counts: Record<string, number> = {};
         snapshot.docs.forEach(doc => {
             const eventId = doc.data().eventId;
@@ -614,8 +639,11 @@ export const subscribeToAppSettings = (settingId: string, callback: (data: any) 
 // ==================== COMMUNITY ====================
 
 export const subscribeToPosts = (callback: (posts: any[]) => void) => {
+    // ─ OPTIMIZACIÓN: Limitar a los 30 posts más recientes.
+    // Sin este límite, cada apertura del chat descargaba toda la colección.
+    // Ahorro: ~N-30 lecturas por sesión (donde N = total de posts).
     const postsRef = collection(db, 'posts');
-    const q = query(postsRef, orderBy('timestamp', 'desc'));
+    const q = query(postsRef, orderBy('timestamp', 'desc'), limit(30));
     return onSnapshot(q, (snapshot) => {
         const posts = snapshot.docs.map(doc => ({
             id: doc.id,
@@ -713,15 +741,58 @@ export const sendRoomMessage = async (roomId: string, message: Omit<ChatMessage,
 
 export const subscribeToRoomMessages = (roomId: string, callback: (messages: ChatMessage[]) => void) => {
     const messagesRef = collection(db, `chatRooms/${roomId}/messages`);
-    return onSnapshot(messagesRef, (snapshot) => {
+    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+    return onSnapshot(q, (snapshot) => {
         const messages = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
             timestamp: doc.data().timestamp?.toDate() || new Date()
         })) as ChatMessage[];
-        messages.sort((a, b) => a.timestamp - b.timestamp);
         callback(messages);
     });
+};
+
+/**
+ * Auto-delete messages older than 7 days from a chat room.
+ * Called client-side when a user opens a room (Spark plan — no Cloud Functions).
+ */
+export const deleteOldRoomMessages = async (roomId: string): Promise<void> => {
+    try {
+        const ONE_WEEK_AGO = Timestamp.fromDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+        const messagesRef = collection(db, `chatRooms/${roomId}/messages`);
+        const q = query(messagesRef, where('timestamp', '<', ONE_WEEK_AGO), limit(50));
+        const snapshot = await getDocs(q);
+        const deletes = snapshot.docs.map(d => deleteDoc(d.ref));
+        await Promise.all(deletes);
+        if (snapshot.size > 0) {
+            console.log(`[AutoClean] Deleted ${snapshot.size} old messages from room ${roomId}`);
+        }
+    } catch (error) {
+        // Non-critical — silently fail so it doesn't break the chat experience
+        console.warn('[AutoClean] Could not delete old messages:', error);
+    }
+};
+
+/** Delete a single message from a chatRoom — only the sender can call this (enforced by Firestore rules too). */
+export const deleteRoomMessage = async (roomId: string, messageId: string): Promise<void> => {
+    try {
+        const msgRef = doc(db, `chatRooms/${roomId}/messages`, messageId);
+        await deleteDoc(msgRef);
+    } catch (error) {
+        console.error('Error deleting room message:', error);
+        throw error;
+    }
+};
+
+/** Delete a single message from the global chat (messages collection). */
+export const deleteGlobalMessage = async (messageId: string): Promise<void> => {
+    try {
+        const msgRef = doc(db, 'messages', messageId);
+        await deleteDoc(msgRef);
+    } catch (error) {
+        console.error('Error deleting global message:', error);
+        throw error;
+    }
 };
 
 export const createChatRoom = async (roomData: Omit<ChatRoom, 'id'>) => {
@@ -735,6 +806,55 @@ export const createChatRoom = async (roomData: Omit<ChatRoom, 'id'>) => {
         return docRef.id;
     } catch (error) {
         console.error('Error creating chat room:', error);
+        throw error;
+    }
+};
+
+export interface CustomLocality {
+    id?: string;
+    name: string;
+    coords: [number, number];
+    zoom: number;
+    sectors: string[];
+    createdBy: string;
+    createdAt: Date;
+}
+
+export const getCustomLocalities = async (): Promise<CustomLocality[]> => {
+    try {
+        const localitiesRef = collection(db, 'customLocalities');
+        const snapshot = await getDocs(localitiesRef);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date()
+        })) as CustomLocality[];
+    } catch (error) {
+        console.error('Error getting custom localities:', error);
+        return [];
+    }
+};
+
+export const createCustomLocality = async (locality: Omit<CustomLocality, 'id' | 'createdAt'>): Promise<string> => {
+    try {
+        const localitiesRef = collection(db, 'customLocalities');
+        const docRef = await addDoc(localitiesRef, {
+            ...locality,
+            createdAt: serverTimestamp()
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error('Error creating custom locality:', error);
+        throw error;
+    }
+};
+
+export const deleteCustomLocality = async (id: string): Promise<void> => {
+    try {
+        const localityRef = doc(db, 'customLocalities', id);
+        await deleteDoc(localityRef);
+    } catch (error) {
+        console.error('Error deleting custom locality:', error);
         throw error;
     }
 };

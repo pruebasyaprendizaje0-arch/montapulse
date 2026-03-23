@@ -78,6 +78,8 @@ interface MapViewProps {
   isMovingBusiness?: boolean;
   movingBusinessId?: string;
   onMoveBusinessComplete?: () => void;
+  customLocalities?: { name: string; coords: [number, number]; zoom: number }[];
+  onAddLocality?: (name: string, coords: [number, number]) => void;
 }
 
 export const MapView: React.FC<MapViewProps> = ({
@@ -109,7 +111,9 @@ export const MapView: React.FC<MapViewProps> = ({
   isSuperUser,
   isMovingBusiness = false,
   movingBusinessId,
-  onMoveBusinessComplete
+  onMoveBusinessComplete,
+  customLocalities = [],
+  onAddLocality
 }: MapViewProps) => {
   const { showToast, showConfirm, showPrompt } = useToast();
   const mapRef = useRef<L.Map | null>(null);
@@ -446,13 +450,35 @@ export const MapView: React.FC<MapViewProps> = ({
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
     >
       {/* Map UI Overlay */}
+      {/* SuperAdmin: Add Locality Button - Always visible for admins */}
+      {isSuperUser && onAddLocality && (
+        <div className="absolute top-4 right-4 z-[1001] pointer-events-auto">
+          <button
+            onClick={() => {
+              const name = prompt('Nombre del nuevo pueblo:');
+              if (name) {
+                const coordsStr = prompt('Coordenadas (lat, lng):', '-1.825, -80.753');
+                if (coordsStr) {
+                  const coords = coordsStr.split(',').map(s => parseFloat(s.trim())) as [number, number];
+                  if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+                    onAddLocality(name, coords);
+                  }
+                }
+              }
+            }}
+            className="px-5 py-3 rounded-full text-sm font-black uppercase tracking-widest transition-all duration-300 bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:from-emerald-400 hover:to-green-400 border-2 border-emerald-400 shadow-xl shadow-emerald-500/40 animate-pulse"
+          >
+            + Agregar Pueblo
+          </button>
+        </div>
+      )}
       <div className="absolute inset-x-0 top-20 z-[1000] p-4 pointer-events-none">
         <div className="max-w-xl mx-auto space-y-6">
           {/* Locality Selector */}
           {!hideUI && (
             <div className="flex justify-center">
               <div className="bg-black/60 backdrop-blur-2xl border border-white/8 rounded-full p-1 flex items-center shadow-2xl shadow-black/40 ring-1 ring-white/5 pointer-events-auto">
-                {LOCALITIES.map((loc) => (
+                {[...LOCALITIES, ...customLocalities].map((loc) => (
                   <button
                     key={loc.name}
                     onClick={() => onLocalityChange?.(loc.name)}

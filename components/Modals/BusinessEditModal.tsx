@@ -1,9 +1,15 @@
-import React, { useRef } from 'react';
-import { X, Camera, Upload, Store, MapPin } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, Camera, Upload, Store, MapPin, Search } from 'lucide-react';
 import { useAuthContext } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS } from '../../constants';
 import { Sector, BusinessCategory } from '../../types';
+import * as Icons from 'react-icons/md';
+import { MdLocationOn } from 'react-icons/md';
+import * as BiIcons from 'react-icons/bi';
+import * as GiIcons from 'react-icons/gi';
+import * as PiIcons from 'react-icons/pi';
+import * as BsIcons from 'react-icons/bs';
 
 interface BusinessEditModalProps {
     onClose?: () => void;
@@ -11,12 +17,13 @@ interface BusinessEditModalProps {
 }
 
 export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, isRegistration = false }) => {
-    const { user } = useAuthContext();
+    const { user, isSuperAdmin } = useAuthContext();
     const {
         businesses, setBusinesses, editingBusinessId, setShowBusinessEdit,
         setEditingBusinessId, handleUpdateBusinessProfile, handleImageUpload,
         bizForm, setBizForm, handleBusinessRegister, setShowBusinessReg,
-        handleBusinessImageUpload, handleDeleteBusiness
+        handleBusinessImageUpload, handleDeleteBusiness,
+        customLocalities
     } = useData();
 
     const bizEditFileInputRef = useRef<HTMLInputElement>(null);
@@ -24,6 +31,11 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
 
     const targetBusinessId = editingBusinessId || user?.businessId;
     const business = isRegistration ? null : businesses.find(b => b.id === targetBusinessId);
+
+    const userBusiness = businesses.find(b => b.ownerId === user?.id && !b.isReference);
+    const userReference = businesses.find(b => b.ownerId === user?.id && b.isReference);
+    const canAddBusiness = isSuperAdmin || !userBusiness;
+    const canAddReference = isSuperAdmin || !userReference;
 
     const handleClose = () => {
         if (onClose) {
@@ -78,23 +90,29 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                         <div className="grid grid-cols-2 gap-3 p-2 bg-slate-800/30 rounded-[2rem] border border-white/5">
                             <button
                                 type="button"
+                                disabled={!canAddBusiness}
                                 onClick={() => {
-                                    updateField('isReference', false);
+                                    if (canAddBusiness) updateField('isReference', false);
                                 }}
-                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${!data.isReference ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${!data.isReference ? 'bg-orange-500 text-white shadow-lg' : canAddBusiness ? 'text-slate-500 hover:text-slate-300' : 'text-slate-700 cursor-not-allowed'}`}
+                                title={!canAddBusiness ? 'Ya tienes un negocio registrado' : 'Registrar Negocio'}
                             >
                                 <Store className="w-6 h-6" />
                                 <span className="text-[10px] font-black uppercase tracking-widest">Negocio</span>
+                                {!canAddBusiness && <span className="text-[8px] text-slate-600">Ya tienes uno</span>}
                             </button>
                             <button
                                 type="button"
+                                disabled={!canAddReference}
                                 onClick={() => {
-                                    updateField('isReference', true);
+                                    if (canAddReference) updateField('isReference', true);
                                 }}
-                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${data.isReference ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${data.isReference ? 'bg-sky-500 text-white shadow-lg' : canAddReference ? 'text-slate-500 hover:text-slate-300' : 'text-slate-700 cursor-not-allowed'}`}
+                                title={!canAddReference ? 'Ya tienes un punto de referencia' : 'Registrar Punto de Referencia'}
                             >
                                 <MapPin className="w-6 h-6" />
                                 <span className="text-[10px] font-black uppercase tracking-widest">Referencia</span>
+                                {!canAddReference && <span className="text-[8px] text-slate-600">Ya tienes uno</span>}
                             </button>
                         </div>
                     </div>
@@ -132,28 +150,10 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
 
                         <div>
                             <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Icono del Mapa</label>
-                            <div className="flex flex-wrap gap-2 p-2 bg-slate-800/30 rounded-2xl border border-white/5">
-                                {MAP_ICONS.slice(0, 5).map(i => (
-                                    <button
-                                        key={i.id}
-                                        type="button"
-                                        onClick={() => updateField('icon', i.id)}
-                                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${data.icon === i.id ? 'bg-orange-500 scale-110' : 'bg-slate-800/50 border border-transparent'}`}
-                                        title={i.label}
-                                    >
-                                        {i.emoji}
-                                    </button>
-                                ))}
-                                <select 
-                                    className="bg-transparent text-slate-400 text-[10px] outline-none max-w-[80px]"
-                                    onChange={(e) => updateField('icon', e.target.value)}
-                                    value={MAP_ICONS.some(icon => icon.id === data.icon) ? data.icon : 'map'}
-                                >
-                                    {MAP_ICONS.map(i => (
-                                        <option key={i.id} value={i.id}>{i.label}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            <IconSelector 
+                                value={data.icon || 'palmtree'} 
+                                onChange={(iconId) => updateField('icon', iconId)} 
+                            />
                         </div>
                     </div>
 
@@ -203,7 +203,8 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                 value={data.locality || 'Montañita'}
                                 onChange={(e) => {
                                     const newLoc = e.target.value;
-                                    const locObj = LOCALITIES.find(l => l.name === newLoc);
+                                    const allLocalities = [...LOCALITIES, ...(customLocalities || [])];
+                                    const locObj = allLocalities.find(l => l.name === newLoc);
                                     if (isRegistration) {
                                         setBizForm({
                                             ...bizForm,
@@ -223,7 +224,7 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                 }}
                                 className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none appearance-none transition-all"
                             >
-                                {LOCALITIES.map(l => (
+                                {[...LOCALITIES, ...(customLocalities || [])].map(l => (
                                     <option key={l.name} value={l.name}>{l.name}</option>
                                 ))}
                             </select>
@@ -396,6 +397,145 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                     className="hidden"
                 />
             </div>
+        </div>
+    );
+};
+
+const ICON_CATEGORIES = [
+    { name: 'Gastronomía', icons: [
+        { id: 'MdRestaurant', lib: 'md' }, { id: 'MdLocalCafe', lib: 'md' }, { id: 'MdLocalBar', lib: 'md' },
+        { id: 'GiCocktail', lib: 'gi' }, { id: 'MdBakeryDining', lib: 'md' }, { id: 'MdFastfood', lib: 'md' },
+        { id: 'BiFoodMenu', lib: 'bi' }, { id: 'GiPizza', lib: 'gi' }, { id: 'MdBrunchDining', lib: 'md' },
+    ]},
+    { name: 'Diversión', icons: [
+        { id: 'GiPartyPopper', lib: 'gi' }, { id: 'BiSolidMoon', lib: 'bi' }, { id: 'MdNightlife', lib: 'md' },
+        { id: 'MdMusicNote', lib: 'md' }, { id: 'GiMicrophone', lib: 'gi' }, { id: 'BsStars', lib: 'bs' },
+    ]},
+    { name: 'Surf/Playa', icons: [
+        { id: 'BiSwim', lib: 'bi' }, { id: 'MdSurfing', lib: 'md' }, { id: 'BiBeach', lib: 'bi' },
+        { id: 'BiSolidBeach', lib: 'bi' }, { id: 'GiSailboat', lib: 'gi' }, { id: 'MdKitesurfing', lib: 'md' },
+        { id: 'BiSolidWaves', lib: 'bi' }, { id: 'MdBeachAccess', lib: 'md' },
+    ]},
+    { name: 'Hospedaje', icons: [
+        { id: 'MdHotel', lib: 'md' }, { id: 'MdVilla', lib: 'md' }, { id: 'MdCabin', lib: 'md' },
+        { id: 'MdHouse', lib: 'md' }, { id: 'MdBeachAccess', lib: 'md' }, { id: 'MdCamping', lib: 'md' },
+    ]},
+    { name: 'Naturaleza', icons: [
+        { id: 'BsTree', lib: 'bs' }, { id: 'PiTree', lib: 'pi' }, { id: 'GiMountaintop', lib: 'gi' },
+        { id: 'MdForest', lib: 'md' }, { id: 'GiCampfire', lib: 'gi' }, { id: 'MdPark', lib: 'md' },
+    ]},
+    { name: 'Servicios', icons: [
+        { id: 'MdStore', lib: 'md' }, { id: 'MdShoppingBag', lib: 'md' }, { id: 'MdLocalPharmacy', lib: 'md' },
+        { id: 'MdLocalHospital', lib: 'md' }, { id: 'MdAccountBalance', lib: 'md' }, { id: 'MdLocalGasStation', lib: 'md' },
+        { id: 'MdLocalParking', lib: 'md' }, { id: 'MdDirectionsBus', lib: 'md' }, { id: 'MdSchool', lib: 'md' },
+    ]},
+    { name: 'Cultura', icons: [
+        { id: 'GiChurch', lib: 'gi' }, { id: 'MdPalette', lib: 'md' }, { id: 'GiGreekTemple', lib: 'gi' },
+        { id: 'GiAnchor', lib: 'gi' }, { id: 'MdMuseum', lib: 'md' }, { id: 'GiHeartInside', lib: 'gi' },
+    ]},
+    { name: 'Deporte', icons: [
+        { id: 'MdFitnessCenter', lib: 'md' }, { id: 'MdDirectionsBike', lib: 'md' }, { id: 'GiVolleyballBall', lib: 'gi' },
+        { id: 'GiBiceps', lib: 'gi' }, { id: 'MdSportsTennis', lib: 'md' }, { id: 'MdSpa', lib: 'md' },
+    ]},
+    { name: 'Otros', icons: [
+        { id: 'MdLocationOn', lib: 'md' }, { id: 'MdPhotoCamera', lib: 'md' }, { id: 'MdCall', lib: 'md' },
+        { id: 'MdInfo', lib: 'md' }, { id: 'MdStar', lib: 'md' }, { id: 'MdDiamond', lib: 'md' },
+    ]},
+];
+
+const getIcon = (iconId: string, lib: string) => {
+    if (lib === 'md' && Icons[iconId as keyof typeof Icons]) return React.createElement(Icons[iconId as keyof typeof Icons] as any);
+    if (lib === 'bi' && BiIcons[iconId as keyof typeof BiIcons]) return React.createElement(BiIcons[iconId as keyof typeof BiIcons] as any);
+    if (lib === 'gi' && GiIcons[iconId as keyof typeof GiIcons]) return React.createElement(GiIcons[iconId as keyof typeof GiIcons] as any);
+    if (lib === 'pi' && PiIcons[iconId as keyof typeof PiIcons]) return React.createElement(PiIcons[iconId as keyof typeof PiIcons] as any);
+    if (lib === 'bs' && BsIcons[iconId as keyof typeof BsIcons]) return React.createElement(BsIcons[iconId as keyof typeof BsIcons] as any);
+    return null;
+};
+
+const IconSelector: React.FC<{ value: string; onChange: (id: string) => void }> = ({ value, onChange }) => {
+    const [search, setSearch] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+
+    const currentIcon = MAP_ICONS.find(i => i.id === value);
+    const currentLib = currentIcon?.icon?.split(/(Md|Bi|Gi|Pi|Bs)/)[2];
+    const currentLibPrefix = currentIcon?.icon?.match(/^[A-Za-z]*/)?.[0] || 'md';
+    const iconKey = `${currentLibPrefix.charAt(0).toUpperCase()}${currentLibPrefix.slice(1)}${currentLib}`;
+
+    const filteredCategories = ICON_CATEGORIES.map(cat => ({
+        ...cat,
+        icons: cat.icons.filter(icon => 
+            icon.id.toLowerCase().includes(search.toLowerCase()) ||
+            cat.name.toLowerCase().includes(search.toLowerCase())
+        )
+    })).filter(cat => cat.icons.length > 0 || search === '');
+
+    return (
+        <div className="relative">
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center gap-3 p-3 bg-slate-800/50 border border-white/10 rounded-2xl hover:bg-slate-700/50 transition-all"
+            >
+                <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white">
+                    {currentIcon && getIcon(iconKey, currentLibPrefix.toLowerCase()) || <MdLocationOn />}
+                </div>
+                <div className="flex-1 text-left">
+                    <span className="text-white font-medium text-sm">{currentIcon?.label || 'Seleccionar'}</span>
+                </div>
+                <span className="text-slate-400 text-xs">{currentIcon?.emoji}</span>
+            </button>
+
+            {isOpen && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 rounded-2xl border border-white/10 shadow-2xl z-50 max-h-80 overflow-hidden flex flex-col">
+                    <div className="p-2 border-b border-white/10">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Buscar icono..."
+                                className="w-full bg-slate-700/50 border border-white/5 rounded-xl pl-10 pr-4 py-2 text-white text-sm outline-none focus:border-orange-500/50"
+                            />
+                        </div>
+                    </div>
+                    <div className="overflow-y-auto flex-1 p-2 space-y-3">
+                        {filteredCategories.map(cat => (
+                            <div key={cat.name}>
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2 mb-2">{cat.name}</p>
+                                <div className="grid grid-cols-6 gap-1">
+                                    {cat.icons.map(icon => {
+                                        const fullIconKey = icon.id;
+                                        const isSelected = `${icon.lib.charAt(0).toUpperCase()}${icon.lib.slice(1)}${icon.id}` === iconKey && value.includes(icon.id.toLowerCase());
+                                        return (
+                                            <button
+                                                key={icon.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    const mapIcon = MAP_ICONS.find(i => i.icon === fullIconKey);
+                                                    onChange(mapIcon?.id || icon.id.toLowerCase());
+                                                    setIsOpen(false);
+                                                    setSearch('');
+                                                }}
+                                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                                                    isSelected 
+                                                        ? 'bg-orange-500 text-white scale-110' 
+                                                        : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600 hover:text-white'
+                                                }`}
+                                            >
+                                                {getIcon(fullIconKey, icon.lib)}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                        {filteredCategories.length === 0 && (
+                            <p className="text-center text-slate-500 text-sm py-4">No hay iconos que coincidan</p>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

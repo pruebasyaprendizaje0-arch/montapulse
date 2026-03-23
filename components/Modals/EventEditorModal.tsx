@@ -19,7 +19,8 @@ export const EventEditorModal: React.FC = () => {
         handleImageUpload,
         generatedDesc,
         businesses,
-        events
+        events,
+        customLocalities
     } = useData();
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -173,7 +174,7 @@ export const EventEditorModal: React.FC = () => {
                                 value={newEvent.locality}
                                 onChange={e => setNewEvent({ ...newEvent, locality: e.target.value, sector: (LOCALITY_SECTORS[e.target.value] || [])[0] || Sector.CENTRO })}
                             >
-                                {LOCALITIES.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
+                                {[...LOCALITIES, ...(customLocalities || [])].map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                             </select>
                         </div>
                         <div className="space-y-2">

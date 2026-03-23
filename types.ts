@@ -23,7 +23,11 @@ export enum Vibe {
   TECHNO = 'Techno',
   FAMILIA = 'Familia',
   WELLNESS = 'Wellness',
-  FIESTA = 'Fiesta'
+  FIESTA = 'Fiesta',
+  SURF = 'Surf',
+  GASTRONOMIA = 'Gastronomía',
+  FUTBOL = 'Fútbol',
+  OTRO = 'Otro'
 }
 
 export enum BusinessCategory {
@@ -67,6 +71,7 @@ export interface UserProfile {
   plan: SubscriptionPlan;
   pulsePassActive?: boolean;
   locality?: string;
+  acceptedTerms?: boolean;
 }
 
 export interface Business {
@@ -176,6 +181,20 @@ export interface ServiceCategory {
   items: ServiceItem[];
 }
 
+export interface HelpSupportItem {
+  id: string;
+  label: string;
+  type: 'email' | 'whatsapp' | 'link' | 'toast';
+  value: string;
+  icon: string;
+}
+
+export interface HelpSupportSettings {
+  items: HelpSupportItem[];
+}
+
 export type AgendaRange = 'day' | 'week' | 'month';
 
-export type ViewType = 'explore' | 'calendar' | 'favorites' | 'host' | 'history' | 'all-favorites' | 'plans' | 'community' | 'chat' | 'admin-users' | 'info';
+export type ViewType = 'explore' | 'calendar' | 'favorites' | 'host' | 'history' | 'all-favorites' | 'plans' | 'community' | 'chat'    | 'admin-users'
+    | 'policies'
+ | 'info';

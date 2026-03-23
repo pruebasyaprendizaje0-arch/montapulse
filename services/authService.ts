@@ -69,7 +69,8 @@ export const registerWithEmail = async (
             role,
             preferredVibe: Vibe.RELAX,
             avatarUrl: avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0ea5e9&color=fff&size=200`,
-            plan: SubscriptionPlan.VISITOR
+            plan: SubscriptionPlan.VISITOR,
+            acceptedTerms: true
         });
 
         return result.user;

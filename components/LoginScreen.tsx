@@ -11,8 +11,13 @@ export const LoginScreen: React.FC = () => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [termsAccepted, setTermsAccepted] = useState(false);
 
     const handleGoogleLogin = async () => {
+        if (!termsAccepted) {
+            setError('Debes aceptar los términos y condiciones antes de continuar');
+            return;
+        }
         setLoading(true);
         setError('');
         try {
@@ -90,6 +95,34 @@ export const LoginScreen: React.FC = () => {
                                 </svg>
                                 <span>{loading ? 'Signing in...' : 'Sign in with Google'}</span>
                             </button>
+
+                            {/* Terms and Conditions for Google */}
+                            <div className="flex items-start gap-3 mt-4 mb-2 p-2 bg-white/5 rounded-2xl border border-white/5">
+                                <div className="flex items-center h-5">
+                                    <input
+                                        id="terms-google"
+                                        type="checkbox"
+                                        checked={termsAccepted}
+                                        onChange={(e) => setTermsAccepted(e.target.checked)}
+                                        className="w-4 h-4 bg-slate-800 border-slate-700 rounded text-orange-500 focus:ring-orange-500/20"
+                                    />
+                                </div>
+                                <label htmlFor="terms-google" className="text-[10px] text-slate-400 leading-tight select-none">
+                                    Acepto los <button
+                                        type="button"
+                                        onClick={() => window.open('/policies', '_blank')}
+                                        className="text-orange-500 hover:text-orange-400 font-bold"
+                                    >
+                                        términos del servicio
+                                    </button> y la <button
+                                        type="button"
+                                        onClick={() => window.open('/policies', '_blank')}
+                                        className="text-orange-500 hover:text-orange-400 font-bold"
+                                    >
+                                        política de privacidad
+                                    </button> de Montapulse.
+                                </label>
+                            </div>
 
                             {/* Divider */}
                             <div className="flex items-center gap-4 my-6">

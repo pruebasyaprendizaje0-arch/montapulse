@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, MapPin, MessageCircle, Phone, Instagram, Globe, Calendar, Star, Zap, UserPlus, UserCheck, Send } from 'lucide-react';
+import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight } from 'lucide-react';
 import { Business, UserProfile, MontanitaEvent, BusinessReview } from '../types';
 import { useData } from '../context/DataContext';
 import { subscribeToBusinessReviews, addBusinessReview } from '../services/firestoreService';
@@ -19,7 +19,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     businessId,
     userId
 }) => {
-    const { businesses, events, allUsers, handleToggleFollow, isBusinessFollowed } = useData();
+    const { businesses, events, allUsers, handleToggleFollow, isBusinessFollowed, setPublicProfileId, setPublicProfileType, setShowPublicProfile } = useData();
     const { user: currentUser } = useAuthContext();
     const { showToast } = useToast();
     const [reviews, setReviews] = useState<BusinessReview[]>([]);
@@ -31,6 +31,15 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     const userProfile = userId ? allUsers.find(u => u.id === userId) : null;
 
     const isFollowing = businessId ? isBusinessFollowed(businessId) : false;
+
+    // If viewing a user: find their business. If viewing a business: find the owner user.
+    const linkedBusiness = userProfile
+        ? (userProfile.businessId ? businesses.find(b => b.id === userProfile.businessId) : null)
+        : null;
+
+    const owner = business
+        ? allUsers.find(u => u.businessId === business.id || u.id === business.ownerId)
+        : userProfile;
 
     useEffect(() => {
         if (businessId && isOpen) {
@@ -61,8 +70,17 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
         }
     };
 
-    // If we only have businessId, try to find the owner for extra info
-    const owner = business ? allUsers.find(u => u.businessId === business.id) : userProfile;
+    const openLinkedBusiness = (biz: Business) => {
+        setPublicProfileId(biz.id);
+        setPublicProfileType('business');
+        setShowPublicProfile(true);
+    };
+
+    const openLinkedUser = (uid: string) => {
+        setPublicProfileId(uid);
+        setPublicProfileType('user');
+        setShowPublicProfile(true);
+    };
 
     if (!isOpen || (!business && !owner)) return null;
 
@@ -72,9 +90,12 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
         (userId && e.ownerId === userId)
     ).slice(0, 3);
 
-    const displayName = business?.name || `${owner?.name} ${owner?.surname}`;
-    const avatar = business?.imageUrl || owner?.avatarUrl || "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=300&q=80";
+    const displayName = business?.name || `${owner?.name || ''} ${owner?.surname || ''}`.trim();
+    const avatar = business?.imageUrl || owner?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=4f46e5&color=fff`;
     const bio = business?.description || "Ciudadano activo de la ruta Spondylus. ¡Nos vemos en el próximo pulso!";
+
+    // Email to display: for businesses prioritise business.email, fallback to owner's email
+    const contactEmail = business?.email || owner?.email || null;
 
     return (
         <div
@@ -82,11 +103,11 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
             onClick={onClose}
         >
             <div
-                className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl animate-in zoom-in duration-300"
+                className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto no-scrollbar"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Profile Header */}
-                <div className="relative h-48 bg-gradient-to-br from-indigo-600 to-purple-800">
+                <div className="relative h-48 bg-gradient-to-br from-indigo-600 to-purple-800 shrink-0">
                     <button
                         onClick={onClose}
                         className="absolute top-6 right-6 p-2 bg-black/20 hover:bg-black/40 rounded-full text-white/80 hover:text-white transition-all z-10"
@@ -103,6 +124,17 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                             loading="lazy"
                         />
                     </div>
+
+                    {/* Business / User badge top right */}
+                    <div className="absolute top-6 left-6 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 backdrop-blur-sm">
+                        {business
+                            ? <Store className="w-3.5 h-3.5 text-amber-400" />
+                            : <User className="w-3.5 h-3.5 text-sky-400" />
+                        }
+                        <span className="text-[9px] font-black uppercase tracking-widest text-white/80">
+                            {business ? 'Negocio' : 'Miembro'}
+                        </span>
+                    </div>
                 </div>
 
                 <div className="pt-16 p-8 space-y-6">
@@ -112,17 +144,27 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                             <h2 className="text-2xl font-black text-white">{displayName}</h2>
                             {business && <Star className="w-5 h-5 text-amber-400 fill-current" />}
                         </div>
-                        <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+                        <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest flex-wrap">
                             <MapPin className="w-3 h-3" />
                             {business?.locality || "Montañita"}
                             <span>•</span>
                             {business?.category || "Explorador"}
                             <span>•</span>
-                            {business 
-                                ? (business.isReference || business.id?.startsWith('ref-') ? 'Punto de Referencia Verificado' : 'Negocio Verificado') 
+                            {business
+                                ? (business.isReference || business.id?.startsWith('ref-') ? 'Punto de Referencia Verificado' : 'Negocio Verificado')
                                 : 'Explorador Pulse'
                             }
                         </div>
+
+                        {/* Email asociado */}
+                        {contactEmail && (
+                            <div className="flex items-center gap-2 mt-2">
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
+                                    <Mail className="w-3 h-3 text-indigo-400" />
+                                    <span className="text-[10px] font-black text-indigo-300 tracking-wide">{contactEmail}</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Bio */}
@@ -145,6 +187,76 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                             <p className="text-[10px] text-slate-500 font-bold uppercase">Rating</p>
                         </div>
                     </div>
+
+                    {/* ────────────────────────────────────────────────────
+                        LINKED BUSINESS CARD: shown when viewing a MEMBER
+                    ──────────────────────────────────────────────────── */}
+                    {linkedBusiness && (
+                        <div className="space-y-2">
+                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <Building2 className="w-3 h-3 text-amber-400" />
+                                Su Negocio
+                            </h3>
+                            <button
+                                onClick={() => openLinkedBusiness(linkedBusiness)}
+                                className="w-full flex items-center gap-4 p-4 bg-slate-800/60 rounded-2xl border border-white/5 hover:border-amber-500/30 transition-all group"
+                            >
+                                <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/10">
+                                    <img
+                                        src={linkedBusiness.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(linkedBusiness.name)}&background=f59e0b&color=fff`}
+                                        alt={linkedBusiness.name}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                                <div className="flex-1 text-left min-w-0">
+                                    <p className="text-sm font-black text-white truncate">{linkedBusiness.name}</p>
+                                    <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest">{linkedBusiness.category}</p>
+                                    {linkedBusiness.email && (
+                                        <div className="flex items-center gap-1 mt-0.5">
+                                            <Mail className="w-2.5 h-2.5 text-slate-500" />
+                                            <span className="text-[9px] text-slate-500">{linkedBusiness.email}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-colors shrink-0" />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ────────────────────────────────────────────────────
+                        OWNER MEMBER CARD: shown when viewing a BUSINESS
+                    ──────────────────────────────────────────────────── */}
+                    {business && owner && (
+                        <div className="space-y-2">
+                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <User className="w-3 h-3 text-sky-400" />
+                                Perfil del Propietario
+                            </h3>
+                            <button
+                                onClick={() => openLinkedUser(owner.id)}
+                                className="w-full flex items-center gap-4 p-4 bg-slate-800/60 rounded-2xl border border-white/5 hover:border-sky-500/30 transition-all group"
+                            >
+                                <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 border-white/10">
+                                    <img
+                                        src={owner.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(`${owner.name} ${owner.surname}`)}&background=0ea5e9&color=fff`}
+                                        alt={`${owner.name} ${owner.surname}`}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                                <div className="flex-1 text-left min-w-0">
+                                    <p className="text-sm font-black text-white truncate">{owner.name} {owner.surname}</p>
+                                    <p className="text-[10px] text-sky-400 font-bold uppercase tracking-widest">Miembro Verificado</p>
+                                    {owner.email && (
+                                        <div className="flex items-center gap-1 mt-0.5">
+                                            <Mail className="w-2.5 h-2.5 text-slate-500" />
+                                            <span className="text-[9px] text-slate-500">{owner.email}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-sky-400 transition-colors shrink-0" />
+                            </button>
+                        </div>
+                    )}
 
                     {/* Public Activities / Pulses */}
                     {publicPulses.length > 0 && (
@@ -263,14 +375,13 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                                 Contactar
                             </a>
                         )}
-                        {business?.instagram && (
+                        {contactEmail && (
                             <a
-                                href={`https://instagram.com/${business.instagram.replace('@', '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-4 bg-slate-800 rounded-2xl border border-white/10 text-slate-400 hover:text-white transition-all"
+                                href={`mailto:${contactEmail}`}
+                                className="p-4 bg-slate-800 rounded-2xl border border-white/10 text-slate-400 hover:text-indigo-400 hover:border-indigo-500/30 transition-all"
+                                title={`Enviar email a ${contactEmail}`}
                             >
-                                <Instagram className="w-5 h-5" />
+                                <Mail className="w-5 h-5" />
                             </a>
                         )}
                     </div>

@@ -43,6 +43,7 @@ export const PulseModal: React.FC = () => {
     } = useData();
 
     const [activeTab, setActiveTab] = useState<'all' | 'events' | 'posts' | 'references'>('all');
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
     const REFERENCE_CATEGORIES = [
         BusinessCategory.REFERENCIA,
@@ -54,22 +55,34 @@ export const PulseModal: React.FC = () => {
         BusinessCategory.PLAYA,
         BusinessCategory.OTRO,
         BusinessCategory.HOTEL,
-        BusinessCategory.HOSTAL
+        BusinessCategory.HOSTAL,
+        BusinessCategory.HOSPAJE,
+        BusinessCategory.RESTAURANTE,
+        BusinessCategory.BAR,
+        BusinessCategory.DISCOTECA,
+        BusinessCategory.BAR_DISCOTECA,
+        BusinessCategory.CENTRO_SURF,
+        BusinessCategory.ESCUELA_SURF,
+        BusinessCategory.TOUR_OPERATOR,
+        BusinessCategory.SHOPPING,
+        BusinessCategory.TRANSPORT
     ];
 
     const referencePoints = useMemo(() => {
         return (businesses || []).filter((b: any) => 
             b.locality === currentLocality?.name && 
-            REFERENCE_CATEGORIES.includes(b.category)
+            REFERENCE_CATEGORIES.includes(b.category) &&
+            (!selectedCategory || b.category === selectedCategory)
         );
-    }, [businesses, currentLocality]);
+    }, [businesses, currentLocality, selectedCategory]);
 
     const premiumBusinesses = useMemo(() => {
         return (businesses || []).filter((b: any) => 
             b.locality === currentLocality?.name && 
-            b.plan === SubscriptionPlan.PREMIUM
+            b.plan === SubscriptionPlan.PREMIUM &&
+            (!selectedCategory || b.category === selectedCategory)
         );
-    }, [businesses, currentLocality]);
+    }, [businesses, currentLocality, selectedCategory]);
     const [searchQuery, setSearchQuery] = useState('');
 
     const today = new Date();
@@ -101,6 +114,10 @@ export const PulseModal: React.FC = () => {
             [Vibe.ADRENALINA]: 'bg-red-500/20 border-red-500/30 text-red-400',
             [Vibe.FAMILIA]: 'bg-amber-500/20 border-amber-500/30 text-amber-400',
             [Vibe.WELLNESS]: 'bg-violet-500/20 border-violet-500/30 text-violet-400',
+            [Vibe.SURF]: 'bg-sky-500/20 border-sky-500/30 text-sky-400',
+            [Vibe.GASTRONOMIA]: 'bg-orange-500/20 border-orange-500/30 text-orange-400',
+            [Vibe.FUTBOL]: 'bg-green-500/20 border-green-500/30 text-green-400',
+            [Vibe.OTRO]: 'bg-slate-500/20 border-slate-500/30 text-slate-400',
         };
         return colors[vibe] || 'bg-slate-500/20 border-slate-500/30 text-slate-400';
     };
@@ -495,6 +512,38 @@ export const PulseModal: React.FC = () => {
 
                         {activeTab === 'references' && (
                             <div className="space-y-6">
+                                {/* Category Filter */}
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        onClick={() => setSelectedCategory(null)}
+                                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                            selectedCategory === null 
+                                                ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' 
+                                                : 'bg-white/5 text-slate-500 border border-white/10 hover:text-white'
+                                        }`}
+                                    >
+                                        Todos ({referencePoints.length + premiumBusinesses.length})
+                                    </button>
+                                    {Object.values(BusinessCategory).map(cat => {
+                                        const count = (referencePoints.length + premiumBusinesses.length) || 0;
+                                        const catCount = (businesses || []).filter((b: any) => b.category === cat && b.locality === currentLocality?.name).length;
+                                        if (catCount === 0) return null;
+                                        return (
+                                            <button
+                                                key={cat}
+                                                onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
+                                                className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                    selectedCategory === cat 
+                                                        ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' 
+                                                        : 'bg-white/5 text-slate-500 border border-white/10 hover:text-white'
+                                                }`}
+                                            >
+                                                {cat} ({catCount})
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                
                                 {premiumBusinesses.length > 0 && (
                                     <>
                                         <div className="flex items-center gap-3 mb-4">
