@@ -364,7 +364,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="relative h-[100dvh] w-screen bg-slate-900 overflow-hidden flex flex-row font-sans select-none">
       <Sidebar />
-      <div className={`flex-1 flex flex-col h-full relative ${activeView === 'favorites' || activeView === 'admin-users' ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+      <div className={`flex-1 flex flex-col h-full relative ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
       <div className="fixed top-0 left-0 lg:left-64 right-0 z-50 bg-slate-900/60 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-6">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20 rotate-3">
@@ -414,7 +414,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <main className={`flex-1 lg:pt-0 pt-16 ${activeView === 'favorites' || activeView === 'admin-users' ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: activeView === 'favorites' || activeView === 'admin-users' ? 'auto' : '100%', minHeight: '0' }}>
+      <main className={`flex-1 lg:pt-0 pt-16 ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
         {renderView()}
       </main>
       </div>

@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Lock, FileText, ChevronLeft, ArrowRight, Edit3, Save, X, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
-import { useAuthContext } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { PolicyData, PolicySection } from '../types';
 
 export const Policies: React.FC = () => {
     const navigate = useNavigate();
-    const { policyData, handleUpdatePolicies } = useData();
-    const { isSuperUser } = useAuthContext();
+    const { policyData, handleUpdatePolicies, isSuperUser } = useData();
+    const { showToast, showConfirm } = useToast();
     const [isEditing, setIsEditing] = useState(false);
     const [editForm, setEditForm] = useState<PolicyData>(policyData);
 
@@ -28,11 +28,20 @@ export const Policies: React.FC = () => {
         }));
     };
 
-    const removeSection = (type: 'terms' | 'privacy', index: number) => {
-        setEditForm(prev => ({
-            ...prev,
-            [type]: prev[type].filter((_, i) => i !== index)
-        }));
+    const removeSection = async (type: 'terms' | 'privacy', index: number) => {
+        const section = editForm[type][index];
+        const confirmed = await showConfirm(
+            `¿Estás seguro de que deseas eliminar la sección "${section.title || 'sin título'}"?`,
+            'Eliminar Sección'
+        );
+        
+        if (confirmed) {
+            setEditForm(prev => ({
+                ...prev,
+                [type]: prev[type].filter((_, i) => i !== index)
+            }));
+            showToast('Sección eliminada temporalmente. No olvides guardar cambios.', 'info');
+        }
     };
 
     const updateSection = (type: 'terms' | 'privacy', index: number, field: keyof PolicySection, value: string) => {
@@ -60,7 +69,7 @@ export const Policies: React.FC = () => {
     );
 
     return (
-        <div className="min-h-screen bg-slate-950 text-white overflow-y-auto pb-32 selection:bg-orange-500/30">
+        <div className="h-auto bg-slate-950 text-white pb-32 selection:bg-orange-500/30">
             {/* Background Decorative Elements */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-orange-500/10 blur-[120px] rounded-full" />

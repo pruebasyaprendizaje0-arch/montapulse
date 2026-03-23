@@ -31,7 +31,7 @@ interface PassportProps {
 export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { user, setUser, authUser, logout, isAdmin, loading: authLoading } = useAuthContext();
+    const { user, setUser, authUser, logout, isAdmin, isSuperAdmin, isSuperUser, toggleSuperUser, loading: authLoading } = useAuthContext();
     const {
         events,
         businesses,
@@ -658,11 +658,23 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             </button>
 
                             <button
-                                onClick={() => navigate('/admin-users')}
-                                className="w-full bg-[#111111] text-sky-400 font-black py-4 rounded-2xl border border-sky-500/30 flex items-center justify-center gap-2 hover:bg-white/5 transition-all uppercase tracking-[0.2em] text-[10px]"
+                                onClick={toggleSuperUser}
+                                className={`w-full py-4 rounded-2xl border transition-all uppercase tracking-[0.2em] text-[10px] font-black flex items-center justify-center gap-2 ${
+                                    isSuperUser 
+                                    ? 'bg-sky-500 text-white border-sky-400 shadow-lg shadow-sky-500/20' 
+                                    : 'bg-[#111111] text-sky-400 border-sky-500/30 hover:bg-white/5'
+                                }`}
                             >
-                                <ShieldCheck className="w-5 h-5" />
-                                <span>Modo SuperUsuario</span>
+                                <ShieldCheck className={`w-5 h-5 ${isSuperUser ? 'animate-pulse' : ''}`} />
+                                <span>{isSuperUser ? 'SuperUsuario: ACTIVO' : 'Activar Modo SuperUsuario'}</span>
+                            </button>
+                            
+                            <button
+                                onClick={() => navigate('/admin-users')}
+                                className="w-full bg-white/5 text-slate-400 font-black py-4 rounded-2xl border border-white/5 flex items-center justify-center gap-2 hover:bg-white/10 transition-all uppercase tracking-[0.2em] text-[10px]"
+                            >
+                                <Users className="w-5 h-5" />
+                                <span>Gestión de Usuarios</span>
                             </button>
                         </div>
                     )}
