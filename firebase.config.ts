@@ -6,6 +6,7 @@ import {
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
+import { getMessaging } from 'firebase/messaging';
 
 const firebaseConfig = {
     apiKey: "AIzaSyB9rX2IUTx99cWvdjTZ7YJD3ouDdordjj8",
@@ -16,11 +17,8 @@ const firebaseConfig = {
     appId: "1:171684408196:web:11eb216bd0b67ab58b0bd1"
 };
 
-// Initialize Firebase app first
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with modern persistent cache (replacement for deprecated enableMultiTabIndexedDbPersistence)
-// This enables offline storage and tab synchronization.
 const db = initializeFirestore(app, {
     localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager()
@@ -29,6 +27,7 @@ const db = initializeFirestore(app, {
 
 const storage = getStorage(app);
 const auth = getAuth(app);
+const messaging = typeof window !== 'undefined' ? getMessaging(app) : null;
 
-export { db, storage, auth };
+export { db, storage, auth, messaging };
 export default app;

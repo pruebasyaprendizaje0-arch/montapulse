@@ -4,6 +4,7 @@ import { useData } from '../../context/DataContext';
 import { useAuthContext } from '../../context/AuthContext';
 import { format, isToday, isTomorrow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { SubscriptionPlan } from '../../types';
 
 interface PulsePassModalProps {
     isOpen: boolean;
@@ -17,7 +18,7 @@ export const PulsePassModal: React.FC<PulsePassModalProps> = ({ isOpen, onClose,
     const [filter, setFilter] = useState<'all' | 'today' | 'upcoming'>('all');
 
     const premiumBusinesses = useMemo(() => {
-        return businesses.filter(b => b.plan === 'Premium');
+        return businesses.filter(b => b.plan === SubscriptionPlan.BASIC || b.plan === SubscriptionPlan.EXPERT);
     }, [businesses]);
 
     const exclusiveOffers = useMemo(() => {
@@ -117,7 +118,7 @@ export const PulsePassModal: React.FC<PulsePassModalProps> = ({ isOpen, onClose,
                     {exclusiveOffers.length > 0 ? (
                         exclusiveOffers.map(offer => {
                             const business = businesses.find(b => b.id === offer.businessId);
-                            const isPremium = business?.plan === 'Premium';
+                            const isPremium = business?.plan === SubscriptionPlan.BASIC || business?.plan === SubscriptionPlan.EXPERT;
                             
                             return (
                                 <div 

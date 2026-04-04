@@ -71,7 +71,7 @@ export const LoginScreen: React.FC = () => {
                     <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-600 rounded-3xl shadow-2xl shadow-orange-500/30 mb-4">
                         <Lock className="w-10 h-10 text-white" />
                     </div>
-                    <h1 translate="no" className="text-4xl font-black text-white tracking-tight mb-2 notranslate">Spondylus Pulse</h1>
+                    <h1 translate="no" className="text-4xl font-black text-white tracking-tight mb-2 notranslate uppercase font-mono">ubicame.info Pulse</h1>
                     <p className="text-slate-400 font-medium">
                         {viewMode === 'register' ? 'Create your account' : 'Welcome back'}
                     </p>
@@ -120,7 +120,7 @@ export const LoginScreen: React.FC = () => {
                                         className="text-orange-500 hover:text-orange-400 font-bold"
                                     >
                                         política de privacidad
-                                    </button> de Montapulse.
+                                    </button> de ubicame.info Pulse.
                                 </label>
                             </div>
 
@@ -226,7 +226,7 @@ export const LoginScreen: React.FC = () => {
 
                 {/* Footer */}
                 <p className="text-center text-slate-500 text-sm mt-6">
-                    🌊 Discover the best events along the Spondylus Route
+                    🌊 Discover the best events with ubicame.info Pulse
                 </p>
             </div>
         </div>

@@ -1,20 +1,56 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
 
 :root {
+    --bg-light: #f0f2f5;
     --bg-dark: #0f172a;
     --bg-darker: #020617;
-    --brand: #f97316;
-    --primary: #f97316; /* Making Orange the primary brand color for consistency */
-    --primary-glow: rgba(249, 115, 22, 0.4);
-    --secondary: #0ea5e9; /* Sky Blue */
-    --secondary-glow: rgba(14, 165, 233, 0.4);
-    --accent: #f43f5e; /* Rose */
-    --success: #10b981; /* Emerald */
-    --glass: rgba(15, 23, 42, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --text-dim: #94a3b8;
+    --brand-primary: #f97316; /* Orange 500 */
+    --brand-secondary: #f59e0b; /* Amber 500 */
+    --brand-accent: #25d366; 
+    --text-primary: #111b21;
+    --text-secondary: #667781;
+    --message-out: #004d40;
+    --message-in: #ffffff;
+    --white: #ffffff;
+    --border-light: rgba(0, 0, 0, 0.05);
+
+    /* Default Theme Variables (Light) */
+    --bg-main: var(--bg-light);
+    --bg-surface: #ffffff;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --border-main: rgba(0, 0, 0, 0.1);
+    --glass: rgba(255, 255, 255, 0.8);
+    --glass-border: rgba(0, 0, 0, 0.05);
+    --primary-glow: rgba(249, 115, 22, 0.2);
+}
+
+html.dark {
+    --bg-main: #0f172a;
+    --bg-surface: #1e293b;
     --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-main: rgba(255, 255, 255, 0.1);
+    --glass: rgba(15, 23, 42, 0.8);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --primary-glow: rgba(249, 115, 22, 0.4);
+}
+
+html.night {
+    --bg-main: #020617;
+    --bg-surface: #0f172a;
+    --text-main: #f1f5f9;
+    --text-muted: #64748b;
+    --border-main: rgba(255, 255, 255, 0.05);
+    --glass: rgba(2, 6, 23, 0.9);
+    --glass-border: rgba(255, 255, 255, 0.05);
+    --primary-glow: rgba(249, 115, 22, 0.6);
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
 }
 
 * {
@@ -26,8 +62,8 @@ body {
     margin: 0;
     padding: 0;
     font-family: 'Plus Jakarta Sans', sans-serif;
-    background-color: var(--bg-darker);
-    color: #f8fafc;
+    background-color: var(--bg-light);
+    color: var(--text-primary);
     overflow-x: hidden;
     letter-spacing: -0.01em;
     height: 100dvh;
@@ -43,6 +79,25 @@ body {
 
 .glow-primary {
     box-shadow: 0 0 20px var(--primary-glow);
+}
+
+@keyframes like-pop {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+@keyframes like-particle {
+  0% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(var(--velocity) * -100px)); opacity: 0; }
+}
+
+.animate-like-pop {
+  animation: like-pop 0.6s cubic-bezier(0.17, 0.89, 0.32, 1.49) forwards;
+}
+
+.animate-like-particle {
+  animation: like-particle 0.8s ease-out forwards;
 }
 
 .text-gradient {
@@ -104,6 +159,19 @@ body {
 
 .animate-slide-up {
     animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes spin-slow {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin-slow {
+    animation: spin-slow 12s linear infinite;
 }
 
 .glass-shimmer {
@@ -199,4 +267,57 @@ body {
 
 .vibe-default {
     transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Premium Pulsar Design Tokens */
+@keyframes pulsar-shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+}
+
+.text-pulsar-premium {
+    background: linear-gradient(90deg, #f97316, #f59e0b, #ef4444, #f97316);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: pulsar-shimmer 4s linear infinite;
+}
+
+.text-pulsar-expert {
+    background: linear-gradient(90deg, #fbbf24, #f59e0b, #d97706, #fbbf24);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: pulsar-shimmer 3s linear infinite;
+}
+
+.expert-glow {
+    box-shadow: 0 0 30px rgba(245, 158, 11, 0.15), inset 0 0 10px rgba(245, 158, 11, 0.1);
+}
+
+.premium-glow {
+    box-shadow: 0 0 30px rgba(14, 165, 233, 0.15), inset 0 0 10px rgba(14, 165, 233, 0.1);
+}
+
+@keyframes float-gentle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.animate-float-premium {
+    animation: float-gentle 6s ease-in-out infinite;
+}
+
+.glass-expert {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(15, 23, 42, 0.9));
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.glass-premium {
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(15, 23, 42, 0.9));
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(14, 165, 233, 0.2);
 }

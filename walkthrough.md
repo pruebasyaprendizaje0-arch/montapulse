@@ -54,7 +54,7 @@ We performed a deep scan of the codebase to ensure zero native dialogs remain. T
 ## 4. User Experience Improvements
 
 - **Non-blocking**: The UI remains responsive and beautiful during interactions.
-- **Consistent Branding**: Every modal and toast follows the "Spondylus Pulse" design language (Glassmorphism + Slate/Sky color palette).
+- **Consistent Branding**: Every modal and toast follows the "ubicame.info Pulse" design language (Glassmorphism + Slate/Sky color palette).
 - **Safe Operations**: Critical actions (delete, role change, plan change) are now always confirmed with a clear, readable dialog.
 
 ---

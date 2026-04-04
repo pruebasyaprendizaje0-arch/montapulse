@@ -107,13 +107,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     const newUser: UserProfile = {
                         id: authUser.uid,
-                        name: authUser.displayName?.split(' ')[0] || (isMaster ? 'Super' : 'Visitor'),
+                        name: authUser.displayName?.split(' ')[0] || (isMaster ? 'Super' : 'Free'),
                         surname: authUser.displayName?.split(' ').slice(1).join(' ') || (isMaster ? 'Admin' : ''),
                         email: authUser.email || '',
                         role: defaultRole as any,
                         preferredVibe: Vibe.RELAX,
                         avatarUrl: authUser.photoURL || undefined,
-                        plan: defaultRole === 'admin' ? SubscriptionPlan.PREMIUM : SubscriptionPlan.VISITOR,
+                        plan: defaultRole === 'admin' ? SubscriptionPlan.EXPERT : SubscriptionPlan.FREE,
                         businessId: assignedBusinessId,
                         acceptedTerms: true
                     };
@@ -163,3 +163,5 @@ export const useAuthContext = () => {
     }
     return context;
 };
+
+

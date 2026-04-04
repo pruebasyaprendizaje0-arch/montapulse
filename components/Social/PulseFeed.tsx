@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useData } from '../../context/DataContext';
-import { Sparkles, MessageSquare, Zap, User, Activity, GripVertical, Crown, MapPin } from 'lucide-react';
+import { LikeFeedback } from './LikeFeedback';
+import { Sparkles, MessageSquare, Zap, User, Activity, GripVertical, Crown, MapPin, Heart } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { SubscriptionPlan } from '../../types';
 
 interface PulseItem {
     id: string;
+    realId: string;
     type: 'post' | 'message' | 'rsvp' | 'system';
     user: string;
     action: string;
@@ -14,9 +16,11 @@ interface PulseItem {
     timestamp: Date;
     avatar?: string;
     isPremium?: boolean;
+    isFeatured?: boolean;
     businessName?: string;
     businessLocation?: string;
     businessSector?: string;
+    likes?: string[];
 }
 
 interface PulseFeedProps {
@@ -24,21 +28,35 @@ interface PulseFeedProps {
 }
 
 export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false }) => {
-    const { posts, messages, events, setShowPulseModal, businesses } = useData();
+    const { posts, messages, events, setShowPulseModal, businesses, handleLikePost, toggleFavorite, user, favorites } = useData();
     const [isVisible, setIsVisible] = useState(true);
     
-    // Estado para arrastrar
-    const [position, setPosition] = useState({ x: 0, y: 0 });
+    // Estado para arrastrar con posición inicial por defecto visible
+    const [position, setPosition] = useState({ x: 20, y: 150 });
     const [isDragging, setIsDragging] = useState(false);
     const dragOffset = useRef({ x: 0, y: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
+    const [feedbacks, setFeedbacks] = useState<{ id: number; x: number; y: number }[]>([]);
+
+    const addFeedback = (x: number, y: number) => {
+        const id = Date.now();
+        setFeedbacks(prev => [...prev, { id, x, y }]);
+    };
+
+    const removeFeedback = (id: number) => {
+        setFeedbacks(prev => prev.filter(f => f.id !== id));
+    };
     
     // Cargar posición guardada
     useEffect(() => {
         const savedPosition = localStorage.getItem('pulsefeed_position');
         if (savedPosition) {
             try {
-                setPosition(JSON.parse(savedPosition));
+                const parsed = JSON.parse(savedPosition);
+                // Validar que la posición esté dentro de límites razonables
+                if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+                    setPosition(parsed);
+                }
             } catch (e) {
                 console.error('Error loading position:', e);
             }
@@ -92,19 +110,22 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false })
 
         posts.slice(0, 5).forEach(post => {
             const business = businesses.find(b => b.id === post.authorId);
-            const isPremiumBusiness = business?.plan === SubscriptionPlan.PREMIUM;
+            const isPremiumBusiness = business?.plan === SubscriptionPlan.EXPERT;
             
             items.push({
                 id: `post-${post.id}`,
+                realId: post.id,
                 type: 'post',
                 user: post.authorName,
                 action: isPremiumBusiness ? '★ publicó' : 'publicó en el muro',
                 timestamp: post.timestamp ? new Date(post.timestamp) : new Date(),
                 avatar: post.authorAvatar,
                 isPremium: isPremiumBusiness,
+                isFeatured: post.isFeatured,
                 businessName: business?.name,
                 businessLocation: business?.locality,
-                businessSector: business?.sector
+                businessSector: business?.sector,
+                likes: post.likes || []
             });
         });
 
@@ -115,6 +136,7 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false })
             if (msg.senderId !== 'system') {
                 items.push({
                     id: `msg-${msg.id}`,
+                    realId: msg.id,
                     type: 'message',
                     user: msg.senderName,
                     action: 'envió un mensaje',
@@ -129,6 +151,7 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false })
         events.filter(e => e.interestedCount > 0).slice(0, 3).forEach(event => {
             items.push({
                 id: `rsvp-${event.id}`,
+                realId: event.id,
                 type: 'rsvp',
                 user: 'Alguien',
                 action: `va a ${event.title}`,
@@ -136,7 +159,18 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false })
             });
         });
 
-        return items.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 5);
+        return items.sort((a, b) => {
+            // Priority 1: Featured (Admin/Special)
+            if (a.isFeatured && !b.isFeatured) return -1;
+            if (!a.isFeatured && b.isFeatured) return 1;
+            
+            // Priority 2: Premium
+            if (a.isPremium && !b.isPremium) return -1;
+            if (!a.isPremium && b.isPremium) return 1;
+            
+            // Priority 3: Freshness
+            return b.timestamp.getTime() - a.timestamp.getTime();
+        }).slice(0, 5);
     }, [posts, messages, events]);
 
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -187,7 +221,7 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false })
                     </div>
                 </div>
 
-                <div className="flex flex-col min-w-0">
+                <div className="flex flex-col min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 overflow-hidden">
                         {current.isPremium && (
                             <span className="text-[8px] font-black text-amber-400 uppercase bg-amber-500/20 px-1.5 py-0.5 rounded">
@@ -218,6 +252,46 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false })
                     </button>
                 </div>
 
+                {(current.type === 'post' || current.type === 'rsvp') && (
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            addFeedback(e.clientX, e.clientY);
+                            if (current.type === 'post') {
+                                handleLikePost(current.realId);
+                            } else if (current.type === 'rsvp') {
+                                toggleFavorite(current.realId);
+                            }
+                        }}
+                        className="p-1.5 hover:bg-white/10 rounded-full transition-all group relative border border-white/5 active:scale-95"
+                    >
+                        <Heart 
+                            className={`w-3.5 h-3.5 ${
+                                (current.type === 'post' && current.likes?.includes(user?.uid || user?.id || '')) || 
+                                (current.type === 'rsvp' && favorites.includes(current.realId))
+                                ? 'fill-rose-500 text-rose-500' 
+                                : 'text-slate-400 group-hover:text-rose-400'
+                            }`} 
+                        />
+                        {(current.type === 'post' && current.likes && current.likes.length > 0) && (
+                            <div className="absolute -top-1 -right-1 flex items-center justify-center min-w-[12px] h-[12px] bg-rose-500 rounded-full border border-slate-900 shadow-lg">
+                                <span className="text-[7px] font-black text-white px-0.5">
+                                    {current.likes.length}
+                                </span>
+                            </div>
+                        )}
+                    </button>
+                )}
+
+                {feedbacks.map(f => (
+                    <LikeFeedback 
+                        key={f.id} 
+                        x={f.x} 
+                        y={f.y} 
+                        onComplete={() => removeFeedback(f.id)} 
+                    />
+                ))}
+
                 <button
                     onClick={() => setIsVisible(false)}
                     className="ml-auto p-1 text-slate-600 hover:text-slate-400 transition-colors"
@@ -228,3 +302,5 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false })
         </div>
     );
 };
+
+

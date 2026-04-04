@@ -23,8 +23,8 @@ export const Policies: React.FC = () => {
 
     const handleShare = async () => {
         const shareData = {
-            title: 'Políticas y Privacidad - Montapulse',
-            text: 'Consulta los Términos de Servicio y la Política de Privacidad de Montapulse.',
+            title: 'Políticas y Privacidad - ubicame.info Pulse',
+            text: 'Consulta los Términos de Servicio y la Política de Privacidad de ubicame.info Pulse.',
             url: window.location.href
         };
 
@@ -301,7 +301,7 @@ export const Policies: React.FC = () => {
                                     value={editForm.supportEmail}
                                     onChange={e => setEditForm(prev => ({ ...prev, supportEmail: e.target.value }))}
                                     className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 focus:border-green-500/50 transition-all outline-none"
-                                    placeholder="soporte@montapulse.com"
+                                    placeholder="soporte@ubicame.info"
                                 />
                             </div>
 
@@ -326,7 +326,7 @@ export const Policies: React.FC = () => {
                             <div className="space-y-2">
                                 <h2 className="text-4xl font-black tracking-tight leading-tight">Tu Seguridad es <br/><span className="text-orange-500">Nuestra Prioridad</span></h2>
                                 <p className="text-slate-400 leading-relaxed text-lg max-w-xl mx-auto">
-                                    En Montapulse trabajamos para crear un entorno seguro, transparente y profesional para la comunidad de la Ruta del Spondylus.
+                                    En ubicame.info Pulse trabajamos para crear un entorno seguro, transparente y profesional para la comunidad de la ruta.
                                 </p>
                             </div>
                         </div>

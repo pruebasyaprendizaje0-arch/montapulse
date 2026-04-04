@@ -7,6 +7,7 @@ export interface CompressionOptions {
     maxHeight?: number;
     quality?: number;
     format?: 'image/jpeg' | 'image/png' | 'image/webp';
+    squareCrop?: boolean;
 }
 
 /**
@@ -20,7 +21,8 @@ export const compressImage = (
         maxWidth = 800,
         maxHeight = 800,
         quality = 0.7,
-        format = 'image/jpeg'
+        format = 'image/jpeg',
+        squareCrop = false
     } = options;
 
     return new Promise((resolve, reject) => {
@@ -34,31 +36,62 @@ export const compressImage = (
                 let width = img.width;
                 let height = img.height;
 
-                // Calculate new dimensions maintaining aspect ratio
-                if (width > height) {
-                    if (width > maxWidth) {
-                        height *= maxWidth / width;
-                        width = maxWidth;
+                if (squareCrop) {
+                    // Square crop logic
+                    const size = maxWidth; // Use maxWidth as standard square side
+                    const side = Math.min(width, height);
+                    const sx = (width - side) / 2;
+                    const sy = (height - side) / 2;
+                    
+                    canvas.width = size;
+                    canvas.height = size;
+                    const ctx = canvas.getContext('2d', { alpha: false });
+                    if (ctx) {
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
                     }
                 } else {
-                    if (height > maxHeight) {
-                        width *= maxHeight / height;
-                        height = maxHeight;
+                    // Calculate new dimensions maintaining aspect ratio
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height = Math.round(height * (maxWidth / width));
+                            width = maxWidth;
+                        }
+                        // Check if height still exceeds maxHeight (e.g. very tall image)
+                        if (height > maxHeight) {
+                            width = Math.round(width * (maxHeight / height));
+                            height = maxHeight;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width = Math.round(width * (maxHeight / height));
+                            height = maxHeight;
+                        }
+                        // Check if width still exceeds maxWidth (e.g. very wide vertical?)
+                        if (width > maxWidth) {
+                            height = Math.round(height * (maxWidth / width));
+                            width = maxWidth;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d', { alpha: false });
+                    if (ctx) {
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, 0, 0, width, height);
                     }
                 }
-
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx?.drawImage(img, 0, 0, width, height);
 
                 // Convert to requested format and quality
                 const dataUrl = canvas.toDataURL(format, quality);
                 resolve(dataUrl);
             };
-            img.onerror = (error) => reject(error);
+            img.onerror = (error) => reject(new Error('Failed to load image'));
         };
-        reader.onerror = (error) => reject(error);
+        reader.onerror = (error) => reject(new Error('Failed to read file'));
     });
 };
 

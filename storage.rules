@@ -1,0 +1,58 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    function isValidImage() {
+      return request.resource.contentType.matches('image/(jpeg|png|gif|webp)') 
+        && request.resource.size <= 5 * 1024 * 1024;
+    }
+    
+    function isValidVideo() {
+      return request.resource.contentType.matches('video/(mp4|webm)') 
+        && request.resource.size <= 100 * 1024 * 1024;
+    }
+    
+    // Events - anyone can read, only auth can upload
+    match /events/{eventId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuthenticated() && (isValidImage() || isValidVideo());
+    }
+    
+    // Businesses - anyone can read, only auth can upload
+    match /businesses/{businessId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuthenticated() && (isValidImage() || isValidVideo());
+    }
+    
+    // User avatars - only owner can read/write
+    match /users/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId) && isValidImage();
+    }
+    
+    // Chat - only participants can access
+    match /chat/{roomId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isValidImage() || isValidVideo());
+    }
+    
+    // Uploads folder - authenticated users can upload (including subfolders)
+    match /uploads/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated() && (isValidImage() || isValidVideo());
+    }
+    
+    // Default - deny everything
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

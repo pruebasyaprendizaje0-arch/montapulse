@@ -41,7 +41,9 @@ interface MapViewProps {
   onMoveBusinessComplete?: () => void;
   onStartMoveBusiness?: () => void;
   customLocalities?: { name: string; coords: [number, number]; zoom: number }[];
-  onAddLocality?: (name: string, coords: [number, number]) => void;
+  activeTab: 'events' | 'directory' | 'landmarks';
+  onAddLocality?: (name: string, coords: [number, number], hasBeach: boolean) => void;
+  focusedBusinessId?: string | null;
 }
 
 const CATEGORY_COLORS: Record<string, { bg: string; border: string; shadow: string }> = {
@@ -129,7 +131,9 @@ export const MapView: React.FC<MapViewProps> = ({
   onMoveBusinessComplete,
   onStartMoveBusiness,
   customLocalities = [],
-  onAddLocality
+  onAddLocality,
+  activeTab,
+  focusedBusinessId
 }) => {
   const { t } = useTranslation();
   const { showConfirm, showPrompt } = useToast();
@@ -322,12 +326,26 @@ export const MapView: React.FC<MapViewProps> = ({
     });
 
     businesses.forEach((business) => {
+      const sq = searchQuery || '';
       const isVisible = activeFilter === 'All' || business.category === activeFilter;
-      const matchesSearch = business.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = !sq || (business.name ?? '').toLowerCase().includes(sq.toLowerCase());
+      
+      const isReference = business.isReference === true;
+      const hasActiveEvents = events.some(e => e.businessId === business.id);
+      
+      let tabMatch = false;
+      if (activeTab === 'events') {
+        tabMatch = hasActiveEvents;
+      } else if (activeTab === 'directory') {
+        tabMatch = !isReference;
+      } else if (activeTab === 'landmarks') {
+        tabMatch = isReference;
+      }
 
-      if (isVisible && matchesSearch) {
-        const isReference = business.isReference === true;
-        const isPremium = business.plan === SubscriptionPlan.PREMIUM;
+      const isActuallyVisible = isVisible && matchesSearch && tabMatch;
+
+      if (isActuallyVisible) {
+        const isPremium = business.plan === SubscriptionPlan.EXPERT;
 
         let iconKey: string;
         let markerBg: string;
@@ -392,7 +410,16 @@ export const MapView: React.FC<MapViewProps> = ({
         const isOwnBusiness = business.id === userBusinessId || business.ownerId === userId;
         const canEdit = isSuperAdmin || (isPremiumUser && isOwnBusiness);
         
-        const marker = L.marker([business.location?.lat || business.coordinates[0], business.location?.lng || business.coordinates[1]], {
+        // Get coordinates - use default locality coords if missing
+        const businessLocality = business.locality || localityName || 'Montañita';
+        const defaultCoords = LOCALITIES.find(l => l.name === businessLocality)?.coords 
+          || customLocalities?.find(l => l.name === businessLocality)?.coords 
+          || [-1.825, -80.753];
+        
+        const lat = business.location?.lat ?? business.coordinates?.[0] ?? defaultCoords[0];
+        const lng = business.location?.lng ?? business.coordinates?.[1] ?? defaultCoords[1];
+
+        const marker = L.marker([lat, lng], {
           icon: customIcon,
           draggable: canEdit,
           autoPan: true,
@@ -418,9 +445,14 @@ export const MapView: React.FC<MapViewProps> = ({
       }
     });
 
-    events.forEach(event => {
-      if (!event.coordinates) return;
-      const isFlash = event.isFlashOffer;
+    const sq = searchQuery || '';
+    const showEvents = activeTab === 'events';
+
+    if (showEvents) {
+      events.forEach(event => {
+        const matchesEventSearch = !sq || event.title.toLowerCase().includes(sq.toLowerCase());
+        if (!event.coordinates || !matchesEventSearch) return;
+        const isFlash = event.isFlashOffer;
       const icon = L.divIcon({
         html: `
           <div class="relative group cursor-pointer flex flex-col items-center">
@@ -451,10 +483,11 @@ export const MapView: React.FC<MapViewProps> = ({
         iconAnchor: [24, 24],
       });
 
-      L.marker([event.coordinates[0], event.coordinates[1]], { icon })
-        .addTo(markersLayerRef.current!)
-        .on('click', () => onBusinessSelectRef.current(event as any));
-    });
+        L.marker([event.coordinates[0], event.coordinates[1]], { icon })
+          .addTo(markersLayerRef.current!)
+          .on('click', () => onBusinessSelectRef.current(event as any));
+      });
+    }
 
     if (selectedSector) {
       const coords = sectorPolygons[selectedSector];
@@ -470,7 +503,7 @@ export const MapView: React.FC<MapViewProps> = ({
         map.flyTo(mapCenter, 15, { duration: 1.2 });
       }
     }
-  }, [businesses, events, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, isSuperAdmin, editingSector, tempCoords, mapCenter, localityName, showHeatmap, posts, isEditorFocus]);
+  }, [businesses, events, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, isSuperAdmin, editingSector, tempCoords, mapCenter, localityName, showHeatmap, posts, isEditorFocus, activeTab]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -549,6 +582,16 @@ export const MapView: React.FC<MapViewProps> = ({
     }
   }, [mousePos, editingSector, tempCoords]);
 
+  useEffect(() => {
+    if (focusedBusinessId && mapRef.current) {
+      const business = businesses.find(b => b.id === focusedBusinessId);
+      if (business?.coordinates) {
+        mapRef.current.flyTo([business.coordinates[0], business.coordinates[1]], 16, { duration: 1 });
+        onBusinessSelect(business);
+      }
+    }
+  }, [focusedBusinessId, businesses, onBusinessSelect]);
+
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
@@ -577,14 +620,15 @@ export const MapView: React.FC<MapViewProps> = ({
         {isSuperAdmin && onAddLocality && (
           <div className="absolute top-4 right-4 z-[1001] pointer-events-auto">
             <button
-              onClick={() => {
-                const name = prompt('Nombre del nuevo pueblo:');
+              onClick={async () => {
+                const name = await showPrompt('Nombre del nuevo pueblo:', 'Nombre del pueblo');
                 if (name) {
-                  const coordsStr = prompt('Coordenadas (lat, lng):', '-1.825, -80.753');
+                  const coordsStr = await showPrompt('Coordenadas (lat, lng):', '-1.825, -80.753');
                   if (coordsStr) {
                     const coords = coordsStr.split(',').map(s => parseFloat(s.trim())) as [number, number];
                     if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-                      onAddLocality(name, coords);
+                      const hasBeach = await showConfirm('¿Este pueblo tiene playa?', 'Confirmar Playa');
+                      onAddLocality(name, coords, hasBeach);
                     }
                   }
                 }
@@ -757,3 +801,5 @@ export const MapView: React.FC<MapViewProps> = ({
     </div>
   );
 };
+
+

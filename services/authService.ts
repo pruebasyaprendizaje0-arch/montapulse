@@ -11,10 +11,13 @@ import {
 import { auth } from '../firebase.config';
 import { createUser } from './firestoreService';
 import { Vibe, SubscriptionPlan } from '../types';
+import { uploadBase64Image } from './storageService';
 
 // Super admin emails - ONLY these emails have full admin access
 const SUPER_ADMIN_EMAILS = [
-    'pruebasyaprendizaje0@gmail.com'
+    'pruebasyaprendizaje0@gmail.com',
+    'fhernandezcalle@gmail.com',
+    'ubicameinformacion@gmail.com'
 ];
 
 export type UserRole = 'visitor' | 'host' | 'admin';
@@ -61,6 +64,20 @@ export const registerWithEmail = async (
         // Create Firebase Auth account
         const result = await createUserWithEmailAndPassword(auth, email, password);
 
+        // Upload avatar to Storage if it's base64
+        let finalAvatarUrl = avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0ea5e9&color=fff&size=200`;
+        
+        if (avatarUrl && avatarUrl.startsWith('data:image')) {
+            try {
+                const storagePath = `avatars/${result.user.uid}_${Date.now()}.jpg`;
+                finalAvatarUrl = await uploadBase64Image(storagePath, avatarUrl);
+            } catch (uploadError) {
+                console.error('Error uploading avatar during registration:', uploadError);
+                // Fallback to default avatar if upload fails
+                finalAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0ea5e9&color=fff&size=200`;
+            }
+        }
+
         // Create user profile in Firestore
         await createUser(result.user.uid, {
             name,
@@ -68,8 +85,8 @@ export const registerWithEmail = async (
             email,
             role,
             preferredVibe: Vibe.RELAX,
-            avatarUrl: avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0ea5e9&color=fff&size=200`,
-            plan: SubscriptionPlan.VISITOR,
+            avatarUrl: finalAvatarUrl,
+            plan: SubscriptionPlan.FREE,
             acceptedTerms: true
         });
 

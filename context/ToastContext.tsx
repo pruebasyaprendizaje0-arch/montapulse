@@ -114,7 +114,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                         <div className="flex flex-col gap-3">
                             <button
                                 onClick={handleConfirm}
-                                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-500 active:scale-95 transition-all shadow-lg shadow-indigo-600/20"
+                                className="w-full py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-orange-500 active:scale-95 transition-all shadow-lg shadow-orange-600/20"
                             >
                                 Confirmar
                             </button>
@@ -144,12 +144,12 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                             onChange={(e) => setPromptValue(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handlePromptConfirm()}
                             placeholder={prompt.placeholder}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:border-sky-500 transition-all mb-6 shadow-inner"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:border-orange-500 transition-all mb-6 shadow-inner"
                         />
                         <div className="flex flex-col gap-3">
                             <button
                                 onClick={handlePromptConfirm}
-                                className="w-full py-4 bg-sky-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-sky-400 active:scale-95 transition-all shadow-lg shadow-sky-500/20"
+                                className="w-full py-4 bg-amber-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-amber-400 active:scale-95 transition-all shadow-lg shadow-amber-500/20"
                             >
                                 Aceptar
                             </button>

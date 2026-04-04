@@ -1,15 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { X, Camera, Upload, Store, MapPin, Search } from 'lucide-react';
+import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock } from 'lucide-react';
 import { useAuthContext } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS } from '../../constants';
 import { Sector, BusinessCategory } from '../../types';
-import * as Icons from 'react-icons/md';
-import { MdLocationOn } from 'react-icons/md';
-import * as BiIcons from 'react-icons/bi';
-import * as GiIcons from 'react-icons/gi';
-import * as PiIcons from 'react-icons/pi';
-import * as BsIcons from 'react-icons/bs';
+import { IconMap } from '../../utils/icons';
+import { OptimizedImageUploader } from '../OptimizedImageUploader';
 
 interface BusinessEditModalProps {
     onClose?: () => void;
@@ -20,14 +16,15 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
     const { user, isSuperAdmin } = useAuthContext();
     const {
         businesses, setBusinesses, editingBusinessId, setShowBusinessEdit,
-        setEditingBusinessId, handleUpdateBusinessProfile, handleImageUpload,
+        setEditingBusinessId, handleUpdateBusinessProfile,
         bizForm, setBizForm, handleBusinessRegister, setShowBusinessReg,
-        handleBusinessImageUpload, handleDeleteBusiness,
-        customLocalities
+        handleDeleteBusiness,
+        customLocalities, allUsers
     } = useData();
 
     const bizEditFileInputRef = useRef<HTMLInputElement>(null);
-    const bizEditCameraInputRef = useRef<HTMLInputElement>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [newService, setNewService] = useState('');
 
     const targetBusinessId = editingBusinessId || user?.businessId;
     const business = isRegistration ? null : businesses.find(b => b.id === targetBusinessId);
@@ -49,17 +46,23 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
 
     if (!business && !isRegistration) return null;
 
-    // Use either the found business for editing or bizForm for registration
-    const data = isRegistration ? bizForm : business!;
+    // Use bizForm as the canonical state for the modal fields
+    const data = bizForm;
     const updateField = (field: string, value: any) => {
         const safeValue = value === undefined ? null : value;
-        if (isRegistration) {
-            setBizForm({ ...bizForm, [field]: safeValue });
-        } else {
-            setBusinesses(prev => prev.map(b =>
-                b.id === targetBusinessId ? { ...b, [field]: safeValue } : b
-            ));
+        setBizForm(prev => ({ ...prev, [field]: safeValue }));
+    };
+
+    const servicesList = (data as any).services || [];
+    const addService = () => {
+        if (newService.trim()) {
+            updateField('services', [...servicesList, newService.trim()]);
+            setNewService('');
         }
+    };
+    const removeService = (idx: number) => {
+        const updated = servicesList.filter((_: string, i: number) => i !== idx);
+        updateField('services', updated);
     };
 
     return (
@@ -129,6 +132,30 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                         />
                     </div>
 
+                    {isSuperAdmin && !data.isReference && (
+                        <div className="space-y-3">
+                             <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest pl-2">Dueño del Negocio</label>
+                             <div className="relative">
+                                <select
+                                    className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all appearance-none"
+                                    value={data.ownerId || 'admin'}
+                                    onChange={(e) => updateField('ownerId', e.target.value)}
+                                >
+                                    <option value="admin">Administrador Central (Sin dueño)</option>
+                                    {[...allUsers].sort((a,b) => (a.name || '').localeCompare(b.name || '')).map((u) => (
+                                        <option key={u.id} value={u.id}>
+                                            {u.name} {u.surname} ({u.email})
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                    <Users className="w-5 h-5" />
+                                </div>
+                             </div>
+                             <p className="text-[10px] text-slate-500 mt-2 px-2 italic">Solo administradores pueden reasignar el dueño de un negocio.</p>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-2 mb-3 block">Categoría</label>
@@ -195,6 +222,46 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                             placeholder="Describe tu negocio..."
                         />
                     </div>
+
+                    {!data.isReference && (
+                        <div>
+                            <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Servicios y Productos</label>
+                            <p className="text-[10px] text-slate-600 mb-3">Agrega los servicios o productos que ofrece tu negocio (ej: "Cerveza artesanal", "Clases de surf", "WiFi gratis")</p>
+                            <div className="flex gap-2 mb-3">
+                                <input
+                                    type="text"
+                                    value={newService}
+                                    onChange={(e) => setNewService(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addService())}
+                                    placeholder="Escribe un servicio..."
+                                    className="flex-1 bg-slate-800/50 border border-white/5 rounded-2xl px-4 py-3 text-white text-sm font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={addService}
+                                    className="px-4 py-2 bg-orange-500/20 border border-orange-500/30 rounded-2xl text-orange-400 hover:bg-orange-500/30 transition-all"
+                                >
+                                    <Plus className="w-5 h-5" />
+                                </button>
+                            </div>
+                            {(data as any).services && (data as any).services.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                    {(data as any).services.map((service: string, idx: number) => (
+                                        <span key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-xs font-bold text-amber-300">
+                                            {service}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeService(idx)}
+                                                className="hover:text-orange-400 transition-colors"
+                                            >
+                                                <XCircle className="w-4 h-4" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -281,48 +348,83 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                         </>
                     )}
 
-                    <div>
-                        <label className="text-xs font-black text-slate-500 uppercase mb-4 block tracking-widest">Imagen del Negocio</label>
-                        <div className="group relative rounded-[2.5rem] overflow-hidden border-2 border-white/5 mb-4 aspect-video bg-slate-800/50">
-                            <img
-                                src={data.imageUrl || "https://images.unsplash.com/photo-1566737236500-c8ac43014a67?auto=format&fit=crop&q=80&w=400"}
-                                alt="Business"
-                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                                <button
-                                    onClick={() => bizEditCameraInputRef.current?.click()}
-                                    className="p-4 bg-white/10 backdrop-blur-xl rounded-full border border-white/20 hover:bg-white/20 transition-all scale-75 group-hover:scale-100"
-                                >
-                                    <Camera className="w-6 h-6 text-white" />
-                                </button>
-                                <button
-                                    onClick={() => bizEditFileInputRef.current?.click()}
-                                    className="p-4 bg-white/10 backdrop-blur-xl rounded-full border border-white/20 hover:bg-white/20 transition-all scale-75 group-hover:scale-100"
-                                >
-                                    <Upload className="w-6 h-6 text-white" />
-                                </button>
+                    {/* Horario de Atención */}
+                    {!data.isReference && (
+                        <div>
+                            <label className="text-xs font-black text-slate-500 uppercase mb-4 block tracking-widest flex items-center gap-2">
+                                <Clock className="w-4 h-4" /> Horario de Atención
+                            </label>
+                            <div className="space-y-3">
+                                {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => {
+                                    const dayKey = day.toLowerCase();
+                                    const schedule = (data as any).openingHours?.[dayKey] || null;
+                                    const isClosed = schedule?.closed;
+                                    const openTime = schedule?.open || '08:00';
+                                    const closeTime = schedule?.close || '22:00';
+
+                                    return (
+                                        <div key={day} className="flex items-center gap-3">
+                                            <span className="text-xs font-bold text-slate-400 w-20">{day}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const current = (data as any).openingHours || {};
+                                                    const newSchedule = { ...current };
+                                                    if (newSchedule[dayKey]?.closed) {
+                                                        newSchedule[dayKey] = { open: '08:00', close: '22:00' };
+                                                    } else {
+                                                        newSchedule[dayKey] = { closed: true, open: '', close: '' };
+                                                    }
+                                                    updateField('openingHours', newSchedule);
+                                                }}
+                                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${isClosed ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-slate-700 text-slate-400'}`}
+                                            >
+                                                {isClosed ? 'Cerrado' : 'Abierto'}
+                                            </button>
+                                            {!isClosed && (
+                                                <>
+                                                    <input
+                                                        type="time"
+                                                        value={openTime}
+                                                        onChange={(e) => {
+                                                            const current = (data as any).openingHours || {};
+                                                            updateField('openingHours', {
+                                                                ...current,
+                                                                [dayKey]: { ...current[dayKey], open: e.target.value, close: closeTime }
+                                                            });
+                                                        }}
+                                                        className="bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-medium focus:ring-1 focus:ring-orange-500 outline-none"
+                                                    />
+                                                    <span className="text-slate-500 text-xs">-</span>
+                                                    <input
+                                                        type="time"
+                                                        value={closeTime}
+                                                        onChange={(e) => {
+                                                            const current = (data as any).openingHours || {};
+                                                            updateField('openingHours', {
+                                                                ...current,
+                                                                [dayKey]: { ...current[dayKey], open: openTime, close: e.target.value }
+                                                            });
+                                                        }}
+                                                        className="bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-medium focus:ring-1 focus:ring-orange-500 outline-none"
+                                                    />
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
+                    )}
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                type="button"
-                                onClick={() => bizEditCameraInputRef.current?.click()}
-                                className="flex items-center justify-center gap-3 bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white hover:bg-slate-700 transition-all font-bold"
-                            >
-                                <Camera className="w-5 h-5 text-slate-400" />
-                                <span className="text-sm">Camara</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => bizEditFileInputRef.current?.click()}
-                                className="flex items-center justify-center gap-3 bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white hover:bg-slate-700 transition-all font-bold"
-                            >
-                                <Upload className="w-5 h-5 text-slate-400" />
-                                <span className="text-sm">Galería</span>
-                            </button>
-                        </div>
+                    <div>
+                        <label className="text-xs font-black text-slate-500 uppercase mb-4 block tracking-widest">Imagen del Negocio</label>
+                        <OptimizedImageUploader
+                            currentImageUrl={data.imageUrl || undefined}
+                            onImageProcessed={(url) => updateField('imageUrl', url)}
+                            path={`uploads/${user?.id || 'admin'}/businesses`}
+                            className="bg-slate-800/50"
+                        />
                     </div>
 
                     {/* Admin Only Toggles - Simplified if not referenced above */}
@@ -340,21 +442,45 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                 <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all ${(data as any).isPublished ? 'left-[calc(100%-1.35rem)]' : 'left-0.5'}`} />
                             </button>
                         </div>
+                        
                     </div>
                     <div className="flex flex-col gap-3 mt-4">
                         <button
                             type="button"
-                            onClick={(e) => {
+                            disabled={isSaving}
+                            onClick={async (e) => {
                                 if (isRegistration) {
-                                    const fakeEvent = { preventDefault: () => { } } as React.FormEvent;
-                                    handleBusinessRegister(fakeEvent);
+                                    setIsSaving(true);
+                                    try {
+                                        const fakeEvent = { preventDefault: () => { } } as React.FormEvent;
+                                        await handleBusinessRegister(fakeEvent);
+                                    } catch (error) {
+                                        console.error('Error registering business:', error);
+                                    } finally {
+                                        setIsSaving(false);
+                                    }
                                 } else {
-                                    handleUpdateBusinessProfile();
+                                    setIsSaving(true);
+                                    try {
+                                        const success = await handleUpdateBusinessProfile();
+                                        if (success) {
+                                            handleClose();
+                                        }
+                                    } catch (error) {
+                                        console.error('Error updating business profile:', error);
+                                    } finally {
+                                        setIsSaving(false);
+                                    }
                                 }
                             }}
-                            className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black py-5 rounded-3xl hover:shadow-[0_0_30px_rgba(249,115,22,0.3)] hover:scale-[1.02] active:scale-95 transition-all tracking-widest uppercase text-sm"
+                            className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black py-5 rounded-3xl hover:shadow-[0_0_30px_rgba(249,115,22,0.3)] hover:scale-[1.02] active:scale-95 transition-all tracking-widest uppercase text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                            {isRegistration ? 'Finalizar Registro' : 'Guardar Cambios'}
+                            {isSaving ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Guardando...
+                                </>
+                            ) : isRegistration ? 'Finalizar Registro' : 'Guardar Cambios'}
                         </button>
 
                         {!isRegistration && business && (
@@ -368,34 +494,6 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                         )}
                     </div>
                 </div>
-
-                <input
-                    type="file"
-                    ref={bizEditCameraInputRef}
-                    accept="image/*"
-                    capture="environment"
-                    onChange={(e) => {
-                        if (isRegistration) {
-                            handleImageUpload(e, 'business');
-                        } else {
-                            handleBusinessImageUpload(e);
-                        }
-                    }}
-                    className="hidden"
-                />
-                <input
-                    type="file"
-                    ref={bizEditFileInputRef}
-                    accept="image/*"
-                    onChange={(e) => {
-                        if (isRegistration) {
-                            handleImageUpload(e, 'business');
-                        } else {
-                            handleBusinessImageUpload(e);
-                        }
-                    }}
-                    className="hidden"
-                />
             </div>
         </div>
     );
@@ -443,13 +541,9 @@ const ICON_CATEGORIES = [
     ]},
 ];
 
-const getIcon = (iconId: string, lib: string) => {
-    if (lib === 'md' && Icons[iconId as keyof typeof Icons]) return React.createElement(Icons[iconId as keyof typeof Icons] as any);
-    if (lib === 'bi' && BiIcons[iconId as keyof typeof BiIcons]) return React.createElement(BiIcons[iconId as keyof typeof BiIcons] as any);
-    if (lib === 'gi' && GiIcons[iconId as keyof typeof GiIcons]) return React.createElement(GiIcons[iconId as keyof typeof GiIcons] as any);
-    if (lib === 'pi' && PiIcons[iconId as keyof typeof PiIcons]) return React.createElement(PiIcons[iconId as keyof typeof PiIcons] as any);
-    if (lib === 'bs' && BsIcons[iconId as keyof typeof BsIcons]) return React.createElement(BsIcons[iconId as keyof typeof BsIcons] as any);
-    return null;
+const getIcon = (iconId: string) => {
+    const IconComp = IconMap[iconId];
+    return IconComp ? <IconComp /> : <IconMap.MdLocationOn />;
 };
 
 const IconSelector: React.FC<{ value: string; onChange: (id: string) => void }> = ({ value, onChange }) => {
@@ -457,9 +551,7 @@ const IconSelector: React.FC<{ value: string; onChange: (id: string) => void }> 
     const [isOpen, setIsOpen] = useState(false);
 
     const currentIcon = MAP_ICONS.find(i => i.id === value);
-    const currentLib = currentIcon?.icon?.split(/(Md|Bi|Gi|Pi|Bs)/)[2];
-    const currentLibPrefix = currentIcon?.icon?.match(/^[A-Za-z]*/)?.[0] || 'md';
-    const iconKey = `${currentLibPrefix.charAt(0).toUpperCase()}${currentLibPrefix.slice(1)}${currentLib}`;
+    const iconKey = currentIcon?.icon || 'MdLocationOn';
 
     const filteredCategories = ICON_CATEGORIES.map(cat => ({
         ...cat,
@@ -477,7 +569,7 @@ const IconSelector: React.FC<{ value: string; onChange: (id: string) => void }> 
                 className="w-full flex items-center gap-3 p-3 bg-slate-800/50 border border-white/10 rounded-2xl hover:bg-slate-700/50 transition-all"
             >
                 <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white">
-                    {currentIcon && getIcon(iconKey, currentLibPrefix.toLowerCase()) || <MdLocationOn />}
+                    {getIcon(iconKey)}
                 </div>
                 <div className="flex-1 text-left">
                     <span className="text-white font-medium text-sm">{currentIcon?.label || 'Seleccionar'}</span>
@@ -523,7 +615,7 @@ const IconSelector: React.FC<{ value: string; onChange: (id: string) => void }> 
                                                         : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600 hover:text-white'
                                                 }`}
                                             >
-                                                {getIcon(fullIconKey, icon.lib)}
+                                                {getIcon(fullIconKey)}
                                             </button>
                                         );
                                     })}

@@ -58,14 +58,14 @@ export const EventModal: React.FC<EventModalProps> = ({
     const handleWhatsApp = () => {
         if (business?.phone || business?.whatsapp) {
             const phone = business.whatsapp || business.phone;
-            window.open(`https://wa.me/${phone}?text=Hola! Vi su evento "${event.title}" en Spondylus Pulse`, '_blank');
+            window.open(`https://wa.me/${phone}?text=Hola! Vi su evento "${event.title}" en ubicame.info Pulse`, '_blank');
         }
     };
 
     const handleShare = async () => {
         const shareData = {
             title: event.title,
-            text: `¡Mira este evento en Spondylus Pulse!
+            text: `¡Mira este evento en ubicame.info Pulse!
             
 📅 ${event.title}
 📍 Lugar: ${business?.name || 'Local'}
@@ -75,7 +75,7 @@ export const EventModal: React.FC<EventModalProps> = ({
 ${business?.whatsapp ? `📱 WhatsApp: ${business.whatsapp}` : ''}
 ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
 
-¡Descúbrelo en Spondylus Pulse!`,
+¡Descúbrelo en ubicame.info Pulse!`,
             url: window.location.href
         };
 
@@ -206,18 +206,26 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                         </div>
                     </div>
 
-                    {/* Event Title at Bottom */}
-                    <div className="absolute bottom-0 left-0 right-0 p-8">
-                        <h1 className="text-4xl font-black text-white mb-3 leading-tight tracking-tight">
+                    {/* Event Title and Description at Bottom */}
+                    <div className="absolute bottom-0 left-0 right-0 p-8 pt-20 bg-gradient-to-t from-slate-900 via-slate-900/80 to-transparent flex flex-col items-center text-center">
+                        <h1 className="text-4xl font-black text-white mb-3 leading-tight tracking-tight max-w-[80%]">
                             {event.title}
                         </h1>
+
+                        {/* Centered Description */}
+                        {event.description && (
+                            <p className="text-slate-200 text-sm font-medium leading-relaxed max-w-[70%] mb-6">
+                                {event.description}
+                            </p>
+                        )}
+
                         {business && (
                             <div className="flex items-center gap-3 mb-2">
                                 <div className="relative group/biz">
                                     <img
                                         src={business.imageUrl}
                                         alt={business.name}
-                                        className="w-10 h-10 rounded-full border-2 border-white/20 object-cover"
+                                        className="w-10 h-10 rounded-full border-2 border-white/20 object-cover shadow-2xl"
                                     />
                                     {isAdmin && (
                                         <button
@@ -228,7 +236,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                         </button>
                                     )}
                                 </div>
-                                <div className="flex flex-col">
+                                <div className="flex flex-col items-start">
                                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">Publicado por</p>
                                     <div className="flex items-center gap-2">
                                         <p className="text-sm font-black text-white">{business.name}</p>
@@ -248,15 +256,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                 </div>
 
                 {/* Content */}
-                <div className="p-8 space-y-6">
-                    {/* Description */}
-                    {event.description && (
-                        <div>
-                            <p className="text-slate-300 text-sm leading-relaxed">
-                                {event.description}
-                            </p>
-                        </div>
-                    )}
+                <div className="p-8 pt-4 space-y-6">
 
                     {/* Event Details Grid */}
                     <div className="grid grid-cols-2 gap-4">

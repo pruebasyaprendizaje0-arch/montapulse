@@ -1,8 +1,0 @@
-{
-  "name": "Spondylus Pulse",
-  "description": "A Progressive Web App for discovering events in Montañita, Ecuador. Segmented by lifestyle zones: Centro, La Punta, El Tigrillo, and Malecón.",
-  "requestFramePermissions": [
-    "geolocation",
-    "camera"
-  ]
-}

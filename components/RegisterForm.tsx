@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User as UserIcon, Store, Mail, Key, X, AlertCircle, CheckCircle, Camera, Image as ImageIcon, Upload } from 'lucide-react';
 import { registerWithEmail } from '../services/authService';
+import { compressImage } from '../utils/imageUtils';
 
 interface RegisterFormProps {
     onBack: () => void;
@@ -21,17 +22,25 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const cameraInputRef = React.useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setFormData({ ...formData, avatarUrl: reader.result as string });
-            };
-            reader.readAsDataURL(file);
+            try {
+                // Compress and crop to 300x300 square for avatar
+                const compressed = await compressImage(file, { 
+                    maxWidth: 300, 
+                    maxHeight: 300, 
+                    quality: 0.8, 
+                    squareCrop: true 
+                });
+                setFormData(prev => ({ ...prev, avatarUrl: compressed }));
+            } catch (err) {
+                console.error('Error processing image:', err);
+                setError('Could not process the image. Please try another.');
+            }
         }
     };
 
@@ -281,7 +290,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onBack, onSuccess })
                         className="text-orange-500 hover:text-orange-400 font-bold"
                     >
                         política de privacidad
-                    </button> de Montapulse.
+                    </button> de ubicame.info PULSE.
                 </label>
             </div>
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { X, MapPin, Star, Search, ArrowRight, Waves, TreePine, Store, Hotel } from 'lucide-react';
+import { X, MapPin, Star, Search, ArrowRight, Waves, TreePine, Store, Hotel, Droplets, Activity } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useNavigate } from 'react-router-dom';
 import { SubscriptionPlan, BusinessCategory } from '../types';
@@ -15,7 +15,9 @@ const REFERENCE_CATEGORIES = [
     BusinessCategory.PLAYA,
     BusinessCategory.OTRO,
     BusinessCategory.HOTEL,
-    BusinessCategory.HOSTAL
+    BusinessCategory.HOSTAL,
+    BusinessCategory.HIDRATACION,
+    BusinessCategory.HOSPITAL
 ];
 
 export const InfoPage: React.FC = () => {
@@ -24,6 +26,7 @@ export const InfoPage: React.FC = () => {
         businesses,
         currentLocality,
         setCurrentLocality,
+        customLocalities,
         setShowPublicProfile,
         setPublicProfileId,
         setPublicProfileType
@@ -35,37 +38,50 @@ export const InfoPage: React.FC = () => {
 
     const allBusinesses = useMemo(() => {
         let all = businesses || [];
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
+        
+        // Filter by current locality
+        const currentLocName = currentLocality?.name || 'Montañita';
+        all = all.filter((b: any) => (b.locality || 'Montañita') === currentLocName);
+
+        const sq = searchQuery || '';
+        if (sq.trim()) {
+            const q = sq.toLowerCase();
             all = all.filter((b: any) => {
                 try {
                     const nameMatch = b.name && b.name.toLowerCase().includes(q);
                     const categoryMatch = b.category && b.category.toLowerCase().includes(q);
                     const sectorMatch = b.sector && b.sector.toLowerCase().includes(q);
                     const descMatch = b.description && b.description.toLowerCase().includes(q);
-                    const localityMatch = b.locality && b.locality.toLowerCase().includes(q);
-                    return nameMatch || categoryMatch || sectorMatch || descMatch || localityMatch;
+                    return nameMatch || categoryMatch || sectorMatch || descMatch;
                 } catch (e) {
                     return false;
                 }
             });
         }
         return all;
-    }, [businesses, searchQuery]);
+    }, [businesses, searchQuery, currentLocality]);
 
     const referencePoints = useMemo(() => {
         return allBusinesses.filter((b: any) => REFERENCE_CATEGORIES.includes(b.category));
     }, [allBusinesses]);
 
     const premiumBusinesses = useMemo(() => {
-        return allBusinesses.filter((b: any) => b.plan === SubscriptionPlan.PREMIUM);
+        return allBusinesses.filter((b: any) => b.plan === SubscriptionPlan.EXPERT);
     }, [allBusinesses]);
 
     const otherBusinesses = useMemo(() => {
         return allBusinesses.filter((b: any) => 
             !REFERENCE_CATEGORIES.includes(b.category) && 
-            b.plan !== SubscriptionPlan.PREMIUM
+            b.plan !== SubscriptionPlan.BASIC && b.plan !== SubscriptionPlan.EXPERT
         );
+    }, [allBusinesses]);
+
+    const hydrationPoints = useMemo(() => {
+        return allBusinesses.filter((b: any) => b.category === BusinessCategory.HIDRATACION);
+    }, [allBusinesses]);
+
+    const healthPoints = useMemo(() => {
+        return allBusinesses.filter((b: any) => b.category === BusinessCategory.HOSPITAL);
     }, [allBusinesses]);
 
     const handleBusinessClick = (id: string) => {
@@ -78,27 +94,30 @@ export const InfoPage: React.FC = () => {
         if (category === BusinessCategory.PLAYA || category === 'Playa') return <Waves className="w-5 h-5 text-sky-400" />;
         if (category === BusinessCategory.HOTEL || category === BusinessCategory.HOSTAL || category === 'Hotel' || category === 'Hostal') return <Hotel className="w-5 h-5 text-amber-400" />;
         if (category === BusinessCategory.PARQUE || category === 'Parque') return <TreePine className="w-5 h-5 text-emerald-400" />;
+        if (category === BusinessCategory.HIDRATACION) return <Droplets className="w-5 h-5 text-cyan-400" />;
+        if (category === BusinessCategory.HOSPITAL) return <Activity className="w-5 h-5 text-red-500" />;
         return <MapPin className="w-5 h-5 text-slate-400" />;
     };
 
     return (
-        <div className="h-full flex flex-col bg-[#020617] overflow-hidden">
+        <div className="h-full flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 overflow-y-auto" style={{height: '100%', minHeight: '100vh'}}>
             <div className="p-6 border-b border-white/5">
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h1 className="text-3xl font-black text-amber-400 uppercase tracking-tight">★ INFO {localityName}</h1>
+                        <h1 className="text-3xl font-black text-amber-400 uppercase tracking-tight">📱 INFO {localityName}</h1>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Puntos de Referencia y Negocios Premium</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <select
                             value={currentLocality?.name || 'Montañita'}
                             onChange={(e) => {
-                                const loc = LOCALITIES.find(l => l.name === e.target.value);
+                                const allLocs = [...LOCALITIES, ...customLocalities];
+                                const loc = allLocs.find(l => l.name === e.target.value);
                                 if (loc) setCurrentLocality(loc);
                             }}
-                            className="bg-white/5 border border-white/10 text-white text-xs font-black uppercase tracking-widest px-3 py-2 rounded-xl cursor-pointer hover:bg-white/10 transition-all"
+                            className="bg-white/5 border border-white/10 text-white text-xs font-black uppercase tracking-widest px-3 py-2 rounded-xl cursor-pointer hover:bg-white/10 transition-all max-w-[150px]"
                         >
-                            {LOCALITIES.map(l => (
+                            {[...LOCALITIES, ...customLocalities].map(l => (
                                 <option key={l.name} value={l.name} className="bg-slate-900">{l.name}</option>
                             ))}
                         </select>
@@ -123,7 +142,72 @@ export const InfoPage: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                {/* SALUD / HOSPITAL */}
+                {healthPoints.length > 0 && (
+                    <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+                            <span className="text-[10px] font-black text-red-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                                <Activity className="w-3 h-3" /> HOSPITALES Y SALUD
+                            </span>
+                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+                        </div>
+                        <div className="space-y-3">
+                            {healthPoints.map((biz: any) => (
+                                <div
+                                    key={biz.id}
+                                    onClick={() => handleBusinessClick(biz.id)}
+                                    className="p-4 rounded-[2rem] bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-all cursor-pointer group"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 rounded-2xl bg-red-500/20 border border-red-500/30 flex items-center justify-center shrink-0">
+                                            <Activity className="w-6 h-6 text-red-400" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="text-sm font-black text-white truncate">{biz.name}</h4>
+                                            <p className="text-[10px] text-slate-400 mt-1 line-clamp-1">{biz.description || 'Centro de atención médica 24h'}</p>
+                                        </div>
+                                        <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-red-400 group-hover:translate-x-1 transition-all" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* HIDRATACIÓN */}
+                {hydrationPoints.length > 0 && (
+                    <div className="animate-in fade-in slide-in-from-top-4 duration-700">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+                            <span className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                                <Droplets className="w-3 h-3" /> PUNTOS DE HIDRATACIÓN
+                            </span>
+                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+                        </div>
+                        <div className="space-y-3">
+                            {hydrationPoints.map((biz: any) => (
+                                <div
+                                    key={biz.id}
+                                    onClick={() => handleBusinessClick(biz.id)}
+                                    className="p-4 rounded-[2rem] bg-cyan-500/5 border border-cyan-500/20 hover:border-cyan-500/40 transition-all cursor-pointer group"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center shrink-0">
+                                            <Droplets className="w-6 h-6 text-cyan-400" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="text-sm font-black text-white truncate">{biz.name}</h4>
+                                            <p className="text-[10px] text-slate-400 mt-1 line-clamp-1">{biz.description || 'Agua potable gratuita / Venta de agua'}</p>
+                                        </div>
+                                        <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 {premiumBusinesses.length > 0 && (
                     <div>
                         <div className="flex items-center gap-3 mb-4">
@@ -289,3 +373,5 @@ export const InfoPage: React.FC = () => {
         </div>
     );
 };
+
+

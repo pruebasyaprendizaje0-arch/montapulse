@@ -22,8 +22,8 @@ export const Header: React.FC = () => {
                     <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-lg font-black tracking-tight text-white leading-none">MONTAPULSE</span>
-                    <span className="text-[9px] font-black tracking-[0.4em] text-orange-500 leading-none mt-1">PREMIUM</span>
+                    <span className="text-lg font-black tracking-tight text-white leading-none uppercase">ubicame.info</span>
+                    <span className="text-[9px] font-black tracking-[0.4em] text-orange-500 leading-none mt-1">PULSE</span>
                 </div>
                 {!isOnline && (
                     <div className="ml-2 flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg animate-pulse">

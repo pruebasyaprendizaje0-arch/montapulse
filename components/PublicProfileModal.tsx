@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight } from 'lucide-react';
 import { Business, UserProfile, MontanitaEvent, BusinessReview } from '../types';
 import { useData } from '../context/DataContext';
-import { subscribeToBusinessReviews, addBusinessReview } from '../services/firestoreService';
+import { subscribeToBusinessReviews, addBusinessReview, getUser, incrementBusinessViewCount } from '../services/firestoreService';
 import { useAuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -26,9 +26,12 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const [fetchedUser, setFetchedUser] = useState<UserProfile | null>(null);
+    const [isLoadingUser, setIsLoadingUser] = useState(false);
+
     // Find the target profile
     const business = businessId ? businesses.find(b => b.id === businessId) : null;
-    const userProfile = userId ? allUsers.find(u => u.id === userId) : null;
+    const userProfile = userId ? (allUsers.find(u => u.id === userId) || fetchedUser) : fetchedUser;
 
     const isFollowing = businessId ? isBusinessFollowed(businessId) : false;
 
@@ -38,14 +41,38 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
         : null;
 
     const owner = business
-        ? allUsers.find(u => u.businessId === business.id || u.id === business.ownerId)
+        ? (allUsers.find(u => u.businessId === business.id || u.id === business.ownerId) || fetchedUser)
         : userProfile;
 
     useEffect(() => {
+        const fetchTargetUser = async () => {
+            const targetId = userId || business?.ownerId;
+            if (!targetId || !isOpen) return;
+
+            // If we already have it in allUsers, don't fetch
+            if (allUsers.find(u => u.id === targetId)) {
+                setFetchedUser(null);
+                return;
+            }
+
+            setIsLoadingUser(true);
+            try {
+                const fetched = await getUser(targetId);
+                setFetchedUser(fetched);
+            } catch (error) {
+                console.error("Error fetching user for modal:", error);
+            } finally {
+                setIsLoadingUser(false);
+            }
+        };
+
+        fetchTargetUser();
+
         if (businessId && isOpen) {
+            incrementBusinessViewCount(businessId);
             return subscribeToBusinessReviews(businessId, setReviews);
         }
-    }, [businessId, isOpen]);
+    }, [businessId, userId, business?.ownerId, isOpen, allUsers]);
 
     const handleSubmitReview = async () => {
         if (!currentUser || !businessId) return;
@@ -92,7 +119,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
 
     const displayName = business?.name || `${owner?.name || ''} ${owner?.surname || ''}`.trim();
     const avatar = business?.imageUrl || owner?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=4f46e5&color=fff`;
-    const bio = business?.description || "Ciudadano activo de la ruta Spondylus. ¡Nos vemos en el próximo pulso!";
+    const bio = business?.description || "Miembro activo de la comunidad. ¡Nos vemos en el próximo pulso!";
 
     // Email to display: for businesses prioritise business.email, fallback to owner's email
     const contactEmail = business?.email || owner?.email || null;

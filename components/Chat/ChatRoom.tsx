@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ChevronLeft, MoreVertical, Image as ImageIcon, Smile, Paperclip, Check, CheckCheck, MessageCircle, Building2, User, ChevronDown, Zap, X, Camera, Upload, Search, Trash2 } from 'lucide-react';
+import { Send, ChevronLeft, MoreVertical, Image as ImageIcon, Smile, Paperclip, Check, CheckCheck, MessageCircle, Building2, User, ChevronDown, Zap, X, Camera, Upload, Search, Trash2, Phone, Video, Info } from 'lucide-react';
 import { ChatRoom as ChatRoomType, ChatMessage } from '../../types';
-import { sendRoomMessage, subscribeToRoomMessages, deleteOldRoomMessages, deleteRoomMessage } from '../../services/firestoreService';
+import { sendRoomMessage, subscribeToRoomMessages, deleteOldRoomMessages, deleteRoomMessage, clearRoomMessages } from '../../services/firestoreService';
 import { useAuthContext } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { useToast } from '../../context/ToastContext';
 import { SubscriptionPlan } from '../../types';
 import { compressImage } from '../../utils/imageUtils';
 
@@ -16,7 +17,8 @@ const EMOJI_LIST = ['😀', '😎', '🔥', '❤️', '🎉', '👍', '🙏', '�
 
 export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
     const { user } = useAuthContext();
-    const { businesses } = useData();
+    const { businesses, allUsers, setPublicProfileId, setPublicProfileType, setShowPublicProfile } = useData();
+    const { showToast, showConfirm } = useToast();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const [sendAsBusiness, setSendAsBusiness] = useState(false);
@@ -31,9 +33,19 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
     const [deletingMsgId, setDeletingMsgId] = useState<string | null>(null);
 
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
-    const userPlan = user?.plan || SubscriptionPlan.VISITOR;
-    const canSendAsBusiness = userBusiness && userPlan === SubscriptionPlan.PREMIUM;
-    const canUsePremiumFeatures = userPlan === SubscriptionPlan.PREMIUM;
+    const userPlan = user?.plan || SubscriptionPlan.FREE;
+    // Premium corresponds to PRO or EXPERT plans
+    const isPremiumPlan = userPlan === SubscriptionPlan.BASIC || userPlan === SubscriptionPlan.PREMIUM || userPlan === SubscriptionPlan.EXPERT;
+    const canSendAsBusiness = !!(userBusiness && isPremiumPlan);
+    const canUsePremiumFeatures = isPremiumPlan;
+
+    // Non-premium users can reply (including images) when a Premium user started the conversation
+    const premiumInitiated = messages.some(m => m.isBusinessMessage) || room.status === 'green';
+    const canSendImages = canUsePremiumFeatures || premiumInitiated;
+
+    const partnerId = room.type === 'direct' && user?.id ? room.participants.find(p => p !== user.id) : null;
+    const partnerUser = partnerId ? allUsers.find(u => u.id === partnerId) : null;
+    const partnerBusiness = partnerUser?.businessId ? businesses.find(b => b.id === partnerUser.businessId) : null;
 
     useEffect(() => {
         // Auto-clean messages older than 7 days on room open (client-side, Spark plan)
@@ -118,16 +130,29 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
         }
     };
 
+    const handleClearChat = async () => {
+        const confirmed = await showConfirm('¿Estás seguro de que quieres eliminar todos los mensajes de este chat para todos los participantes?', 'Limpiar Chat');
+        if (confirmed) { 
+            setShowOptionsMenu(false);
+            try {
+                await clearRoomMessages(room.id);
+                showToast('Chat limpiado correctamente', 'success');
+            } catch (error) {
+                showToast('No se pudo limpiar el chat. Inténtalo de nuevo.', 'error');
+            }
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-[#020617] text-white pb-20 lg:pb-0">
             {/* Header */}
             <div className="pt-6 lg:pt-14 pb-4 px-6 flex items-center gap-4 bg-slate-900/40 backdrop-blur-2xl border-b border-white/5 sticky top-0 z-20">
-                <button onClick={onBack} className="p-2 -ml-2 text-slate-400 hover:text-white transition-all transform active:scale-90">
-                    <ChevronLeft className="w-7 h-7" />
+                <button onClick={onBack} className="p-2 -ml-2 text-slate-400 hover:text-white transition-all transform active:scale-95 group/back">
+                    <ChevronLeft className="w-7 h-7 group-hover/back:-translate-x-1 transition-transform" />
                 </button>
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="relative">
-                        <div className={`p-0.5 border-2 ${(room as any).isBusinessChat ? 'border-amber-500/30' : 'border-white/10'} ${room.type === 'direct' ? 'rounded-full' : 'rounded-2xl'}`}>
+                    <div className="relative group">
+                        <div className={`p-0.5 border-2 transition-transform group-hover:scale-105 ${(room as any).isBusinessChat ? 'border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'border-white/10'} ${room.type === 'direct' ? 'rounded-full' : 'rounded-2xl'}`}>
                             <img
                                 src={(room as any).displayAvatar || room.avatar || 'https://i.pravatar.cc/100'}
                                 alt={(room as any).displayName || room.name}
@@ -135,93 +160,116 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                             />
                         </div>
                         {room.status === 'green' && (
-                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 rounded-full border-[3px] border-slate-900 shadow-[0_0_10px_#10b981]" />
+                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 rounded-full border-[3px] border-slate-900 shadow-[0_0_10px_#10b981] animate-pulse" />
                         )}
                         {room.status === 'orange' && (
                             <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-orange-500 rounded-full border-[3px] border-slate-900 shadow-[0_0_10px_#f97316]" />
                         )}
                     </div>
                     <div className="flex flex-col min-w-0">
-                        <h2 className={`font-black text-base truncate tracking-tight ${(room as any).isBusinessChat ? 'text-amber-400' : 'text-white'}`}>
+                        <h2 className={`font-black text-[13px] uppercase truncate tracking-widest leading-none mb-1 ${(room as any).isBusinessChat ? 'text-amber-400' : 'text-white'}`}>
                             {(room as any).displayName || room.name}
                         </h2>
                         <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">
-                                {room.type === 'group' ? 'Pulso Grupal' : 'En línea'}
+                            <div className={`w-1.5 h-1.5 rounded-full ${room.status === 'green' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-600'}`} />
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">
+                                {room.type === 'group' ? 'Pulso Grupal' : room.status === 'green' ? 'En línea ahora' : 'Desconectado'}
                             </span>
                         </div>
                     </div>
                 </div>
-                <div className="relative">
-                    <button 
-                        onClick={() => setShowOptionsMenu(!showOptionsMenu)}
-                        className="p-2 text-slate-400 hover:text-white transition-colors"
-                    >
-                        <MoreVertical className="w-6 h-6" />
+                <div className="flex items-center gap-1">
+                    <button className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all hidden sm:block">
+                        <Phone className="w-5 h-5" />
                     </button>
-                    {showOptionsMenu && (
-                        <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
-                            {userPlan === SubscriptionPlan.PREMIUM && userBusiness && (
-                                <div className="p-3 border-b border-white/10 bg-amber-500/10">
-                                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2">Como enviar mensajes</p>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => { setSendAsBusiness(false); setShowOptionsMenu(false); }}
-                                            className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-xl transition-all ${!sendAsBusiness ? 'bg-white text-black' : 'bg-white/10 text-slate-400'}`}
-                                        >
-                                            <User className="w-4 h-4" />
-                                            <span className="text-[10px] font-black">Persona</span>
-                                        </button>
-                                        <button
-                                            onClick={() => { setSendAsBusiness(true); setShowOptionsMenu(false); }}
-                                            className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-xl transition-all ${sendAsBusiness ? 'bg-amber-500 text-white' : 'bg-white/10 text-slate-400'}`}
-                                        >
-                                            <Building2 className="w-4 h-4" />
-                                            <span className="text-[10px] font-black">Negocio</span>
-                                        </button>
+                    <button className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all hidden sm:block">
+                        <Video className="w-5 h-5" />
+                    </button>
+                    <div className="relative">
+                        <button 
+                            onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                            className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
+                        >
+                            <MoreVertical className="w-6 h-6" />
+                        </button>
+                        {showOptionsMenu && (
+                            <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+                                {canUsePremiumFeatures && userBusiness && (
+                                    <div className="p-3 border-b border-white/10 bg-amber-500/10">
+                                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2">Como enviar mensajes</p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => { setSendAsBusiness(false); setShowOptionsMenu(false); }}
+                                                className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-xl transition-all ${!sendAsBusiness ? 'bg-white text-black' : 'bg-white/10 text-slate-400'}`}
+                                            >
+                                                <User className="w-4 h-4" />
+                                                <span className="text-[10px] font-black">Persona</span>
+                                            </button>
+                                            <button
+                                                onClick={() => { setSendAsBusiness(true); setShowOptionsMenu(false); }}
+                                                className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-xl transition-all ${sendAsBusiness ? 'bg-amber-500 text-white' : 'bg-white/10 text-slate-400'}`}
+                                            >
+                                                <Building2 className="w-4 h-4" />
+                                                <span className="text-[10px] font-black">Negocio</span>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                            <button 
-                                onClick={() => {
-                                    setShowOptionsMenu(false);
-                                    alert('Función de perfilcoming soon');
-                                }}
-                                className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
-                            >
-                                <User className="w-5 h-5 text-slate-400" />
-                                <span className="text-sm font-bold text-white">Ver perfil</span>
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    setShowOptionsMenu(false);
-                                    alert('Función de búsqueda coming soon');
-                                }}
-                                className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
-                            >
-                                <Search className="w-5 h-5 text-slate-400" />
-                                <span className="text-sm font-bold text-white">Buscar en chat</span>
-                            </button>
-                            <button 
-                                onClick={async () => {
-                                    if (window.confirm('¿Estás seguro de que quieres eliminar todos los mensajes de este chat?')) {
+                                )}
+                                {partnerId && (
+                                    <button 
+                                        onClick={() => {
+                                            setShowOptionsMenu(false);
+                                            setPublicProfileId(partnerId);
+                                            setPublicProfileType('user');
+                                            setShowPublicProfile(true);
+                                        }}
+                                        className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
+                                    >
+                                        <User className="w-5 h-5 text-slate-400" />
+                                        <span className="text-sm font-bold text-white">Ver perfil</span>
+                                    </button>
+                                )}
+                                {partnerBusiness && (
+                                    <button 
+                                        onClick={() => {
+                                            setShowOptionsMenu(false);
+                                            setPublicProfileId(partnerBusiness.id);
+                                            setPublicProfileType('business');
+                                            setShowPublicProfile(true);
+                                        }}
+                                        className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
+                                    >
+                                        <Building2 className="w-5 h-5 text-amber-400" />
+                                        <span className="text-sm font-bold text-amber-400">Ver negocio</span>
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={() => {
                                         setShowOptionsMenu(false);
-                                        alert('Función de limpiar chat coming soon');
-                                    }
-                                }}
-                                className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
-                            >
-                                <Trash2 className="w-5 h-5 text-red-400" />
-                                <span className="text-sm font-bold text-red-400">Limpiar chat</span>
-                            </button>
-                        </div>
-                    )}
+                                        showToast('Función de búsqueda coming soon', 'info');
+                                    }}
+                                    className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
+                                >
+                                    <Search className="w-5 h-5 text-slate-400" />
+                                    <span className="text-sm font-bold text-white">Buscar en chat</span>
+                                </button>
+                                <button 
+                                    onClick={handleClearChat}
+                                    className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
+                                >
+                                    <Trash2 className="w-5 h-5 text-red-400" />
+                                    <span className="text-sm font-bold text-red-400">Limpiar chat</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-8 space-y-8 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-fixed opacity-95">
+            <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-8 space-y-8 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-fixed opacity-95 relative">
+                <div className="absolute inset-0 bg-gradient-to-b from-[#020617] via-slate-900/10 to-[#020617] pointer-events-none" />
+                <div className="relative z-10 space-y-8">
                 {messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full space-y-4 opacity-30">
                         <div className="w-16 h-16 bg-white/5 rounded-[2rem] flex items-center justify-center border border-dashed border-white/20">
@@ -269,12 +317,14 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                                     {isMe && (
                                         <button
                                             onClick={async () => {
-                                                if (window.confirm('¿Eliminar este mensaje?')) {
+                                                const confirmed = await showConfirm('¿Eliminar este mensaje?', 'Eliminar Mensaje');
+                                                if (confirmed) {
                                                     setDeletingMsgId(msg.id);
                                                     try {
                                                         await deleteRoomMessage(room.id, msg.id);
+                                                        showToast('Mensaje eliminado', 'success');
                                                     } catch {
-                                                        alert('No se pudo eliminar el mensaje.');
+                                                        showToast('No se pudo eliminar el mensaje.', 'error');
                                                     } finally {
                                                         setDeletingMsgId(null);
                                                     }
@@ -288,21 +338,28 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                                         </button>
                                     )}
 
-                                    <div className={`px-5 py-3.5 rounded-[2rem] text-sm font-bold leading-relaxed shadow-2xl transition-all ${
+                                    <div className={`px-5 py-3.5 rounded-[2.2rem] text-sm font-bold leading-relaxed shadow-2xl transition-all hover:scale-[1.01] ${
                                         isMe
-                                            ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-tr-sm shadow-orange-600/20'
-                                            : 'bg-slate-800/80 backdrop-blur-md text-slate-100 rounded-tl-sm border border-white/5 shadow-black/40'
-                                        } ${deletingMsgId === msg.id ? 'opacity-40' : ''}`}>
+                                            ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-tr-sm shadow-orange-600/30'
+                                            : 'bg-slate-800/80 backdrop-blur-xl text-slate-100 rounded-tl-sm border border-white/5 shadow-black/40'
+                                        } ${deletingMsgId === msg.id ? 'opacity-40 grayscale' : ''}`}>
                                         {msg.imageUrl && (
-                                            <img src={msg.imageUrl} alt="Imagen" className="max-w-full rounded-xl mb-2 border border-white/10" />
+                                            <div className="mb-3 -mx-1 -mt-1 group/img relative overflow-hidden rounded-2xl">
+                                                <img 
+                                                    src={msg.imageUrl} 
+                                                    alt="Imagen" 
+                                                    className="max-w-full rounded-2xl border border-white/10 shadow-inner transition-transform duration-500 group-hover/img:scale-105" 
+                                                />
+                                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity" />
+                                            </div>
                                         )}
-                                        {msg.text && <p>{msg.text}</p>}
+                                        {msg.text && <p className="tracking-tight select-text">{msg.text}</p>}
 
-                                        <div className={`mt-1.5 flex items-center gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                            <span className={`text-[9px] font-black uppercase tracking-tighter opacity-50 ${isMe ? 'text-white' : 'text-slate-400'}`}>
+                                        <div className={`mt-2 flex items-center gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                            <span className={`text-[9px] font-black uppercase tracking-widest opacity-60 ${isMe ? 'text-white' : 'text-slate-500'}`}>
                                                 {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </span>
-                                            {isMe && <CheckCheck className="w-3 h-3 text-white/60" />}
+                                            {isMe && <CheckCheck className="w-3 h-3 text-cyan-300 shadow-[0_0_5px_rgba(103,232,249,0.5)]" />}
                                         </div>
                                     </div>
                                 </div>
@@ -311,16 +368,17 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                     );
                 })}
                 <div ref={messagesEndRef} />
+                </div>
             </div>
 
             {/* Input Section */}
             <div className="px-6 py-4 bg-[#020617] border-t border-white/5 pb-4 lg:pb-6">
                 {/* Business Toggle - Solo Premium con negocio */}
-                {userBusiness && userBusiness.plan === SubscriptionPlan.PREMIUM ? (
+                {userBusiness && isPremiumPlan ? (
                     <div className="mb-3">
                         <div className="flex items-center justify-between">
                             <span className="text-[10px] text-amber-500 font-black uppercase tracking-widest flex items-center gap-2">
-                                <Zap className="w-3 h-3" /> Modo Premium
+                                <Zap className="w-3 h-3" /> Modo Negocio
                             </span>
                             <div className="flex items-center gap-2">
                                 <span className="text-[9px] text-slate-500">Enviar como:</span>
@@ -347,10 +405,10 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                 ) : userBusiness ? (
                     <div className="flex items-center gap-2 mb-3 px-2 bg-amber-500/5 border border-amber-500/10 rounded-xl p-2">
                         <Zap className="w-3 h-3 text-amber-500" />
-                        <span className="text-[9px] text-amber-400 font-medium">Plan Básico: Upgrade a Premium para escribir como {userBusiness.name}</span>
+                        <span className="text-[9px] text-amber-400 font-medium">Plan Gratis: Mejora tu plan para escribir como {userBusiness.name}</span>
                     </div>
                 ) : null}
-                <div className="flex items-center gap-3 bg-slate-900/80 backdrop-blur-2xl rounded-[2.5rem] p-2 border border-white/5 shadow-2xl group focus-within:border-orange-500/40 transition-all duration-500">
+                <div className="flex items-center gap-3 bg-slate-900/60 backdrop-blur-3xl rounded-[2.8rem] p-1.5 border border-white/5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] group focus-within:border-orange-500/40 focus-within:bg-slate-900/80 transition-all duration-700">
                     {sendAsBusiness && canSendAsBusiness && (
                         <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
                             <Building2 className="w-4 h-4 text-amber-400" />
@@ -402,12 +460,13 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                         <div className="relative">
                             <button 
                                 onClick={() => { 
-                                    if (canUsePremiumFeatures) {
+                                    if (canSendImages) {
                                         setShowImageOptions(!showImageOptions);
                                         setShowEmojiPicker(false);
                                     }
                                 }}
-                                className={`p-3 transition-colors transform active:scale-90 ${canUsePremiumFeatures ? 'text-slate-500 hover:text-slate-300' : 'text-slate-700 cursor-not-allowed'}`}
+                                title={canSendImages ? 'Adjuntar imagen' : 'Solo disponible cuando un Premium inicia la conversación'}
+                                className={`p-3 transition-colors transform active:scale-90 ${canSendImages ? 'text-slate-500 hover:text-slate-300' : 'text-slate-700 cursor-not-allowed'}`}
                             >
                                 <Paperclip className="w-5 h-5" />
                             </button>

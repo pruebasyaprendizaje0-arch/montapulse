@@ -15,10 +15,12 @@ import {
     increment,
     orderBy,
     limit,
-    startAfter
+    startAfter,
+    arrayUnion,
+    arrayRemove
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, BusinessReview } from '../types';
+import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, BusinessReview, PulseNotification, Announcement } from '../types';
 
 // Helper to sanitize data for Firestore
 const sanitizeData = (data: any): any => {
@@ -149,6 +151,30 @@ export const getEvents = async (): Promise<MontanitaEvent[]> => {
     }
 };
 
+export const incrementEventClickCount = async (eventId: string) => {
+    try {
+        const eventRef = doc(db, 'events', eventId);
+        await updateDoc(eventRef, {
+            clickCount: increment(1),
+            weeklyClicks: increment(1)
+        });
+    } catch (error) {
+        // Silently fail
+    }
+};
+
+export const incrementEventViewCount = async (eventId: string) => {
+    try {
+        const eventRef = doc(db, 'events', eventId);
+        await updateDoc(eventRef, {
+            viewCount: increment(1),
+            weeklyViews: increment(1)
+        });
+    } catch (error) {
+        // Silently fail
+    }
+};
+
 export const subscribeToEvents = (callback: (events: MontanitaEvent[]) => void) => {
     // ─ OPTIMIZACIÓN: Filtramos en el SERVIDOR solo eventos del mes pasado hacia adelante.
     // Antes: descargaba TODA la colección events sin importar la fecha.
@@ -191,20 +217,21 @@ export const incrementViewCount = async (id: string) => {
 export const createBusiness = async (business: Omit<Business, 'id'>) => {
     try {
         const businessesRef = collection(db, 'businesses');
+        const sanitized = sanitizeData(business);
+        console.log('Creating business with sanitized data:', JSON.stringify(sanitized, null, 2));
         
-
         // Reference points need a custom ID with the ref- prefix for map styling
         if ((business as any).isReference) {
             const refId = `ref-${Date.now()}`;
             const docRef = doc(businessesRef, refId);
             await setDoc(docRef, {
-                ...sanitizeData(business),
+                ...sanitized,
                 createdAt: serverTimestamp()
             });
             return refId;
         }
         const docRef = await addDoc(businessesRef, {
-            ...sanitizeData(business),
+            ...sanitized,
             createdAt: serverTimestamp()
         });
         return docRef.id;
@@ -230,12 +257,33 @@ export const updateBusiness = async (id: string, data: Partial<Business>) => {
     }
 };
 
-export const deleteBusiness = async (id: string) => {
+export const deleteBusiness = async (id: string, permanent: boolean = false) => {
     try {
         const businessRef = doc(db, 'businesses', id);
-        await deleteDoc(businessRef);
+        if (permanent) {
+            await deleteDoc(businessRef);
+        } else {
+            await updateDoc(businessRef, { 
+                isDeleted: true, 
+                deletedAt: serverTimestamp() 
+            });
+        }
     } catch (error) {
         console.error('Error deleting business:', error);
+        throw error;
+    }
+};
+
+export const restoreBusiness = async (id: string) => {
+    try {
+        const businessRef = doc(db, 'businesses', id);
+        await updateDoc(businessRef, { 
+            isDeleted: false,
+            deletedAt: null,
+            updatedAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Error restoring business:', error);
         throw error;
     }
 };
@@ -330,8 +378,11 @@ export const subscribeToBusinesses = (callback: (businesses: Business[]) => void
 export const incrementBusinessViewCount = async (businessId: string) => {
     try {
         const bizRef = doc(db, 'businesses', businessId);
+        // We increment both total and weekly. 
+        // Note: A real weekly reset would need a Cloud Function or lazy reset on first view of the week.
         await updateDoc(bizRef, {
-            viewCount: increment(1)
+            viewCount: increment(1),
+            weeklyViews: increment(1)
         });
     } catch (error) {
         console.error('Error incrementing business view count:', error);
@@ -356,9 +407,22 @@ export const createUser = async (userId: string, userData: Omit<UserProfile, 'id
 
 export const updateUser = async (userId: string, data: Partial<UserProfile>) => {
     try {
+        if (!userId) {
+            console.error('UserId is missing for update');
+            throw new Error('UserId is missing');
+        }
+
+        // Clean data for Firestore
+        const cleanData = sanitizeData(data);
+        
+        // NEVER include 'id' in the update payload as it's the document ID
+        if (cleanData.id) {
+            delete cleanData.id;
+        }
+
         const userRef = doc(db, 'users_v2', userId);
         await updateDoc(userRef, {
-            ...sanitizeData(data),
+            ...cleanData,
             updatedAt: serverTimestamp()
         });
     } catch (error) {
@@ -401,11 +465,11 @@ export const getUserByEmail = async (email: string): Promise<UserProfile | null>
 };
 
 export const subscribeToUsers = (callback: (users: UserProfile[]) => void) => {
-    // ─ OPTIMIZACIÓN: Limitar a los 200 usuarios más recientes.
+    // ─ OPTIMIZACIÓN: Limitar a los 500 usuarios más recientes.
     // Solo admin y premium hosts llegan a este query. El límite evita abrir
     // una escucha sin tope sobre usuarios_v2 completos.
     const usersRef = collection(db, 'users_v2');
-    const q = query(usersRef, orderBy('createdAt', 'desc'), limit(200));
+    const q = query(usersRef, orderBy('createdAt', 'desc'), limit(500));
     return onSnapshot(q, (snapshot) => {
         const users = snapshot.docs.map(doc => ({
             id: doc.id,
@@ -639,11 +703,9 @@ export const subscribeToAppSettings = (settingId: string, callback: (data: any) 
 // ==================== COMMUNITY ====================
 
 export const subscribeToPosts = (callback: (posts: any[]) => void) => {
-    // ─ OPTIMIZACIÓN: Limitar a los 30 posts más recientes.
-    // Sin este límite, cada apertura del chat descargaba toda la colección.
-    // Ahorro: ~N-30 lecturas por sesión (donde N = total de posts).
+    // AUMENTADO: De 30 a 500 posts para el muro de la comunidad
     const postsRef = collection(db, 'posts');
-    const q = query(postsRef, orderBy('timestamp', 'desc'), limit(30));
+    const q = query(postsRef, orderBy('timestamp', 'desc'), limit(500));
     return onSnapshot(q, (snapshot) => {
         const posts = snapshot.docs.map(doc => ({
             id: doc.id,
@@ -660,8 +722,10 @@ export const createPost = async (post: any) => {
         await addDoc(postsRef, {
             ...post,
             timestamp: serverTimestamp(),
-            likes: 0,
-            comments: 0
+            likes: [],
+            likesCount: 0,
+            comments: [],
+            commentsCount: 0
         });
     } catch (error) {
         console.error('Error creating post:', error);
@@ -669,17 +733,55 @@ export const createPost = async (post: any) => {
     }
 };
 
-export const toggleLikePost = async (postId: string, userId: string) => {
+export const toggleLikePost = async (postId: string, userId: string, isLiked: boolean, authorId: string) => {
     const postRef = doc(db, 'posts', postId);
-    await updateDoc(postRef, {
-        likes: increment(1)
-    });
+    try {
+        if (isLiked) {
+            await updateDoc(postRef, {
+                likes: arrayRemove(userId),
+                likesCount: increment(-1)
+            });
+        } else {
+            await updateDoc(postRef, {
+                likes: arrayUnion(userId),
+                likesCount: increment(1)
+            });
+            // Award 2 points to the author for each like received
+            if (authorId) {
+                await addPoints(authorId, 2);
+            }
+        }
+    } catch (error) {
+        console.error('Error toggling like:', error);
+        throw error;
+    }
+};
+
+export const addCommentToPost = async (postId: string, comment: any) => {
+    const postRef = doc(db, 'posts', postId);
+    try {
+        await updateDoc(postRef, {
+            comments: arrayUnion({
+                ...comment,
+                id: Math.random().toString(36).substr(2, 9),
+                timestamp: new Date().toISOString() // Using string for nested timestamp to avoid Firestore nesting issues sometimes
+            }),
+            commentsCount: increment(1)
+        });
+        // Award points for commenting
+        if (comment.authorId) {
+            await addPoints(comment.authorId, 2);
+        }
+    } catch (error) {
+        console.error('Error adding comment:', error);
+        throw error;
+    }
 };
 
 // ==================== GLOBAL MESSAGES (OLD) ====================
 
 export const subscribeToMessages = (limitNum: number, callback: (messages: any[]) => void) => {
-    const messagesRef = collection(db, 'messages');
+    const messagesRef = collection(db, 'pulso_global');
     const q = query(messagesRef, orderBy('timestamp', 'desc'), limit(limitNum));
     return onSnapshot(q, (snapshot) => {
         const messages = snapshot.docs.map(doc => ({
@@ -693,13 +795,35 @@ export const subscribeToMessages = (limitNum: number, callback: (messages: any[]
 
 export const sendMessage = async (message: any) => {
     try {
-        const messagesRef = collection(db, 'messages');
+        const messagesRef = collection(db, 'pulso_global');
         await addDoc(messagesRef, {
             ...message,
-            timestamp: serverTimestamp()
+            timestamp: serverTimestamp(),
+            likes: [],
+            likesCount: 0
         });
     } catch (error) {
         console.error('Error sending message:', error);
+        throw error;
+    }
+};
+
+export const toggleLikeGlobalMessage = async (messageId: string, userId: string, isLiked: boolean) => {
+    const msgRef = doc(db, 'pulso_global', messageId);
+    try {
+        if (isLiked) {
+            await updateDoc(msgRef, {
+                likes: arrayRemove(userId),
+                likesCount: increment(-1)
+            });
+        } else {
+            await updateDoc(msgRef, {
+                likes: arrayUnion(userId),
+                likesCount: increment(1)
+            });
+        }
+    } catch (error) {
+        console.error('Error toggling like on global message:', error);
         throw error;
     }
 };
@@ -719,23 +843,54 @@ export const subscribeToChatRooms = (userId: string, callback: (rooms: ChatRoom[
     });
 };
 
-export const sendRoomMessage = async (roomId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+export const sendRoomMessage = async (roomId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>): Promise<string> => {
     try {
         const messagesRef = collection(db, `chatRooms/${roomId}/messages`);
-        await addDoc(messagesRef, {
+        const docRef = await addDoc(messagesRef, {
             ...message,
-            timestamp: serverTimestamp()
+            timestamp: serverTimestamp(),
+            likes: [],
+            likesCount: 0
         });
 
         const roomRef = doc(db, 'chatRooms', roomId);
         const prefix = message.isBusinessMessage ? '🏪 ' : '👤 ';
+        
+        // Fetch room to get participants and update unread counts
+        const roomSnap = await getDoc(roomRef);
+        const unreadUpdates: Record<string, any> = {};
+        
+        if (roomSnap.exists()) {
+            const data = roomSnap.data();
+            const participants = data.participants || [];
+            participants.forEach((pId: string) => {
+                if (pId !== message.senderId) {
+                    unreadUpdates[`unreadCounts.${pId}`] = increment(1);
+                }
+            });
+        }
+        
         await updateDoc(roomRef, {
             lastMessage: `${prefix}${message.senderName}: ${message.text}`,
-            lastMessageTime: serverTimestamp()
+            lastMessageTime: serverTimestamp(),
+            ...unreadUpdates
         });
+        
+        return docRef.id;
     } catch (error) {
         console.error('Error sending room message:', error);
         throw error;
+    }
+};
+
+export const markRoomAsRead = async (roomId: string, userId: string): Promise<void> => {
+    try {
+        const roomRef = doc(db, 'chatRooms', roomId);
+        await updateDoc(roomRef, {
+            [`unreadCounts.${userId}`]: 0
+        });
+    } catch (error) {
+        console.error('Error marking room as read:', error);
     }
 };
 
@@ -753,23 +908,70 @@ export const subscribeToRoomMessages = (roomId: string, callback: (messages: Cha
 };
 
 /**
- * Auto-delete messages older than 7 days from a chat room.
+ * Auto-delete messages to keep a history of up to 120 messages in a chat room.
  * Called client-side when a user opens a room (Spark plan — no Cloud Functions).
  */
 export const deleteOldRoomMessages = async (roomId: string): Promise<void> => {
     try {
-        const ONE_WEEK_AGO = Timestamp.fromDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
         const messagesRef = collection(db, `chatRooms/${roomId}/messages`);
-        const q = query(messagesRef, where('timestamp', '<', ONE_WEEK_AGO), limit(50));
+        const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(300));
         const snapshot = await getDocs(q);
-        const deletes = snapshot.docs.map(d => deleteDoc(d.ref));
-        await Promise.all(deletes);
-        if (snapshot.size > 0) {
-            console.log(`[AutoClean] Deleted ${snapshot.size} old messages from room ${roomId}`);
+        
+        if (snapshot.size > 120) {
+            const messagesToDelete = snapshot.size - 120;
+            const docsToDelete = snapshot.docs.slice(0, messagesToDelete);
+            const deletes = docsToDelete.map(d => deleteDoc(d.ref));
+            await Promise.all(deletes);
+            console.log(`[AutoClean] Deleted ${messagesToDelete} old messages from room ${roomId}`);
         }
     } catch (error) {
         // Non-critical — silently fail so it doesn't break the chat experience
         console.warn('[AutoClean] Could not delete old messages:', error);
+    }
+};
+
+/**
+ * Clear all messages in a chat room.
+ * Warning: This is a destructive action for all participants in this room.
+ */
+export const clearRoomMessages = async (roomId: string): Promise<void> => {
+    try {
+        const messagesRef = collection(db, `chatRooms/${roomId}/messages`);
+        const snapshot = await getDocs(messagesRef);
+        
+        // Use batches if there are many messages, but for mobile usually not many
+        const deletes = snapshot.docs.map(d => deleteDoc(d.ref));
+        await Promise.all(deletes);
+        
+        // Reset last message in room doc
+        const roomRef = doc(db, 'chatRooms', roomId);
+        await updateDoc(roomRef, {
+            lastMessage: 'Chat vaciado',
+            lastMessageTime: serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Error clearing room messages:', error);
+        throw error;
+    }
+};
+
+export const toggleLikeRoomMessage = async (roomId: string, messageId: string, userId: string, isLiked: boolean) => {
+    const msgRef = doc(db, `chatRooms/${roomId}/messages`, messageId);
+    try {
+        if (isLiked) {
+            await updateDoc(msgRef, {
+                likes: arrayRemove(userId),
+                likesCount: increment(-1)
+            });
+        } else {
+            await updateDoc(msgRef, {
+                likes: arrayUnion(userId),
+                likesCount: increment(1)
+            });
+        }
+    } catch (error) {
+        console.error('Error toggling like on room message:', error);
+        throw error;
     }
 };
 
@@ -785,15 +987,44 @@ export const deleteRoomMessage = async (roomId: string, messageId: string): Prom
 };
 
 /** Delete a single message from the global chat (messages collection). */
-export const deleteGlobalMessage = async (messageId: string): Promise<void> => {
+export const deleteGlobalMessage = async (messageId: string) => {
     try {
-        const msgRef = doc(db, 'messages', messageId);
-        await deleteDoc(msgRef);
+        const messageRef = doc(db, 'pulso_global', messageId);
+        await deleteDoc(messageRef);
     } catch (error) {
         console.error('Error deleting global message:', error);
         throw error;
     }
 };
+
+// ==================== FCM TOKENS ====================
+
+/**
+ * Saves an FCM token to the user document for push notifications.
+ * @param userId The ID of the authenticated user
+ * @param token The FCM token generated by Firebase Messaging
+ */
+export const saveFCMToken = async (userId: string, token: string) => {
+    try {
+        const userRef = doc(db, 'users_v2', userId);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const data = userSnap.data();
+            const tokens = data.fcmTokens || [];
+            
+            if (!tokens.includes(token)) {
+                await updateDoc(userRef, {
+                    fcmTokens: [...tokens, token],
+                    updatedAt: serverTimestamp()
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error saving FCM token:', error);
+    }
+};
+
 
 export const createChatRoom = async (roomData: Omit<ChatRoom, 'id'>) => {
     try {
@@ -816,6 +1047,7 @@ export interface CustomLocality {
     coords: [number, number];
     zoom: number;
     sectors: string[];
+    hasBeach: boolean;
     createdBy: string;
     createdAt: Date;
 }
@@ -833,6 +1065,18 @@ export const getCustomLocalities = async (): Promise<CustomLocality[]> => {
         console.error('Error getting custom localities:', error);
         return [];
     }
+};
+
+export const subscribeToCustomLocalities = (callback: (localities: CustomLocality[]) => void) => {
+    const localitiesRef = collection(db, 'customLocalities');
+    return onSnapshot(localitiesRef, (snapshot) => {
+        const localities = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date()
+        })) as CustomLocality[];
+        callback(localities);
+    });
 };
 
 export const createCustomLocality = async (locality: Omit<CustomLocality, 'id' | 'createdAt'>): Promise<string> => {
@@ -859,3 +1103,157 @@ export const deleteCustomLocality = async (id: string): Promise<void> => {
     }
 };
 
+export const incrementPulseCount = async (amount: number = 1) => {
+    try {
+        const pulseRef = doc(db, 'metrics', 'pulse');
+        await setDoc(pulseRef, {
+            activity: increment(amount)
+        }, { merge: true });
+    } catch (error) {
+        console.error('Error incrementing pulse count:', error);
+    }
+};
+
+// ==================== NOTIFICATIONS ====================
+
+export const createNotification = async (notification: Omit<PulseNotification, 'id' | 'createdAt' | 'read'>) => {
+    try {
+        const notificationRef = collection(db, 'notifications');
+        const sanitized = sanitizeData(notification);
+        await addDoc(notificationRef, {
+            ...sanitized,
+            createdAt: serverTimestamp(),
+            read: false,
+            timestamp: serverTimestamp() // Compatibility
+        });
+    } catch (error) {
+        console.error('Error creating notification:', error);
+        throw error;
+    }
+};
+
+export const subscribeToNotifications = (userId: string, callback: (notifications: PulseNotification[]) => void) => {
+    const notificationRef = collection(db, 'notifications');
+    // AUMENTADO: De 100 a 500 notificaciones
+    const q = query(
+        notificationRef, 
+        where('userId', '==', userId), 
+        limit(500)
+    );
+    return onSnapshot(q, (snapshot) => {
+        const notifications = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date()
+        })).sort((a, b) => b.createdAt - a.createdAt) as PulseNotification[];
+        callback(notifications);
+    });
+};
+
+export const markNotificationRead = async (notificationId: string) => {
+    try {
+        const notificationRef = doc(db, 'notifications', notificationId);
+        await updateDoc(notificationRef, { read: true });
+    } catch (error) {
+        console.error('Error marking notification read:', error);
+    }
+};
+
+// ==================== ANNOUNCEMENTS ====================
+
+export const createAnnouncement = async (announcement: Omit<Announcement, 'id' | 'timestamp'>) => {
+    try {
+        const announcementsRef = collection(db, 'announcements');
+        await addDoc(announcementsRef, {
+            ...sanitizeData(announcement),
+            timestamp: serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Error creating announcement:', error);
+        throw error;
+    }
+};
+
+export const subscribeToAnnouncements = (senderId: string, callback: (announcements: Announcement[]) => void) => {
+    const announcementsRef = collection(db, 'announcements');
+    const q = query(announcementsRef, where('senderId', '==', senderId), orderBy('timestamp', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+        const announcements = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate() || new Date()
+        })) as Announcement[];
+        callback(announcements);
+    });
+};
+
+export const deleteAnnouncement = async (announcementId: string, roomMessages?: { roomId: string, messageId: string }[]) => {
+    try {
+        // 1. Delete the announcement record
+        const annRef = doc(db, 'announcements', announcementId);
+        await deleteDoc(annRef);
+
+        // 2. If it has tracked messages, delete them from chat rooms
+        if (roomMessages && roomMessages.length > 0) {
+            const promises = roomMessages.map(item => 
+                deleteDoc(doc(db, `chatRooms/${item.roomId}/messages`, item.messageId))
+            );
+            // Non-blocking but we wait for them to finish for the overall operation
+            await Promise.allSettled(promises);
+        }
+    } catch (error) {
+        console.error('Error deleting announcement:', error);
+        throw error;
+    }
+};
+
+// ==================== BOOSTS ====================
+
+export const purchaseBoost = async (businessId: string, userId: string, points: number, durationHours: number = 24) => {
+    try {
+        // 1. Deduct points from user
+        const userRef = doc(db, 'users_v2', userId);
+        await updateDoc(userRef, {
+            points: increment(-points)
+        });
+
+        // 2. Create boost document
+        const boostsRef = collection(db, 'boosts');
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + durationHours);
+
+        await addDoc(boostsRef, {
+            businessId,
+            userId,
+            type: 'community_boost',
+            createdAt: serverTimestamp(),
+            expiresAt: Timestamp.fromDate(expiresAt),
+            status: 'active'
+        });
+
+        return true;
+    } catch (error) {
+        console.error('Error purchasing boost:', error);
+        throw error;
+    }
+};
+
+export const subscribeToActiveBoosts = (businessId: string, callback: (boosts: any[]) => void) => {
+    const now = new Date();
+    const boostsRef = collection(db, 'boosts');
+    const q = query(
+        boostsRef,
+        where('businessId', '==', businessId),
+        where('status', '==', 'active'),
+        where('expiresAt', '>', Timestamp.fromDate(now))
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const boosts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            expiresAt: doc.data().expiresAt?.toDate() || new Date()
+        }));
+        callback(boosts);
+    });
+};

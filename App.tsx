@@ -1,13 +1,33 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, ChevronRight, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck, Palmtree, Mountain, Activity, Users } from 'lucide-react';
+import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, ChevronRight, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck, Palmtree, Mountain, Activity, Users, Sun, Moon } from 'lucide-react';
 import { MapView } from './components/MapView.tsx';
 import { EventCard } from './components/EventCard.tsx';
 import { EventModal } from './components/EventModal.tsx';
+import { getToken } from 'firebase/messaging';
+import { messaging } from './firebase.config.ts';
+import { saveFCMToken } from './services/firestoreService.ts';
 import { MigrationPanel } from './components/MigrationPanel.tsx';
 import { LoginScreen } from './components/LoginScreen.tsx';
+
+// Lazy load pages for better performance
+const Community = lazy(() => import('./pages/Community.tsx').then(m => ({ default: m.Community })));
+const Passport = lazy(() => import('./pages/Passport.tsx').then(m => ({ default: m.Passport })));
+const Explore = lazy(() => import('./pages/Explore.tsx').then(m => ({ default: m.Explore })));
+const InfoPage = lazy(() => import('./pages/InfoPage.tsx').then(m => ({ default: m.InfoPage })));
+const CalendarPage = lazy(() => import('./pages/Calendar.tsx').then(m => ({ default: m.Calendar })));
+const History = lazy(() => import('./pages/History.tsx').then(m => ({ default: m.History })));
+const Plans = lazy(() => import('./pages/Plans.tsx').then(m => ({ default: m.Plans })));
+const AdminUsers = lazy(() => import('./pages/AdminUsers.tsx').then(m => ({ default: m.AdminUsers })));
+const Policies = lazy(() => import('./pages/Policies.tsx').then(m => ({ default: m.Policies })));
+
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[50vh]">
+    <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
 import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan, BusinessCategory } from './types.ts';
-import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS } from './constants.ts';
+import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS, DEFAULT_NEW_LOCALITY_SECTORS } from './constants.ts';
 import { getSmartRecommendations, generateEventDescription } from './services/geminiService.ts';
 import { useAuthContext } from './context/AuthContext.tsx';
 import { logout, isSuperAdmin as checkSuperAdmin, updateUserProfile } from './services/authService.ts';
@@ -17,54 +37,42 @@ import {
   subscribeToBusinesses, subscribeToAppSettings, updateAppSettings,
   toggleRSVP, subscribeToUserRSVPs, subscribeToUsers
 } from './services/firestoreService.ts';
-import { compressImage } from './services/uiService.ts';
-import { Community } from './pages/Community.tsx';
-import { Passport } from './pages/Passport.tsx';
-import { Explore } from './pages/Explore.tsx';
-import { InfoPage } from './pages/InfoPage.tsx';
-import { Calendar as CalendarPage } from './pages/Calendar.tsx';
-import { History } from './pages/History.tsx';
-import { Plans } from './pages/Plans.tsx';
-import { AdminUsers } from './pages/AdminUsers.tsx';
-import { Policies } from './pages/Policies.tsx';
+import { compressImage } from './utils/imageUtils.ts';
 import { BottomNav } from './components/Layout/BottomNav.tsx';
 import { Sidebar } from './components/Layout/Sidebar.tsx';
-// CalendarModal removed
 import { PulseModal } from './components/Modals/PulseModal.tsx';
 import { PulsePassModal } from './components/Modals/PulsePassModal.tsx';
 import { useToast } from './context/ToastContext.tsx';
 import { useData } from './context/DataContext.tsx';
 import { useTranslation } from 'react-i18next';
 import { BusinessEditModal } from './components/Modals/BusinessEditModal.tsx';
+import { EventEditorModal } from './components/Modals/EventEditorModal.tsx';
 import { PublicProfileModal } from './components/PublicProfileModal.tsx';
+import { useTheme } from './hooks/useTheme.ts';
 
-
-
-
-
-// Helper to suggest an icon based on description
 export const suggestIconFromDescription = (description: string): string => {
   const desc = (description || '').toLowerCase();
 
   if (desc.includes('pizza') || desc.includes('hamburguesa') || desc.includes('restaurante') || desc.includes('comida') || desc.includes('cena') || desc.includes('almuerzo') || desc.includes('food')) return 'food';
   if (desc.includes('cocktail') || desc.includes('coctel') || desc.includes('trago') || desc.includes('bar') || desc.includes('cerveza') || desc.includes('copa') || desc.includes('drink')) return 'cocktail';
-  if (desc.includes('cafÃ©') || desc.includes('coffee') || desc.includes('brunch') || desc.includes('desayuno')) return 'coffee';
-  if (desc.includes('baile') || desc.includes('fiesta') || desc.includes('party') || desc.includes('discoteca') || desc.includes('club') || desc.includes('dj') || desc.includes('musica') || desc.includes('mÃºsica')) return 'music';
+  if (desc.includes('café') || desc.includes('coffee') || desc.includes('brunch') || desc.includes('desayuno')) return 'coffee';
+  if (desc.includes('baile') || desc.includes('fiesta') || desc.includes('party') || desc.includes('discoteca') || desc.includes('club') || desc.includes('dj') || desc.includes('musica') || desc.includes('música')) return 'music';
   if (desc.includes('hotel') || desc.includes('hostal') || desc.includes('alojamiento') || desc.includes('hospedaje') || desc.includes('stay') || desc.includes('cama')) return 'hotel';
   if (desc.includes('surf') || desc.includes('tabla') || desc.includes('ola') || desc.includes('waves')) return 'surf';
-  if (desc.includes('playa') || desc.includes('mar') || desc.includes('arena') || desc.includes('malecÃ³n') || desc.includes('costa')) return 'palmtree';
-  if (desc.includes('montaÃ±a') || desc.includes('cerro') || desc.includes('senderismo') || desc.includes('mountain') || desc.includes('tigrillo')) return 'mountain';
+  if (desc.includes('playa') || desc.includes('mar') || desc.includes('arena') || desc.includes('malecón') || desc.includes('costa')) return 'palmtree';
+  if (desc.includes('montaña') || desc.includes('cerro') || desc.includes('senderismo') || desc.includes('mountain') || desc.includes('tigrillo')) return 'mountain';
   if (desc.includes('iglesia') || desc.includes('parque') || desc.includes('pueblo') || desc.includes('centro') || desc.includes('cultura')) return 'church';
   if (desc.includes('compras') || desc.includes('tienda') || desc.includes('mercado') || desc.includes('ropa') || desc.includes('shop') || desc.includes('market')) return 'shopping';
   if (desc.includes('bus') || desc.includes('terminal') || desc.includes('transporte') || desc.includes('clp') || desc.includes('carro') || desc.includes('taxi')) return 'bus';
   if (desc.includes('mirador') || desc.includes('vista') || desc.includes('foto') || desc.includes('sunset') || desc.includes('atardecer') || desc.includes('camera')) return 'camera';
   if (desc.includes('paz') || desc.includes('verde') || desc.includes('hoja') || desc.includes('naturaleza') || desc.includes('eco')) return 'leaf';
 
-  return 'palmtree'; // Default
+  return 'palmtree';
 };
 
 const Dashboard: React.FC = () => {
   const { user, authUser, isAdmin, isSuperAdmin, isSuperUser, logout, setUser } = useAuthContext();
+  const { theme, setTheme, isAuto, setIsAuto } = useTheme();
   const { showToast, showConfirm } = useToast();
   const {
     events,
@@ -113,8 +121,6 @@ const Dashboard: React.FC = () => {
     filteredBusinesses,
     journeyCards, setJourneyCards,
     toggleSector,
-    handleImageUpload,
-    handleBusinessImageUpload,
     handleDeleteBusiness,
     showBusinessEdit, setShowBusinessEdit,
     showProfileEdit, setShowProfileEdit,
@@ -143,11 +149,9 @@ const Dashboard: React.FC = () => {
     posts,
     services, handleUpdateServices,
     handleToggleFollow, isBusinessFollowed,
-    setActiveView
+    setActiveView,
+    customLocalities
   } = useData();
-
-
-
 
   const canUserEditBusiness = (id: string): boolean => {
     if (canEditAllBusiness) return true;
@@ -164,7 +168,6 @@ const Dashboard: React.FC = () => {
     setShowBusinessEdit(true);
   };
 
-  // AI states (kept local if not in context)
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiRecData, setAiRecData] = useState<any>(null);
 
@@ -191,7 +194,41 @@ const Dashboard: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Sync activeView with URL
+  useEffect(() => {
+    if (user && messaging) {
+      const requestPermission = async () => {
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            let vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+            if (!vapidKey) {
+              console.warn('VITE_FIREBASE_VAPID_KEY is missing. Push notifications will not be active.');
+              return;
+            }
+            vapidKey = vapidKey.trim().replace(/\s/g, '');
+            if (vapidKey.includes('PLACEHOLDER')) {
+              console.warn('VITE_FIREBASE_VAPID_KEY is a placeholder. Push notifications will not be active.');
+              return;
+            }
+
+            try {
+              const token = await getToken(messaging, { vapidKey });
+              if (token) {
+                await saveFCMToken(user.id, token);
+                console.log('FCM Token generated and saved');
+              }
+            } catch (atobError) {
+              console.error('Invalid VAPID key format:', atobError);
+            }
+          }
+        } catch (error) {
+          console.error('Error requesting notification permission:', error);
+        }
+      };
+      requestPermission();
+    }
+  }, [user]);
+
   React.useEffect(() => {
     const path = location.pathname;
     if (path === '/' || path === '/explore') setActiveView('explore');
@@ -203,30 +240,13 @@ const Dashboard: React.FC = () => {
     else if (path === '/saved-events') setActiveView('all-favorites');
     else if (path === '/admin-users') setActiveView('admin-users');
     else if (path === '/info') setActiveView('info');
+    else if (path === '/services') setActiveView('services');
     else if (path === '/policies') setActiveView('policies');
   }, [location.pathname]);
-
-  React.useEffect(() => {
-    localStorage.setItem('montapulse_sector_labels', JSON.stringify(sectorLabels));
-  }, [sectorLabels]);
-
-  React.useEffect(() => {
-    localStorage.setItem('montapulse_polygons', JSON.stringify(sectorPolygons));
-  }, [sectorPolygons]);
-
-  React.useEffect(() => {
-    localStorage.setItem('montapulse_favorites', JSON.stringify(favorites));
-  }, [favorites]);
-
-  React.useEffect(() => {
-    localStorage.setItem('montapulse_journey_cards_v3', JSON.stringify(journeyCards));
-  }, [journeyCards]);
-
 
   const [profileError, setProfileError] = useState<string | null>(null);
   const [managementTab, setManagementTab] = useState<'users' | 'businesses' | 'stats'>('users');
 
-  // Force map update on view change
   React.useEffect(() => {
     if (activeView === 'explore') {
       const refresh = () => {
@@ -236,21 +256,16 @@ const Dashboard: React.FC = () => {
     }
   }, [activeView]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const bizFileInputRef = useRef<HTMLInputElement>(null);
-  const bizCameraInputRef = useRef<HTMLInputElement>(null);
   const bizEditFileInputRef = useRef<HTMLInputElement>(null);
   const bizEditCameraInputRef = useRef<HTMLInputElement>(null);
   const profileFileInputRef = useRef<HTMLInputElement>(null);
   const profileCameraInputRef = useRef<HTMLInputElement>(null);
 
-
   const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && user) {
       try {
-        const compressedBase64 = await compressImage(file, 300, 0.7, true);
+        const compressedBase64 = await compressImage(file, { maxWidth: 300, maxHeight: 300, quality: 0.7, squareCrop: true });
         setUser({ ...user, avatarUrl: compressedBase64 });
       } catch (error) {
         showToast("Error al procesar la imagen.", 'error');
@@ -261,7 +276,7 @@ const Dashboard: React.FC = () => {
   const handleUpdateUserProfile = async () => {
     if (!user) return;
     try {
-      await createUser(user.id, {
+      await updateUser(user.id, {
         name: user.name,
         surname: user.surname,
         email: user.email,
@@ -269,7 +284,7 @@ const Dashboard: React.FC = () => {
         avatarUrl: user.avatarUrl || null,
         role: user.role,
         businessId: user.businessId || null,
-        plan: user.plan || SubscriptionPlan.VISITOR
+        plan: user.plan || SubscriptionPlan.FREE
       });
       setShowProfileEdit(false);
       showToast("Perfil actualizado correctamente.", 'success');
@@ -277,9 +292,6 @@ const Dashboard: React.FC = () => {
       showToast(`Error al actualizar perfil: ${error}`, 'error');
     }
   };
-
-  // Users management
-
 
   const handleUpdateSectorGeometry = (sector: Sector, coords: [number, number][]) => {
     setSectorPolygons(prev => ({ ...prev, [sector]: coords }));
@@ -295,12 +307,10 @@ const Dashboard: React.FC = () => {
       const business = businesses.find(b => b.id === user.businessId);
       if (business) return business;
     }
-    // Fallback: search by ownerId
     if (authUser?.uid) {
       const byOwner = businesses.find(b => b.ownerId === authUser.uid);
       if (byOwner) return byOwner;
     }
-    // Fallback: search by email (for users who registered business with same email)
     if (user?.email) {
       const byEmail = businesses.find(b => b.email?.toLowerCase() === user.email?.toLowerCase());
       if (byEmail) return byEmail;
@@ -308,7 +318,7 @@ const Dashboard: React.FC = () => {
     return null;
   }, [user, businesses, authUser]);
 
-  const isPremiumUser = user?.plan === SubscriptionPlan.PREMIUM;
+  const isPremiumUser = user?.plan === SubscriptionPlan.BASIC || user?.plan === SubscriptionPlan.EXPERT;
   const canEditOwnBusiness = isPremiumUser && userBusiness;
   const canEditAllBusiness = isAdmin || isSuperUser;
 
@@ -334,160 +344,137 @@ const Dashboard: React.FC = () => {
 
   const renderView = () => {
     switch (activeView) {
-      case 'info':
-        return <InfoPage />;
       case 'explore':
-        return <Explore 
-          onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)} 
+        return <Suspense fallback={<PageLoader />}><Explore
+          onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)}
           userBusinessId={userBusiness?.id}
-        />;
+        /></Suspense>;
       case 'calendar':
-        return <CalendarPage />;
+        return <Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>;
       case 'favorites':
-        return <Passport onNavigate={setActiveView} />;
+        return <Suspense fallback={<PageLoader />}><Passport onNavigate={setActiveView} /></Suspense>;
       case 'history':
-        return <History />;
+        return <Suspense fallback={<PageLoader />}><History /></Suspense>;
       case 'plans':
-        return <Plans />;
+        return <Suspense fallback={<PageLoader />}><Plans /></Suspense>;
       case 'community':
       case 'chat':
-        return <Community />;
+        return <Suspense fallback={<PageLoader />}><Community /></Suspense>;
       case 'admin-users':
-        return <AdminUsers />;
+        return <Suspense fallback={<PageLoader />}><AdminUsers /></Suspense>;
       case 'policies':
-        return <Policies />;
+        return <Suspense fallback={<PageLoader />}><Policies /></Suspense>;
+      case 'info':
+        return <Suspense fallback={<PageLoader />}><InfoPage /></Suspense>;
       default:
-        return <Explore onEditBusiness={handleEditBusiness} />;
+        return <Suspense fallback={<PageLoader />}><Explore onEditBusiness={handleEditBusiness} /></Suspense>;
     }
   };
 
   return (
-    <div className="relative h-[100dvh] w-screen bg-slate-900 overflow-hidden flex flex-row font-sans select-none">
+    <div className={`relative h-[100dvh] w-screen bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden flex flex-row font-sans select-none transition-colors duration-500`}>
       <Sidebar />
-      <div className={`flex-1 flex flex-col h-full relative ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-      <div className="fixed top-0 left-0 lg:left-64 right-0 z-50 bg-slate-900/60 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-6">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20 rotate-3">
-            <div className="w-2.5 h-2.5 bg-white rounded-full animate-ping"></div>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-base font-black tracking-tighter text-white leading-none">SPONDYLUS</span>
-            <span className="text-[10px] font-black tracking-[0.3em] text-orange-500 leading-none mt-0.5">PULSE</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          {user && (
-            <div className="flex items-center gap-2.5 pr-2">
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] font-black text-white uppercase tracking-tighter hidden sm:inline">{user.name} {user.surname}</span>
-                {isSuperAdmin && (
-                  <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 leading-none">Master Admin</span>
-                )}
-              </div>
-              <div className="w-8 h-8 rounded-xl border border-orange-500/50 overflow-hidden ring-2 ring-orange-500/20 shadow-lg">
-                <img src={user.avatarUrl} className="w-full h-full object-cover" />
-              </div>
+      <div className={`flex-1 flex flex-col h-full relative ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history', 'services'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--glass)] backdrop-blur-xl border-b border-[var(--glass-border)] h-16 flex items-center justify-between px-6 transition-colors duration-500">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20 rotate-3">
+              <div className="w-2.5 h-2.5 bg-white rounded-full animate-ping"></div>
             </div>
-          )}
-          {isSuperAdmin && (
-            <button
-              onClick={() => navigate('/admin-users')}
-              className="p-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-xl transition-all border border-amber-500/20 flex items-center gap-2"
-              title="Gestión de Usuarios"
-            >
-              <Users className="w-5 h-5" />
-              <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">Admin</span>
-            </button>
-          )}
-          <div className="flex flex-col items-end">
-            <span className="text-[7px] font-bold text-slate-700 mt-1 uppercase tracking-widest leading-none">v1.0.3 Master Edition</span>
+            <div className="flex flex-col">
+              <span className="text-base font-black tracking-tighter text-white leading-none uppercase">ubicame.info</span>
+              <span className="text-[10px] font-black tracking-[0.3em] text-orange-500 leading-none mt-0.5">PULSE</span>
+            </div>
           </div>
-          {isSuperAdmin && (
+          <div className="flex items-center gap-4">
             <button
-              onClick={logout}
-              className="p-3 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-xl transition-all active:scale-90 border border-orange-500/20 ml-2"
-              title="Cerrar SesiÃ³n"
+              onClick={() => {
+                if (isAuto) {
+                  setIsAuto(false);
+                  setTheme('light');
+                } else if (theme === 'light') {
+                  setTheme('dark');
+                } else if (theme === 'dark') {
+                  setTheme('night');
+                } else {
+                  setIsAuto(true);
+                }
+              }}
+              className="p-3 bg-[var(--glass)] hover:bg-orange-500/10 text-orange-500 rounded-xl transition-all border border-[var(--glass-border)] flex items-center gap-2 group relative"
+              title={`Cambiar Tema (Actual: ${isAuto ? 'Auto' : theme})`}
             >
-              <LogOut className="w-5 h-5" />
+              {isAuto ? (
+                <Clock className="w-5 h-5 animate-pulse" />
+              ) : theme === 'light' ? (
+                <Sun className="w-5 h-5 text-amber-500" />
+              ) : theme === 'dark' ? (
+                <Moon className="w-5 h-5" />
+              ) : (
+                <Moon className="w-5 h-5 fill-slate-900 text-slate-400" />
+              )}
             </button>
-          )}
+
+            {user && (
+              <div className="flex items-center gap-2.5 pr-2">
+                <div className="flex flex-col items-end">
+                  <span className="text-[10px] font-black uppercase tracking-tighter hidden sm:inline">{user.name}</span>
+                  {isSuperAdmin && (
+                    <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 leading-none">Master Admin</span>
+                  )}
+                </div>
+                <div className="w-8 h-8 rounded-xl border border-orange-500/50 overflow-hidden ring-2 ring-orange-500/20 shadow-lg">
+                  <img src={user.avatarUrl} className="w-full h-full object-cover" alt="User avatar" />
+                </div>
+              </div>
+            )}
+            
+            {isSuperAdmin && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigate('/admin-users')}
+                  className="p-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-xl transition-all border border-amber-500/20 flex items-center gap-2"
+                  title="Gestión de Usuarios"
+                >
+                  <Users className="w-5 h-5" />
+                  <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">Admin</span>
+                </button>
+
+                <button
+                  onClick={logout}
+                  className="p-3 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-xl transition-all active:scale-90 border border-orange-500/20"
+                  title="Cerrar Sesión"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-col items-end opacity-20">
+              <span className="text-[7px] font-bold text-slate-500 mt-1 uppercase tracking-widest leading-none">v1.0.4 ME</span>
+            </div>
+          </div>
         </div>
+
+        <main className={`flex-1 lg:pt-0 pt-16 ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
+          {renderView()}
+        </main>
       </div>
-
-      <main className={`flex-1 lg:pt-0 pt-16 ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
-        {renderView()}
-      </main>
-      </div>
-
-
-
-      {/* Sector filter pills removed for a cleaner map view */}
 
       <BottomNav />
 
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'event')} />
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleImageUpload(e, 'event')} />
-
       {showBusinessReg && (
-        <BusinessEditModal 
-          isRegistration 
+        <BusinessEditModal
+          isRegistration
           onClose={() => {
             setShowBusinessReg(false);
-            // Forzar resize del mapa al cerrar el modal para recuperar los tiles
             [50, 200, 500, 1000].forEach(delay =>
               setTimeout(() => window.dispatchEvent(new Event('resize')), delay)
             );
-          }} 
+          }}
         />
       )}
 
+      <EventEditorModal />
 
-      {showHostWizard && (
-        <div className="fixed inset-0 z-[2110] bg-slate-900 flex flex-col p-6 overflow-y-auto pb-32 no-scrollbar">
-          <div className="flex items-center justify-between mb-8">
-            <button onClick={() => { setShowHostWizard(false); setEditingEventId(null); }} className="text-slate-400 font-bold">Cerrar</button>
-            <h2 className="text-white font-black uppercase tracking-widest text-xs">{editingEventId ? 'EDITAR PULSO' : 'NUEVO PULSO'}</h2>
-            <button onClick={handleSaveEvent} className="text-orange-500 font-black">Guardar</button>
-          </div>
-          <div className="relative w-full aspect-video bg-slate-800 rounded-3xl overflow-hidden mb-6 group border-2 border-dashed border-slate-700">
-            <img src={newEvent.imageUrl} className="w-full h-full object-cover opacity-60" />
-            <div className="absolute inset-0 flex items-center justify-center gap-4 bg-black/40">
-              <button onClick={() => cameraInputRef.current?.click()} className="p-4 bg-white/20 rounded-full hover:bg-white/40 transition-colors"><Camera className="w-6 h-6 text-white" /></button>
-              <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-white/20 rounded-full hover:bg-white/40 transition-colors"><Upload className="w-6 h-6 text-white" /></button>
-            </div>
-          </div>
-          <div className="space-y-6">
-            <input type="text" placeholder="Título" className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 font-bold text-white shadow-inner" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} />
-            <div className="grid grid-cols-3 gap-3">
-              <select className="col-span-1 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-4 font-black text-[10px] uppercase tracking-wider text-white appearance-none" value={newEvent.locality} onChange={e => setNewEvent({ ...newEvent, locality: e.target.value, sector: (LOCALITY_SECTORS[e.target.value] || [])[0] || Sector.CENTRO })}>
-                {LOCALITIES.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
-              </select>
-              <select className="col-span-1 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-4 font-black text-[10px] uppercase tracking-wider text-white appearance-none" value={newEvent.sector} onChange={e => setNewEvent({ ...newEvent, sector: e.target.value as Sector })}>
-                {(LOCALITY_SECTORS[newEvent.locality || 'Montañita'] || Object.values(Sector)).map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <select className="col-span-1 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-4 font-black text-[10px] uppercase tracking-wider text-white appearance-none" value={newEvent.vibe} onChange={e => setNewEvent({ ...newEvent, vibe: e.target.value as Vibe })}>
-                {Object.values(Vibe).map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <input type="datetime-local" className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-4 font-bold text-white outline-none" value={newEvent.startAt} onChange={e => setNewEvent({ ...newEvent, startAt: e.target.value })} />
-              <input type="datetime-local" className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-4 font-bold text-white outline-none" value={newEvent.endAt} onChange={e => setNewEvent({ ...newEvent, endAt: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <label className="text-[10px] font-black text-slate-500 uppercase">Descripción</label>
-                <button onClick={handleGenerateAIEvent} className="text-[10px] font-black text-orange-400 uppercase tracking-widest"><Sparkles className="w-3 h-3 inline mr-1" /> AI Draft</button>
-              </div>
-              <textarea rows={4} placeholder="Descripción" className="w-full bg-slate-800 border border-slate-700 rounded-3xl px-6 py-5 text-slate-300 text-sm shadow-inner" value={newEvent.description} onChange={e => setNewEvent({ ...newEvent, description: e.target.value })} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal is now handled by EventModal component at the bottom */}
-
-
-      {/* Profile Edit Modal */}
       {showProfileEdit && user && (
         <div className="fixed inset-0 z-[2100] bg-slate-900/80 backdrop-blur-md flex items-end justify-center">
           <div className="w-full max-w-lg bg-slate-900 rounded-t-[3.5rem] p-8 pb-12 max-h-[90vh] overflow-y-auto">
@@ -607,18 +594,15 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Business Edit Modal */}
       {showBusinessEdit && (
-          <BusinessEditModal 
-            onClose={() => {
-              setShowBusinessEdit(false);
-              setEditingBusinessId(null);
-            }} 
-          />
+        <BusinessEditModal
+          onClose={() => {
+            setShowBusinessEdit(false);
+            setEditingBusinessId(null);
+          }}
+        />
       )}
 
-      {/* Migration Panel */}
-      {/* Payment Edit Modal */}
       {showPaymentEdit && isAdmin && (
         <div className="fixed inset-0 z-[2100] bg-slate-900/80 backdrop-blur-md flex items-end justify-center">
           <div className="w-full max-w-lg bg-slate-900 rounded-t-[3.5rem] p-8 pb-12 max-h-[90vh] overflow-y-auto">
@@ -631,7 +615,7 @@ const Dashboard: React.FC = () => {
 
             <div className="space-y-6">
               <div>
-                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">RegiÃ³n/Banco (Header)</label>
+                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Región/Banco (Header)</label>
                 <input
                   type="text"
                   value={paymentDetails.bankRegion}
@@ -663,7 +647,7 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">NÃºmero de Cuenta</label>
+                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">Número de Cuenta</label>
                 <input
                   type="text"
                   value={paymentDetails.accountNumber}
@@ -693,7 +677,7 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">WhatsApp de Contacto (incluir cÃ³digo paÃ­s)</label>
+                <label className="text-xs font-black text-slate-500 uppercase mb-2 block">WhatsApp de Contacto (incluir código país)</label>
                 <input
                   type="text"
                   value={paymentDetails.whatsappNumber}
@@ -714,20 +698,15 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {showMigrationPanel && (
-        <MigrationPanel onClose={() => setShowMigrationPanel(false)} />
-      )}
-
-      {/* Calendar modal removed permanently */}
       <PulseModal />
-      <PulsePassModal 
-        isOpen={showPulsePassModal} 
-        onClose={() => setShowPulsePassModal(false)} 
+      <PulsePassModal
+        isOpen={showPulsePassModal}
+        onClose={() => setShowPulsePassModal(false)}
       />
 
       {/* Global Pulse Window FAB */}
       {!isEditorFocus && (
-        <div className="fixed bottom-48 right-6 z-50 animate-in slide-in-from-right duration-500 delay-150">
+        <div className="fixed bottom-36 right-6 z-50 animate-in slide-in-from-right duration-500 delay-150">
           <button
             onClick={() => setShowPulseModal(true)}
             className="group relative w-16 h-16 bg-[#111111] border-2 border-orange-500/30 rounded-2xl flex flex-col items-center justify-center shadow-[0_20px_50px_rgba(0,0,0,0.8)] transition-all hover:scale-110 active:scale-95 hover:border-orange-500 hover:shadow-[0_20px_60px_rgba(249,115,22,0.3)] overflow-hidden"
@@ -748,15 +727,18 @@ const Dashboard: React.FC = () => {
       {/* Global Login Modal Overlay */}
       {showLogin && !user && (
         <div className="fixed inset-0 z-[3000] bg-slate-900/90 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="absolute top-6 right-6">
+          <LoginScreen />
+          <div className="absolute top-6 right-6 z-[100]">
             <button
-              onClick={() => setShowLogin(false)}
-              className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-2xl transition-all border border-white/10"
+              onClick={() => {
+                setShowLogin(false);
+                navigate('/explore');
+              }}
+              className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-full transition-all border border-white/10"
             >
               <X className="w-6 h-6" />
             </button>
           </div>
-          <LoginScreen />
         </div>
       )}
 
@@ -797,6 +779,7 @@ const Dashboard: React.FC = () => {
           userId={publicProfileType === 'user' ? publicProfileId || undefined : undefined}
         />
       )}
+      {showMigrationPanel && <MigrationPanel onClose={() => setShowMigrationPanel(false)} />}
     </div>
   );
 };
@@ -817,3 +800,5 @@ export default function App() {
 
   return <Dashboard />;
 }
+
+

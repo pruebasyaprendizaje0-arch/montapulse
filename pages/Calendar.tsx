@@ -145,9 +145,9 @@ export const Calendar: React.FC = () => {
     } = useData();
 
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
-    const userBusinessEvents = userBusiness ? events.filter(e => e.businessId === userBusiness.id) : [];
-    const eventLimit = userBusiness?.plan === SubscriptionPlan.PREMIUM ? 7 : userBusiness?.plan === SubscriptionPlan.BASIC ? 3 : 0;
-    const canCreateEvent = userBusiness && userBusinessEvents.length < eventLimit;
+    // canCreateEvent now just checks if they have a business; 
+    // credit validation is handled inside the EventEditorModal
+    const canCreateEvent = !!userBusiness;
 
     const navigateCalendar = (direction: 'prev' | 'next') => {
         const newDate = new Date(calendarBaseDate);
@@ -196,7 +196,8 @@ export const Calendar: React.FC = () => {
             const d = new Date(e.startAt);
             return d.getDate() === date.getDate() &&
                 d.getMonth() === date.getMonth() &&
-                d.getFullYear() === date.getFullYear();
+                d.getFullYear() === date.getFullYear() &&
+                e.status !== 'deactivated';
         }).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
 
     const getBusinessName = (event: MontanitaEvent) =>
@@ -374,7 +375,8 @@ export const Calendar: React.FC = () => {
                     const monthEvents = eventsWithLiveCounts.filter(e => {
                         const d = new Date(e.startAt);
                         return d.getMonth() === calendarBaseDate.getMonth() &&
-                            d.getFullYear() === calendarBaseDate.getFullYear();
+                            d.getFullYear() === calendarBaseDate.getFullYear() &&
+                            e.status !== 'deactivated';
                     }).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
 
                     if (monthEvents.length === 0) return (

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, CheckCircle, MapPin, Store, Edit3, Zap } from 'lucide-react';
 import { BusinessCategory } from '../../types';
 import { MAP_ICONS } from '../../constants';
+import { useToast } from '../../context/ToastContext';
 
 interface PointCreationModalProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ export const PointCreationModal: React.FC<PointCreationModalProps> = ({
   locality,
   sector
 }) => {
+  const { showToast } = useToast();
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [category, setCategory] = useState<BusinessCategory>(initialData?.category || BusinessCategory.OTRO);
@@ -47,7 +49,7 @@ export const PointCreationModal: React.FC<PointCreationModalProps> = ({
 
   const handleSubmit = () => {
     if (!name.trim()) {
-      alert('Por favor ingresa un nombre para el punto');
+      showToast('Por favor ingresa un nombre para el punto', 'warning');
       return;
     }
     

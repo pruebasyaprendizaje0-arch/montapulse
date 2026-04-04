@@ -11,9 +11,12 @@ import { UserProfile, Business, MontanitaEvent, Vibe, SubscriptionPlan, Sector, 
 import { Calendar, Clock } from 'lucide-react';
 import { EventCard } from '../components/EventCard.tsx';
 import { createUser, updateUser, getAppSettings, updateAppSettings } from '../services/firestoreService.ts';
+import { migrateAvatarsToStorage } from '../services/storageMigrationService.ts';
 import { logout, updateUserProfile as updateAuthProfile } from '../services/authService.ts';
-import { LOCALITY_SECTORS, MAP_ICONS, LOCALITIES } from '../constants.ts';
+import { LOCALITY_SECTORS, MAP_ICONS, LOCALITIES, PLAN_LIMITS, SECTOR_INFO } from '../constants.ts';
 import { compressImage } from '../utils/imageUtils';
+import { uploadBase64Image } from '../services/storageService';
+
 
 import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
@@ -74,6 +77,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const [isEditingHelp, setIsEditingHelp] = useState(false);
     const [tempHelpItems, setTempHelpItems] = useState<any[]>([]);
     const [showPulsePass, setShowPulsePass] = useState(false);
+    const [isMigratingStorage, setIsMigratingStorage] = useState(false);
     const [aboutContent, setAboutContent] = useState({
         description: 'Tu guía definitiva para no perderte nada en la costa. Descubre eventos, conecta con la comunidad y vive el pulso real de Montañita.',
         feature1: 'Ver eventos',
@@ -96,12 +100,15 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         const eventsCount = favoritedEvents.length;
         const friendsCount = followedBusinessIds.length;
         const impactCount = businessEvents.reduce((sum, e) => sum + (e.interestedCount || 0), 0);
-        return { eventsCount, friendsCount, impactCount };
+        const totalClicks = businessEvents.reduce((sum, e) => sum + (e.clickCount || 0), 0);
+        return { eventsCount, friendsCount, impactCount, totalClicks };
     }, [favoritedEvents, followedBusinessIds, businessEvents]);
 
-    const eventLimit = userBusiness?.plan === SubscriptionPlan.PREMIUM ? 7 : userBusiness?.plan === SubscriptionPlan.BASIC ? 3 : 0;
-    const eventsUsed = businessEvents.length;
-    const eventsRemaining = eventLimit === Infinity ? null : eventLimit - eventsUsed;
+    const isSpecialUser = user?.email === 'ubicameinformacion@gmail.com' || user?.role === 'admin';
+    const isPremium = userBusiness?.plan === SubscriptionPlan.BASIC || userBusiness?.plan === SubscriptionPlan.PREMIUM || userBusiness?.plan === SubscriptionPlan.EXPERT || isSpecialUser;
+    const planCreditsLimit = isPremium ? Infinity : PLAN_LIMITS[userBusiness?.plan || SubscriptionPlan.FREE];
+    const availableCredits = userBusiness?.eventCredits ?? 0;
+    const creditsRemaining = isPremium ? null : availableCredits;
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -112,6 +119,21 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         };
         loadSettings();
     }, []);
+
+    const getCategoryEmoji = (category: string) => {
+        const cat = (category || '').toLowerCase();
+        // Check exact match in label or id
+        const icon = MAP_ICONS.find(i => i.label.toLowerCase() === cat || i.id === cat);
+        if (icon) return icon.emoji;
+        
+        // Handle synonyms
+        if (cat.includes('restaurante') || cat.includes('comida')) return '🍕';
+        if (cat.includes('fiesta') || cat.includes('discoteca') || cat.includes('bar')) return '🍹';
+        if (cat.includes('hospedaje') || cat.includes('hotel') || cat.includes('hostal')) return '🏨';
+        if (cat.includes('surf')) return '🏄';
+        
+        return '🏷️';
+    };
 
     const handleSaveAbout = async () => {
         try {
@@ -143,25 +165,51 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         if (!editingUser || !user) return;
         setIsSavingProfile(true);
         try {
-            // 1. Update Firestore document (Primary)
-            await updateUser(editingUser.id, editingUser);
+            // Pick only necessary fields to update - ensure we're not sending 'id' 
+            // inside the update object which can sometimes cause issues with Firestore rules 
+            // or if the field is protected.
+            const updatePayload: Partial<UserProfile> = {
+                name: editingUser.name || '',
+                surname: editingUser.surname || '',
+                avatarUrl: editingUser.avatarUrl || '',
+                preferredVibe: editingUser.preferredVibe || Vibe.ADRENALINA,
+                email: editingUser.email || user.email // Update contact email only if provided
+            };
 
-            // 2. Update Firebase Auth profile if possible (Optional but good for consistency)
+            const userIdToUpdate = user.id || authUser?.uid;
+            if (!userIdToUpdate) throw new Error('Usuario sin ID válido');
+
+            // 1. If avatarUrl is a base64 string, upload it to Storage
+            if (updatePayload.avatarUrl && updatePayload.avatarUrl.startsWith('data:image')) {
+                const storagePath = `avatars/${userIdToUpdate}_${Date.now()}.jpg`;
+                const storageUrl = await uploadBase64Image(storagePath, updatePayload.avatarUrl);
+                updatePayload.avatarUrl = storageUrl;
+            }
+
+            // 2. Update Firestore document (Primary) using the UID from our profile
+            await updateUser(userIdToUpdate, updatePayload);
+
+            // 2. Update Firebase Auth profile if possible (Optional for consistency)
             if (authUser) {
+                const newDisplayName = `${updatePayload.name} ${updatePayload.surname}`.trim();
                 await updateAuthProfile(
                     authUser,
-                    `${editingUser.name} ${editingUser.surname}`.trim(),
-                    editingUser.avatarUrl
+                    newDisplayName,
+                    updatePayload.avatarUrl
                 );
             }
 
-            // 3. Update local state
-            setUser(editingUser);
+            // 3. Update local state with all fields (merged)
+            setUser({
+                ...user,
+                ...updatePayload
+            });
+            
             setShowProfileEdit(false);
             showToast('Perfil actualizado con éxito', 'success');
         } catch (error) {
             console.error('Error updating profile:', error);
-            showToast('Error al actualizar el perfil', 'error');
+            showToast('Error al actualizar el perfil: ' + (error instanceof Error ? error.message : 'Error desconocido'), 'error');
         } finally {
             setIsSavingProfile(false);
         }
@@ -235,120 +283,170 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                 {/* Header */}
                 <div className="pt-12 px-8 flex items-center justify-between mb-10">
                     <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-3xl font-black tracking-tight">{user.name} {user.surname}</h1>
-                            <div className="bg-orange-500/20 p-1.5 rounded-xl border border-orange-500/30">
-                                <ShieldCheck className="w-4 h-4 text-orange-500" />
-                            </div>
-                        </div>
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-1">Verified Member</span>
+                        <h1 className="text-3xl font-black tracking-tight text-white">Mi Passport</h1>
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-1">Centro de Control</span>
                     </div>
                     <button
                         onClick={onEditProfile}
-                        className="p-4 bg-[#111111] rounded-2xl border border-white/5 text-slate-400 hover:text-white transition-all shadow-xl"
+                        className="p-4 bg-white/5 text-white rounded-2xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all shadow-xl group flex items-center gap-2"
+                        title="Editar Perfil"
                     >
-                        <Edit3 className="w-6 h-6" />
+                        <Edit3 className="w-5 h-5 text-orange-500 group-hover:scale-110 transition-transform" />
+                        <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block">Editar</span>
                     </button>
                 </div>
 
-                {/* Profile Hero */}
-                <div className="flex flex-col items-center px-8 mb-12">
-                    <div className="relative mb-8">
-                        {/* Glowing Ring */}
-                        <div className="absolute inset-[-4px] rounded-[3.5rem] bg-orange-500 blur-md opacity-20" />
-                        <div className="absolute inset-[-2px] rounded-[3.5rem] bg-gradient-to-br from-orange-400 to-orange-600" />
+                {/* Profile Hero - Passport Card Style */}
+                <div className="px-6 mb-10">
+                    <div className="relative group perspective-1000">
+                        {/* Interactive Card Background */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-orange-600/30 via-transparent to-amber-600/30 rounded-[3rem] blur-3xl opacity-30 group-hover:opacity-50 transition-opacity duration-1000" />
+                        
+                        <div className="relative glass-panel rounded-[3rem] p-8 overflow-hidden border border-white/10 shadow-3xl">
+                            {/* Card Decorative Elements */}
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl -mr-32 -mt-32 animate-pulse" />
+                            <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-500/5 rounded-full blur-3xl -ml-24 -mb-24" />
+                            <div className="absolute top-8 right-8 flex flex-col items-end">
+                                <div className="text-[10px] font-black text-white/30 uppercase tracking-[0.4em] mb-1">Montañita Pulse</div>
+                                <div className="h-[1px] w-12 bg-white/10" />
+                            </div>
 
-                        <div className="w-40 h-40 rounded-[3.25rem] bg-[#111111] border-[6px] border-black overflow-hidden relative shadow-2xl">
-                            {user.avatarUrl ? (
-                                <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-slate-600">
-                                    <User className="w-16 h-16" />
+                            <div className="flex flex-col items-center">
+                                {/* Avatar with High Profile Ring */}
+                                <div className="relative mb-8 pt-4">
+                                    <div className="absolute inset-[-8px] rounded-full border border-white/5 animate-spin-slow" />
+                                    <div className="absolute inset-[-12px] rounded-full border border-orange-500/10" />
+                                    
+                                    <div className="relative z-10 w-32 h-32 rounded-full p-1.5 bg-gradient-to-br from-orange-500 via-amber-500 to-orange-400 shadow-2xl shadow-orange-500/20">
+                                        <div className="w-full h-full rounded-full bg-slate-900 border-4 border-slate-900 overflow-hidden relative group/avatar">
+                                            {user.avatarUrl ? (
+                                                <img 
+                                                    src={user.avatarUrl} 
+                                                    alt="Avatar" 
+                                                    className="w-full h-full object-cover group-hover/avatar:scale-110 transition-transform duration-700" 
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-slate-700 bg-slate-800">
+                                                    <User className="w-12 h-12" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
-                        </div>
 
-                        {/* Verified Badge Overlay */}
-                        <div className="absolute -bottom-2 -right-2 bg-orange-500 p-3 rounded-2xl shadow-2xl shadow-orange-500/40 border-4 border-black ring-1 ring-white/10">
-                            <Star className="w-5 h-5 text-white fill-white" />
-                        </div>
-                    </div>
+                                {/* Identity */}
+                                <div className="text-center mb-10">
+                                    <h2 className="text-3xl font-black text-white tracking-tight mb-3 flex items-center justify-center gap-2">
+                                        {user.name} <span className="text-orange-500">{user.surname}</span>
+                                    </h2>
+                                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                                        <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 shadow-lg shadow-orange-500/5">
+                                            <ShieldCheck className="w-4 h-4 text-orange-500" />
+                                            <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Verified Member</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/5">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Passport No.</span>
+                                            <span className="text-[10px] font-black text-white tracking-widest opacity-80">MP-{user.id?.slice(0, 6).toUpperCase()}</span>
+                                        </div>
+                                    </div>
+                                </div>
 
-                    {/* Stats Grid */}
-                    <div className="w-full grid grid-cols-3 gap-4 px-4">
-                        {[
-                            { label: 'Events', value: userStats.eventsCount.toString(), icon: MapPin },
-                            { label: 'Following', value: userStats.friendsCount.toString(), icon: Users },
-                            { label: 'Impact', value: userStats.impactCount.toString(), icon: Zap }
-                        ].map((stat, i) => (
-                            <div key={i} className="flex flex-col items-center gap-1">
-                                <span className="text-xl font-black text-white">{stat.value}</span>
-                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</span>
+                                {/* Card Stats Bar */}
+                                <div className="w-full grid grid-cols-3 gap-0 border-t border-white/5 pt-8">
+                                    {[
+                                        { label: 'Pulses', value: userStats.eventsCount.toString(), color: 'text-orange-500' },
+                                        { label: 'Following', value: userStats.friendsCount.toString(), color: 'text-white' },
+                                        { label: 'Impact', value: userStats.impactCount.toString(), color: 'text-amber-500' }
+                                    ].map((stat, i) => (
+                                        <div key={i} className={`flex flex-col items-center px-4 ${i !== 2 ? 'border-r border-white/5' : ''}`}>
+                                            <span className={`text-xl font-black ${stat.color} mb-0.5`}>{stat.value}</span>
+                                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{stat.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        ))}
+                        </div>
                     </div>
                 </div>
 
-                {/* Pulse Window Quick Access */}
-                <div className="px-8 mb-8">
-                    <button
-                        onClick={() => setShowPulseModal(true)}
-                        className="w-full relative overflow-hidden rounded-[2.5rem] bg-gradient-to-r from-violet-500/20 to-indigo-500/20 border border-violet-500/30 p-6 flex items-center justify-between group hover:border-violet-500/50 transition-all"
-                    >
-                        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="flex items-center gap-4 relative z-10">
-                            <div className="w-14 h-14 rounded-2xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
-                                <Activity className="w-7 h-7 text-violet-400" />
+                {/* Pulse Window & Discovery */}
+                <div className="px-6 mb-12">
+                    <div className="grid grid-cols-1 gap-4">
+                        <button
+                            onClick={() => setShowPulseModal(true)}
+                            className="relative w-full group overflow-hidden rounded-[2.5rem] bg-indigo-600 p-1 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-95 shadow-2xl shadow-indigo-600/20"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-violet-600 to-indigo-700 animate-shimmer bg-[length:200%_100%]" />
+                            <div className="relative flex-1 flex items-center justify-between bg-black/40 backdrop-blur-3xl rounded-[2.25rem] p-6 border border-white/10">
+                                <div className="flex items-center gap-5">
+                                    <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
+                                        <Activity className="w-7 h-7 text-indigo-400" />
+                                    </div>
+                                    <div className="text-left">
+                                        <h3 className="text-xl font-black text-white tracking-tight leading-tight">Ventana Pulse</h3>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                            </span>
+                                            <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">En Vivo Ahora</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-indigo-500 group-hover:border-indigo-400 transition-all duration-500">
+                                    <Sparkles className="w-5 h-5 text-indigo-400 group-hover:text-white transition-colors" />
+                                </div>
                             </div>
-                            <div className="text-left">
-                                <h3 className="text-lg font-black text-white tracking-tight">Ventana de Pulse</h3>
-                                <p className="text-xs font-medium text-violet-400">Actividad en tiempo real</p>
-                            </div>
-                        </div>
-                        <div className="w-10 h-10 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center group-hover:bg-violet-500 group-hover:scale-110 transition-all">
-                            <Sparkles className="w-5 h-5 text-violet-400 group-hover:text-white transition-colors" />
-                        </div>
-                    </button>
+                        </button>
+                    </div>
                 </div>
 
                 {/* My Upcoming Pulses */}
                 <div className="mb-12">
-                    <div className="px-8 flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-black tracking-tight">My Upcoming Pulses</h3>
+                    <div className="px-6 flex items-center justify-between mb-6">
+                        <div className="flex flex-col">
+                            <h3 className="text-xl font-black tracking-tighter text-white">Próximos Pulses</h3>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tus eventos guardados</p>
+                        </div>
                         {favoritedEvents.length > 3 && (
                             <button 
                                 onClick={() => setShowAllPulses(!showAllPulses)}
-                                className="text-[11px] font-black text-orange-500 uppercase tracking-widest"
+                                className="px-4 py-2 rounded-full border border-white/5 bg-white/5 text-[10px] font-black text-orange-500 uppercase tracking-[0.2em] hover:bg-white/10 transition-colors"
                             >
-                                {showAllPulses ? 'Show Less' : 'View All'}
+                                {showAllPulses ? 'Cerrar' : 'Ver Todos'}
                             </button>
                         )}
                     </div>
-                    <div className="flex gap-4 overflow-x-auto no-scrollbar px-8 pb-4">
-                        {favoritedEvents.slice(0, showAllPulses ? favoritedEvents.length : 3).map((event) => (
-                            <div key={event.id} className="min-w-[280px] w-[280px] shrink-0">
-                                <EventCard 
-                                    event={event} 
-                                    onClick={(e) => setSelectedEvent(e)}
-                                />
-                            </div>
-                        ))}
-                        {favoritedEvents.length === 0 && (
-                            <div className="w-full py-12 bg-[#111111] rounded-[2.5rem] border border-dashed border-white/10 flex flex-col items-center justify-center text-slate-500 gap-2 mx-8">
-                                <Sparkles className="w-8 h-8 opacity-20" />
-                                <p className="text-xs font-black uppercase tracking-widest">No pulses scheduled</p>
+                    <div className="flex gap-4 overflow-x-auto no-scrollbar px-6 pb-4">
+                        {favoritedEvents.length > 0 ? (
+                            favoritedEvents.slice(0, showAllPulses ? favoritedEvents.length : 3).map((event) => (
+                                <div key={event.id} className="min-w-[280px] w-[280px] shrink-0 transform transition-transform hover:scale-[1.02] duration-500">
+                                    <EventCard 
+                                        event={event} 
+                                        onClick={(e) => setSelectedEvent(e)}
+                                    />
+                                </div>
+                            ))
+                        ) : (
+                            <div className="w-full h-32 glass-panel rounded-[2.5rem] flex flex-col items-center justify-center text-slate-600 gap-3 mx-2 border-dashed border-white/10">
+                                <MapPin className="w-8 h-8 opacity-20" />
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em]">No tienes eventos planeados</span>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Following Section */}
+                {/* Following Feed */}
                 {followedBusinessIds.length > 0 && (
                     <div className="mb-12">
-                        <div className="px-8 flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-black tracking-tight">Siguiendo</h3>
+                        <div className="px-6 flex items-center justify-between mb-6">
+                            <div className="flex flex-col">
+                                <h3 className="text-xl font-black tracking-tighter text-white">Puntos de Interés</h3>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Lo que estás siguiendo</p>
+                            </div>
                         </div>
-                        <div className="flex gap-4 overflow-x-auto no-scrollbar px-8 pb-4">
+                        <div className="flex gap-4 overflow-x-auto no-scrollbar px-6 pb-4">
                             {followedBusinessIds.map(bizId => {
                                 const biz = businesses.find(b => b.id === bizId);
                                 if (!biz) return null;
@@ -359,18 +457,28 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                             setPublicProfileId(biz.id);
                                             setShowPublicProfile(true);
                                         }}
-                                        className="min-w-[140px] w-[140px] shrink-0 cursor-pointer"
+                                        className="relative min-w-[140px] group cursor-pointer"
                                     >
-                                        <div className="relative">
-                                            <div className="w-24 h-24 mx-auto rounded-full overflow-hidden border-4 border-orange-500/30 shadow-lg">
-                                                <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
+                                        <div className="relative pt-4 px-2">
+                                            <div className="absolute inset-0 bg-white/5 rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                            <div className="w-24 h-24 mx-auto mb-4 relative z-10">
+                                                <div className="absolute inset-[-4px] rounded-full border border-orange-500/20 group-hover:border-orange-500/50 transition-colors duration-500" />
+                                                <div className="w-full h-full rounded-full overflow-hidden border-4 border-black relative">
+                                                    <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                                </div>
+                                                <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center border-4 border-black shadow-lg">
+                                                    <div className="text-[10px]">
+                                                        {getCategoryEmoji(biz.category)}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center border-2 border-black">
-                                                <MapPin className="w-3 h-3 text-white" />
+                                            <div className="text-center relative z-10 pb-4">
+                                                <p className="text-xs font-black text-white truncate px-2 mb-1">{biz.name}</p>
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{biz.sector}</span>
+                                                </div>
                                             </div>
                                         </div>
-                                        <p className="text-center mt-3 text-xs font-black text-white truncate px-2">{biz.name}</p>
-                                        <p className="text-center text-[9px] text-slate-500">{biz.category}</p>
                                     </div>
                                 );
                             })}
@@ -382,8 +490,9 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                 <div className="px-8 mb-12">
                     <h3 className="text-lg font-black tracking-tight mb-6">Mi Negocio</h3>
                     
-                    {user?.businessId ? (
-                        businesses.find(b => b.id === user.businessId) ? (
+                    {user?.businessId && businesses.find(b => b.id === user.businessId) ? (() => {
+                        const biz = businesses.find(b => b.id === user.businessId)!;
+                        return (
                             <div
                                 onClick={() => {
                                     setShowBusinessEdit(true);
@@ -393,7 +502,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             >
                                 <div className="absolute inset-0">
                                     <img 
-                                        src={businesses.find(b => b.id === user.businessId)?.imageUrl} 
+                                        src={biz.imageUrl} 
                                         alt="Business" 
                                         className="w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-700" 
                                     />
@@ -401,22 +510,68 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                 </div>
                                 <div className="relative p-6 flex flex-col gap-4">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-16 h-16 rounded-2xl bg-black/50 backdrop-blur-md p-1 border border-white/10 shadow-2xl overflow-hidden shrink-0">
-                                            {businesses.find(b => b.id === user.businessId)?.icon ? (
-                                                <img 
-                                                    src={businesses.find(b => b.id === user.businessId)?.icon} 
-                                                    alt="Icon" 
-                                                    className="w-full h-full object-cover rounded-xl" 
-                                                />
+                                        <div className="w-16 h-16 rounded-2xl bg-black/50 backdrop-blur-md p-1 border border-white/10 shadow-2xl overflow-hidden shrink-0 flex items-center justify-center">
+                                            {biz.icon ? (
+                                                (biz.icon.startsWith('http') || biz.icon.startsWith('data:image')) ? (
+                                                    <img 
+                                                        src={biz.icon} 
+                                                        alt="Icon" 
+                                                        className="w-full h-full object-cover rounded-xl" 
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center bg-orange-500/10 rounded-xl">
+                                                        <span className="text-3xl">
+                                                            {MAP_ICONS.find(i => i.id === biz.icon || i.emoji === biz.icon)?.emoji || biz.icon}
+                                                        </span>
+                                                    </div>
+                                                )
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center bg-orange-500/20 rounded-xl">
                                                     <Store className="w-8 h-8 text-orange-500" />
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="flex flex-col text-left">
-                                            <span className="text-white font-black text-xl leading-none mb-1">{businesses.find(b => b.id === user.businessId)?.name}</span>
-                                            <span className="text-sm font-medium text-slate-400">{businesses.find(b => b.id === user.businessId)?.category} · {businesses.find(b => b.id === user.businessId)?.sector}</span>
+                                         <div className="flex flex-col text-left">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-white font-black text-xl leading-none">{biz.name}</span>
+                                                {biz.isVerified && <CheckCircle className="w-4 h-4 text-sky-400 fill-sky-400/10" />}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 border border-white/10">
+                                                    <span className="text-[10px]">
+                                                        {getCategoryEmoji(biz.category)}
+                                                    </span>
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{biz.category}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 border border-white/10">
+                                                    <span className="text-[10px]">{SECTOR_INFO[biz.sector]?.symbol || '📍'}</span>
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{biz.sector}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Metrics Dashboard */}
+                                    <div className="grid grid-cols-2 gap-3 mt-2">
+                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-1 hover:bg-white/10 transition-colors">
+                                            <div className="flex items-center gap-2 text-orange-400 mb-1">
+                                                <Eye className="w-4 h-4" />
+                                                <span className="text-[10px] font-black uppercase tracking-widest">Vistas / Semana</span>
+                                            </div>
+                                            <div className="flex items-end gap-2">
+                                                <span className="text-2xl font-black text-white leading-none">{biz.weeklyViews || 0}</span>
+                                                <span className="text-[10px] text-slate-500 font-bold mb-0.5 uppercase">Totales: {biz.viewCount || 0}</span>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-1 hover:bg-white/10 transition-colors">
+                                            <div className="flex items-center gap-2 text-sky-400 mb-1">
+                                                <TrendingUp className="w-4 h-4" />
+                                                <span className="text-[10px] font-black uppercase tracking-widest">Clicks Eventos</span>
+                                            </div>
+                                            <div className="flex items-end gap-2">
+                                                <span className="text-2xl font-black text-white leading-none">{userStats.totalClicks}</span>
+                                                <span className="text-[10px] text-slate-500 font-bold mb-0.5 uppercase">Interés: {userStats.impactCount}</span>
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between mt-2 pt-4 border-t border-white/10">
@@ -427,8 +582,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                     </div>
                                 </div>
                             </div>
-                        ) : null
-                    ) : (
+                        );
+                    })() : !user?.businessId ? (
                         <button
                             onClick={() => setShowBusinessReg(true)}
                             className="w-full p-8 bg-[#111111] rounded-[2.5rem] border border-dashed border-white/10 hover:bg-white/5 hover:border-white/20 transition-all flex flex-col items-center justify-center gap-3 active:scale-95"
@@ -438,7 +593,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             </div>
                             <span className="font-black text-slate-300">Añadir tu Negocio</span>
                         </button>
-                    )}
+                    ) : null}
                 </div>
 
                 {/* Me Siguen Section */}
@@ -490,9 +645,24 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                         alt={followedBiz.name}
                                                     />
                                                 </div>
-                                                <span className="text-[9px] font-black text-slate-400 text-center truncate w-full group-hover:text-amber-400 transition-colors">
-                                                    {followedBiz.name.split(' ')[0]}
-                                                </span>
+                                                <div className="flex items-center justify-center gap-1 w-full px-1">
+                                                    <div className="flex items-center gap-0.5 px-1 py-0.25 rounded-md bg-white/5 border border-white/10">
+                                                        <span className="text-[8px]">
+                                                            {getCategoryEmoji(followedBiz.category)}
+                                                        </span>
+                                                        {followedBiz.sector && (
+                                                            <>
+                                                                <span className="text-white/10 text-[6px]">|</span>
+                                                                <span className="text-[8px]">
+                                                                    {SECTOR_INFO[followedBiz.sector as Sector]?.symbol || '📍'}
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-[9px] font-black text-slate-400 text-center truncate group-hover:text-amber-400 transition-colors">
+                                                        {followedBiz.name.split(' ')[0]}
+                                                    </span>
+                                                </div>
                                             </div>
                                         );
                                     }
@@ -536,16 +706,16 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     <div className="px-8 mb-12">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-black tracking-tight">Mis Eventos</h3>
-                            {eventLimit === Infinity ? (
+                            {planCreditsLimit === Infinity ? (
                                 <div className="px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center gap-2">
                                     <Zap className="w-4 h-4 text-emerald-400" />
-                                    <span className="text-xs font-black uppercase tracking-widest text-emerald-400">Ilimitados</span>
+                                    <span className="text-xs font-black uppercase tracking-widest text-emerald-400">Créditos Ilimitados</span>
                                 </div>
                             ) : (
-                                <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 ${eventsRemaining <= 2 ? 'bg-red-500/20 border border-red-500/30' : 'bg-orange-500/20 border border-orange-500/30'}`}>
-                                    <Calendar className={`w-4 h-4 ${eventsRemaining <= 2 ? 'text-red-400' : 'text-orange-400'}`} />
-                                    <span className={`text-xs font-black uppercase tracking-widest ${eventsRemaining <= 2 ? 'text-red-400' : 'text-orange-400'}`}>
-                                        {eventsUsed}/{eventLimit} {eventsRemaining === 1 ? 'restante' : 'restantes'}
+                                <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 ${availableCredits <= 1 ? 'bg-rose-500/20 border border-rose-500/30' : 'bg-orange-500/20 border border-orange-500/30'}`}>
+                                    <Zap className={`w-4 h-4 ${availableCredits <= 1 ? 'text-rose-400' : 'text-orange-400'}`} />
+                                    <span className={`text-xs font-black uppercase tracking-widest ${availableCredits <= 1 ? 'text-rose-400' : 'text-orange-400'}`}>
+                                        {availableCredits}/{planCreditsLimit} Créditos Restantes
                                     </span>
                                 </div>
                             )}
@@ -556,8 +726,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                 <div className="flex justify-end mb-4">
                                     <button
                                         onClick={() => handleOpenNewEventWizard()}
-                                        disabled={eventsRemaining !== null && eventsRemaining <= 0}
-                                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${eventsRemaining !== null && eventsRemaining <= 0 ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-500/20'}`}
+                                        disabled={creditsRemaining !== null && creditsRemaining <= 0}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${creditsRemaining !== null && creditsRemaining <= 0 ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-500/20'}`}
                                     >
                                         <Plus className="w-4 h-4" />
                                         Crear Evento
@@ -592,103 +762,161 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
 
 
-                {/* Options List */}
-                <div className="px-8 space-y-3 mb-12">
-                    {[
-                        { label: 'Edit Profile', icon: User, color: 'text-blue-400', action: onEditProfile },
-                        { label: 'Pulse Pass', icon: Zap, color: 'text-rose-400', action: () => setShowPulsePass(true) },
-                        { label: 'Preferences', icon: Sparkles, color: 'text-purple-400', action: () => setShowPreferences(true) },
-                        { label: 'Security', icon: ShieldCheck, color: 'text-emerald-400', action: () => setShowSecurity(true) },
-                        { label: 'Terms & Privacy', icon: Shield, color: 'text-orange-400', action: () => navigate('/policies') },
-                        { label: 'Help & Support', icon: MessageCircle, color: 'text-orange-400', action: () => setShowHelp(true) }
-                    ].map((option, i) => (
-                        <button
-                            key={i}
-                            onClick={option.action}
-                            className="w-full flex items-center justify-between p-6 bg-[#111111] rounded-[2.25rem] border border-white/5 hover:bg-white/5 transition-all group"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className={`p-3 rounded-2xl bg-black/40 ${option.color} group-hover:bg-black/60 transition-colors`}>
-                                    <option.icon className="w-6 h-6" />
-                                </div>
-                                <span className="font-black text-slate-300 group-hover:text-white transition-colors">{option.label}</span>
-                            </div>
-                            <ChevronLeft className="w-6 h-6 text-slate-600 rotate-180 group-hover:text-white transition-colors" />
-                        </button>
-                    ))}
-                </div>
-
-                {/* Your Vibe */}
-                <div className="px-8 mb-12">
-                    <h3 className="text-lg font-black text-white mb-4 tracking-tight">Your Vibe</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {Object.values(Vibe).map(v => (
-                            <button
-                                key={v}
-                                onClick={() => {
-                                    if (user) {
-                                        setUser({ ...user, preferredVibe: v });
-                                    }
-                                    navigate('/', { state: { filter: v } });
-                                }}
-                                className={`px-6 py-3 rounded-2xl border font-black text-xs transition-all uppercase tracking-widest ${user?.preferredVibe === v ? 'bg-orange-500 border-orange-400 text-white shadow-lg shadow-orange-500/20' : 'bg-[#111111] border-white/5 text-slate-500 hover:text-slate-300'}`}
-                            >
-                                {v}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Admin Buttons Group */}
-                    {isAdmin && (
-                        <div className="flex flex-col gap-3 mt-8">
-                            <button
-                                onClick={() => navigate('/admin-users')}
-                                className="w-full bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black py-4 rounded-2xl hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
-                            >
-                                <Users className="w-5 h-5" />
-                                <span>Administrar Usuarios</span>
-                            </button>
-
-                            <button
-                                onClick={() => setShowMigrationPanel(true)}
-                                className="w-full bg-gradient-to-r from-orange-500 to-pink-500 text-white font-black py-4 rounded-2xl hover:from-orange-600 hover:to-pink-600 transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
-                            >
-                                <Upload className="w-5 h-5" />
-                                <span>Migrate to Firestore</span>
-                            </button>
-
-                            <button
-                                onClick={toggleSuperUser}
-                                className={`w-full py-4 rounded-2xl border transition-all uppercase tracking-[0.2em] text-[10px] font-black flex items-center justify-center gap-2 ${
-                                    isSuperUser 
-                                    ? 'bg-sky-500 text-white border-sky-400 shadow-lg shadow-sky-500/20' 
-                                    : 'bg-[#111111] text-sky-400 border-sky-500/30 hover:bg-white/5'
-                                }`}
-                            >
-                                <ShieldCheck className={`w-5 h-5 ${isSuperUser ? 'animate-pulse' : ''}`} />
-                                <span>{isSuperUser ? 'SuperUsuario: ACTIVO' : 'Activar Modo SuperUsuario'}</span>
-                            </button>
-                            
-                            <button
-                                onClick={() => navigate('/admin-users')}
-                                className="w-full bg-white/5 text-slate-400 font-black py-4 rounded-2xl border border-white/5 flex items-center justify-center gap-2 hover:bg-white/10 transition-all uppercase tracking-[0.2em] text-[10px]"
-                            >
-                                <Users className="w-5 h-5" />
-                                <span>Gestión de Usuarios</span>
-                            </button>
+                {/* Navigation Grid */}
+                <div className="px-6 mb-12">
+                    <div className="flex flex-col gap-6">
+                        <div className="flex flex-col">
+                            <h3 className="text-xl font-black tracking-tighter text-white">Menú Passport</h3>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Configuración y Seguridad</p>
                         </div>
-                    )}
+                        
+                        <div className="grid grid-cols-1 gap-3">
+                            {[
+                                { label: 'Editar Perfil', icon: User, color: 'text-orange-400', action: onEditProfile, desc: 'Nombre, avatar y detalles' },
+                                { label: 'Pulse Pass', icon: Zap, color: 'text-amber-400', action: () => setShowPulsePass(true), desc: 'Tu ID para eventos' },
+                                { label: 'Preferencias', icon: Sparkles, color: 'text-purple-400', action: () => setShowPreferences(true), desc: 'Filtros y visualización' },
+                                { label: 'Seguridad', icon: ShieldCheck, color: 'text-emerald-400', action: () => setShowSecurity(true), desc: 'Cuenta y privacidad' },
+                                { label: 'Políticas', icon: Shield, color: 'text-slate-400', action: () => navigate('/policies'), desc: 'Términos y condiciones' },
+                                { label: 'Soporte', icon: MessageCircle, color: 'text-slate-400', action: () => setShowHelp(true), desc: 'Centro de ayuda' }
+                            ].map((option, i) => (
+                                <button
+                                    key={i}
+                                    onClick={option.action}
+                                    className="group flex items-center justify-between p-5 bg-[#111111] rounded-3xl border border-white/5 hover:bg-white/5 hover:border-white/10 transition-all duration-300 active:scale-[0.98]"
+                                >
+                                    <div className="flex items-center gap-5">
+                                        <div className={`w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center ${option.color} group-hover:scale-110 transition-transform duration-500 shadow-inner`}>
+                                            <option.icon className="w-5 h-5" />
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="font-black text-sm text-slate-200 group-hover:text-white transition-colors tracking-tight">{option.label}</p>
+                                            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">{option.desc}</p>
+                                        </div>
+                                    </div>
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-slate-700 group-hover:text-white transition-colors">
+                                        <ChevronLeft className="w-5 h-5 rotate-180" />
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
-                {/* Logout Button */}
-                <div className="px-8">
+                {/* Your Vibe Selector */}
+                <div className="px-6 mb-12">
+                    <div className="flex flex-col gap-6">
+                        <div className="flex flex-col">
+                            <h3 className="text-xl font-black tracking-tighter text-white">Tu Estilo</h3>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personaliza tu experiencia</p>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {Object.values(Vibe).map(v => (
+                                <button
+                                    key={v}
+                                    onClick={() => {
+                                        if (user) {
+                                            setUser({ ...user, preferredVibe: v });
+                                        }
+                                        navigate('/', { state: { filter: v } });
+                                    }}
+                                    className={`relative px-4 py-4 rounded-3xl border font-black text-[11px] transition-all uppercase tracking-widest overflow-hidden active:scale-95 duration-300 ${user?.preferredVibe === v ? 'bg-orange-500 border-orange-400 text-white shadow-2xl shadow-orange-500/20' : 'bg-[#111111] border-white/5 text-slate-500 hover:text-slate-300 hover:border-white/10'}`}
+                                >
+                                    <div className="relative z-10">{v}</div>
+                                    {user?.preferredVibe === v && (
+                                        <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Admin Control Center */}
+                {isAdmin && (
+                    <div className="px-6 mb-12">
+                        <div className="p-8 bg-black border border-white/5 rounded-[3rem] shadow-2xl space-y-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center">
+                                    <ShieldCheck className="w-6 h-6 text-sky-400" />
+                                </div>
+                                <div className="text-left">
+                                    <h3 className="text-lg font-black text-white tracking-tight leading-tight">Admin Center</h3>
+                                    <p className="text-[10px] font-bold text-sky-400 uppercase tracking-widest mt-0.5">Control Total</p>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 gap-3">
+                                <button
+                                    onClick={() => navigate('/admin-users')}
+                                    className="w-full bg-[#111111] border border-white/5 text-slate-300 font-black py-4 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-[10px]"
+                                >
+                                    <Users className="w-4 h-4 text-sky-400" />
+                                    <span>Gestión de Usuarios</span>
+                                </button>
+
+                                <button
+                                    onClick={() => setShowMigrationPanel(true)}
+                                    className="w-full bg-[#111111] border border-white/5 text-slate-300 font-black py-4 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-[10px]"
+                                >
+                                    <Upload className="w-4 h-4 text-orange-400" />
+                                    <span>Migrar a Firestore</span>
+                                </button>
+
+                                <button
+                                    onClick={async () => {
+                                        if (await showConfirm('¿Quieres migrar todos los avatars de base64 a Firebase Storage? Esto mejorará el rendimiento.', 'Migrar Storage')) {
+                                            setIsMigratingStorage(true);
+                                            try {
+                                                const result = await migrateAvatarsToStorage();
+                                                if (result.success) {
+                                                    showToast(result.message, 'success');
+                                                } else {
+                                                    showToast(result.message, 'error');
+                                                }
+                                            } catch (error) {
+                                                showToast('Error en la migración', 'error');
+                                            } finally {
+                                                setIsMigratingStorage(false);
+                                            }
+                                        }
+                                    }}
+                                    disabled={isMigratingStorage}
+                                    className="w-full bg-[#111111] border border-white/5 text-slate-300 font-black py-4 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-[10px] disabled:opacity-50"
+                                >
+                                    <ImageIcon className="w-4 h-4 text-violet-400" />
+                                    <span>{isMigratingStorage ? 'Migrando...' : 'Migrar Avatars a Storage'}</span>
+                                </button>
+
+                                <button
+                                    onClick={toggleSuperUser}
+                                    className={`w-full py-4 rounded-2xl border transition-all uppercase tracking-widest text-[10px] font-black flex items-center justify-center gap-3 ${
+                                        isSuperUser 
+                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                                        : 'bg-[#111111] text-slate-500 border-white/5 hover:bg-white/5'
+                                    }`}
+                                >
+                                    <Zap className={`w-4 h-4 ${isSuperUser ? 'animate-pulse text-emerald-400' : 'text-slate-600'}`} />
+                                    <span>{isSuperUser ? 'SuperUsuario: ACTIVO' : 'Activar Modo SuperUsuario'}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Final Sign Out */}
+                <div className="px-6 pt-12 pb-24">
                     <button
                         onClick={logout}
-                        className="w-full py-6 bg-gradient-to-r from-orange-500/10 to-rose-500/10 border border-orange-500/20 text-orange-500 rounded-[2.25rem] font-black uppercase tracking-[0.3em] hover:from-orange-500/20 hover:to-rose-500/20 transition-all flex items-center justify-center gap-3 shadow-xl"
+                        className="group relative w-full h-[88px] flex items-center justify-center rounded-[2.5rem] bg-gradient-to-br from-rose-600/10 to-orange-600/10 border border-white/5 hover:border-rose-500/30 transition-all duration-500 active:scale-95 shadow-lg active:shadow-inner"
                     >
-                        <LogOut className="w-6 h-6" />
-                        Sign Out
+                        <div className="flex items-center gap-4 group-hover:scale-105 transition-transform duration-500">
+                            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 shadow-inner group-hover:bg-rose-500 group-hover:text-white transition-all duration-500">
+                                <LogOut className="w-5 h-5" />
+                            </div>
+                            <span className="font-black text-rose-500 text-sm uppercase tracking-[0.4em] mb-[-2px]">Cerrar Sesión</span>
+                        </div>
                     </button>
+                    <p className="text-center mt-8 text-[9px] font-black text-slate-700 uppercase tracking-[0.5em] opacity-50">Pulse v4.0.0 PREMIUM</p>
                 </div>
             </div>
 
@@ -1181,3 +1409,5 @@ const AnalyticsCard = ({ icon, label, value, trend }: { icon: React.ReactNode, l
         <p className="text-2xl font-black text-white mt-1">{value?.toLocaleString()}</p>
     </div>
 );
+
+

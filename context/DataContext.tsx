@@ -1,24 +1,28 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef } from 'react';
-import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData } from '../types';
-import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES } from '../constants';
+import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings } from '../types';
+import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition } from '../constants';
 import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAppSettings,
     incrementViewCount, updateAppSettings, subscribeToUsers,
     getUserByEmail, getBusinessById, createUser, createBusiness, updateBusiness, deleteBusiness, updateUser,
     toggleRSVP, deleteEvent, updateEvent, createEvent, subscribeToRSVPCounts,
-    subscribeToPosts, createPost, toggleLikePost,
+    subscribeToPosts, createPost, toggleLikePost, addCommentToPost,
     subscribeToMessages, sendMessage,
-    addPoints, redeemPoints, togglePulsePass,
+    addPoints, redeemPoints, togglePulsePass, incrementPulseCount,
     toggleFollowBusiness, getFollowedBusinessIds, subscribeToUserFollows, subscribeToBusinessFollowers,
     addFavorite, removeFavorite, subscribeToUserFavorites,
     purgeAllReferencePoints,
-    getCustomLocalities, createCustomLocality, deleteCustomLocality
+    restoreBusiness,
+    getCustomLocalities, subscribeToCustomLocalities, createCustomLocality, deleteCustomLocality,
+    subscribeToNotifications, createNotification, markNotificationRead,
+    incrementEventViewCount, incrementEventClickCount as serviceIncrementClick,
+    subscribeToChatRooms, markRoomAsRead
 } from '../services/firestoreService';
 import { generateEventDescription } from '../services/geminiService';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from './AuthContext';
 import { useToast } from './ToastContext';
-import { compressImage } from '../services/uiService';
+import { compressImage } from '../utils/imageUtils';
 
 interface DataContextType {
     events: MontanitaEvent[];
@@ -122,12 +126,13 @@ interface DataContextType {
     selectedMood: Vibe | null;
     setSelectedMood: (mood: Vibe | null) => void;
     user: UserProfile | null;
+    authUser: any;
     isAdmin: boolean;
     isSuperUser: boolean;
     isSuperAdmin: boolean;
     customLocalities: { name: string; coords: [number, number]; zoom: number }[];
     customLocalitySectors: Record<string, Sector[]>;
-    handleAddCustomLocality: (name: string, coords: [number, number], sectors: Sector[]) => Promise<void>;
+    handleAddCustomLocality: (name: string, coords: [number, number], hasBeach: boolean) => Promise<void>;
     handleDeleteCustomLocality: (name: string) => Promise<void>;
     filteredEvents: MontanitaEvent[];
     filteredBusinesses: Business[];
@@ -148,6 +153,14 @@ interface DataContextType {
     setShowPaymentEdit: (show: boolean) => void;
     planPrices: Record<SubscriptionPlan, number>;
     handleUpdatePlanPrices: (prices: Record<SubscriptionPlan, number>) => Promise<void>;
+    planFeatures: Record<SubscriptionPlan, PlanFeatureDefinition[]>;
+    handleUpdatePlanFeatures: (features: Record<SubscriptionPlan, PlanFeatureDefinition[]>) => Promise<void>;
+    planLimits: Record<SubscriptionPlan, number>;
+    handleUpdatePlanLimits: (limits: Record<SubscriptionPlan, number>) => Promise<void>;
+    planNames: Record<SubscriptionPlan, string>;
+    handleUpdatePlanNames: (names: Record<SubscriptionPlan, string>) => Promise<void>;
+    planSubtitles: Record<SubscriptionPlan, string>;
+    handleUpdatePlanSubtitles: (subtitles: Record<SubscriptionPlan, string>) => Promise<void>;
     showMigrationPanel: boolean;
     setShowMigrationPanel: (show: boolean) => void;
     showBusinessReg: boolean;
@@ -184,11 +197,13 @@ interface DataContextType {
     posts: CommunityPost[];
     handleCreatePost: (content: string, imageUrl?: string) => Promise<void>;
     handleToggleLike: (postId: string) => Promise<void>;
+    handleLikePost: (postId: string) => Promise<void>;
+    handleComment: (postId: string, content: string) => Promise<void>;
     handleAddPoints: (amount: number) => Promise<void>;
     handleRedeemPoints: (amount: number) => Promise<void>;
     handleTogglePulsePass: (active: boolean) => Promise<void>;
     messages: ChatMessage[];
-    handleSendMessage: (content: string, asBusiness?: boolean, type?: 'text' | 'image' | 'system') => Promise<void>;
+    handleSendMessage: (content: string, asBusiness?: boolean, type?: 'text' | 'image' | 'system', imageUrl?: string) => Promise<void>;
     services: ServiceCategory[];
     handleUpdateServices: (services: ServiceCategory[]) => Promise<void>;
     helpSupport: HelpSupportItem[];
@@ -199,9 +214,24 @@ interface DataContextType {
     businessFollowers: string[];
     updateBusiness: (id: string, data: Partial<Business>) => Promise<void>;
     handlePurgeAllReferences: () => Promise<void>;
+    handleRestoreBusiness: (id: string) => Promise<void>;
     setActiveView: (view: ViewType) => void;
     policyData: PolicyData;
     handleUpdatePolicies: (data: PolicyData) => Promise<void>;
+    appSettings: AppSettings | null;
+    setAppSettings: React.Dispatch<React.SetStateAction<AppSettings | null>>;
+    handleUpdateAppSettings: (settings: Partial<AppSettings>) => Promise<void>;
+    communityTab: 'global' | 'chats' | 'users';
+    setCommunityTab: (tab: 'global' | 'chats' | 'users') => void;
+    sendPushNotification: (userId: string, title: string, body: string, type: string, metadata?: any) => Promise<void>;
+    markAsRead: (id: string) => Promise<void>;
+    incrementEventView: (id: string) => Promise<void>;
+    incrementEventClick: (id: string) => Promise<void>;
+    deletedBusinesses: Business[];
+    chatRooms: ChatRoom[];
+    unreadChatCount: number;
+    markRoomAsRead: (roomId: string, userId: string) => Promise<void>;
+    markAllRoomsAsRead: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -218,6 +248,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [favorites, setFavorites] = useState<string[]>([]);
     const [paymentDetails, setPaymentDetails] = useState(DEFAULT_PAYMENT_DETAILS);
     const [planPrices, setPlanPrices] = useState<Record<SubscriptionPlan, number>>(PLAN_PRICES);
+    const [planFeatures, setPlanFeatures] = useState<Record<SubscriptionPlan, PlanFeatureDefinition[]>>(PLAN_FEATURES);
+    const [planLimits, setPlanLimits] = useState<Record<SubscriptionPlan, number>>(PLAN_LIMITS);
+    const [planNames, setPlanNames] = useState<Record<SubscriptionPlan, string>>({
+        [SubscriptionPlan.FREE]: 'Free',
+        [SubscriptionPlan.BASIC]: 'Pulse Pro',
+        [SubscriptionPlan.PREMIUM]: 'Pulse Elite',
+        [SubscriptionPlan.EXPERT]: 'Pulse Expert'
+    });
+    const [planSubtitles, setPlanSubtitles] = useState<Record<SubscriptionPlan, string>>({
+        [SubscriptionPlan.FREE]: 'Tu inicio en la comunidad.',
+        [SubscriptionPlan.BASIC]: 'Visibilidad potenciada.',
+        [SubscriptionPlan.PREMIUM]: 'Máximo alcance y control.',
+        [SubscriptionPlan.EXPERT]: 'Solución total para tu negocio.'
+    });
     const [selectedEvent, setSelectedEvent] = useState<MontanitaEvent | null>(null);
     const [posts, setPosts] = useState<CommunityPost[]>([]);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -230,6 +274,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     ]);
     const [loading, setLoading] = useState(true);
     const [policyData, setPolicyData] = useState<PolicyData>(DEFAULT_POLICIES);
+    const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+    const [communityTab, setCommunityTab] = useState<'global' | 'chats' | 'users'>('global');
+    const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+    const [deletedBusinesses, setDeletedBusinesses] = useState<Business[]>([]);
+    const [notifications, setNotifications] = useState<PulseNotification[]>([]);
 
     const [agendaRange, setAgendaRange] = useState<'day' | 'week' | 'month'>('day');
     const [calendarBaseDate, setCalendarBaseDate] = useState(new Date());
@@ -249,7 +298,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [publicProfileType, setPublicProfileType] = useState<'business' | 'user'>('business');
     const [showLogin, setShowLogin] = useState(false);
     const [showHostWizard, setShowHostWizard] = useState(false);
-    const [regForm, setRegForm] = useState({ name: '', email: '', vibe: Vibe.RELAX, role: 'visitor' as 'visitor' | 'host' });
+    const [regForm, setRegForm] = useState({ name: '', surname: '', email: '', vibe: Vibe.RELAX, role: 'visitor' as 'visitor' | 'host' });
     const INITIAL_BIZ_FORM = {
         name: '',
         locality: LOCALITIES[0].name,
@@ -295,7 +344,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [activeFilter, setActiveFilter] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMood, setSelectedMood] = useState<Vibe | null>(null);
-    const [notifications, setNotifications] = useState<PulseNotification[]>([]);
     
     const [customLocalities, setCustomLocalities] = useState<{ name: string; coords: [number, number]; zoom: number }[]>([]);
     const [customLocalitySectors, setCustomLocalitySectors] = useState<Record<string, Sector[]>>({});
@@ -306,7 +354,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return;
         }
 
-        const mockNotifications: PulseNotification[] = [
+        const baseNotifications: PulseNotification[] = [
             {
                 id: 'n1',
                 userId: user.id,
@@ -319,7 +367,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ];
 
         if (user.pulsePassActive) {
-            mockNotifications.push({
+            baseNotifications.push({
                 id: 'n2',
                 userId: user.id,
                 title: 'Pulse Pass Active!',
@@ -330,8 +378,55 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
         }
 
-        setNotifications(mockNotifications);
-    }, [user?.id, user?.pulsePassActive]);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const eventNotifications: PulseNotification[] = [];
+
+        events.forEach(event => {
+            if (event.status === 'deactivated') return;
+
+            const eventStart = new Date(event.startAt);
+            const eventEnd = new Date(event.endAt);
+
+            // Verifica que el evento coincide con "hoy" y aún no ha terminado.
+            const happensToday = eventStart < tomorrow && eventEnd >= today;
+            const hasNotEnded = now < eventEnd;
+
+            if (happensToday && hasNotEnded) {
+                const business = businesses.find(b => b.id === event.businessId);
+                const isPremium = event.isPremium || business?.plan === SubscriptionPlan.EXPERT || business?.plan === SubscriptionPlan.PREMIUM;
+                const isAdminEvent = event.isFeatured || business?.isReference || event.ownerId === user.id;
+                const isLiked = favorites.includes(event.id);
+
+                if (isLiked || isPremium || isAdminEvent) {
+                    eventNotifications.push({
+                        id: `evt-${event.id}`,
+                        userId: user.id,
+                        title: event.title,
+                        message: `¡Hoy! ${eventStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eventEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`,
+                        type: 'alert',
+                        createdAt: eventStart,
+                        read: false,
+                        postId: event.id
+                    });
+                }
+            }
+        });
+
+        setNotifications(prev => {
+            const allNew = [...baseNotifications, ...eventNotifications];
+            return allNew.map(n => {
+                const existing = prev.find(p => p.id === n.id);
+                if (existing) {
+                    return { ...n, read: existing.read };
+                }
+                return n;
+            });
+        });
+    }, [user?.id, user?.pulsePassActive, events, businesses, favorites]);
 
     const unreadNotificationsCount = useMemo(() =>
         notifications.filter(n => !n.read).length
@@ -781,14 +876,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return;
         }
 
+        const isCurrentlyFavorited = favorites.includes(id);
+
+        // Optimistic Update
+        const nextFavs = isCurrentlyFavorited
+            ? favorites.filter(eid => eid !== id)
+            : [...favorites, id];
+        setFavorites(nextFavs);
+
         try {
-            if (favorites.includes(id)) {
+            if (isCurrentlyFavorited) {
                 await removeFavorite(authUser.uid, id);
             } else {
                 await addFavorite(authUser.uid, id);
             }
         } catch (error) {
             console.error('Error toggling favorite:', error);
+            // Rollback on error
+            setFavorites(favorites);
             showToast('Error al guardar favorito.', 'error');
         }
     };
@@ -873,7 +978,93 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    // Utility removed - now using shared uiService.ts
+    const handleUpdatePlanFeatures = async (features: Record<SubscriptionPlan, PlanFeatureDefinition[]>) => {
+        try {
+            await updateAppSettings('plan_features', { features });
+            setPlanFeatures(features);
+            showToast('Características de planes actualizadas', 'success');
+        } catch (error) {
+            console.error('Error updating plan features:', error);
+            showToast('Error al actualizar características de planes', 'error');
+            throw error;
+        }
+    };
+
+    const handleUpdatePlanLimits = async (limits: Record<SubscriptionPlan, number>) => {
+        try {
+            await updateAppSettings('plan_limits', { limits });
+            setPlanLimits(limits);
+            showToast('Límites de planes actualizados', 'success');
+        } catch (error) {
+            console.error('Error updating plan limits:', error);
+            showToast('Error al actualizar límites de planes', 'error');
+            throw error;
+        }
+    };
+
+    const handleUpdatePlanNames = async (names: Record<SubscriptionPlan, string>) => {
+        try {
+            await updateAppSettings('plan_names', { names });
+            setPlanNames(names);
+            showToast('Nombres de planes actualizados', 'success');
+        } catch (error) {
+            console.error('Error updating plan names:', error);
+            showToast('Error al actualizar nombres de planes', 'error');
+            throw error;
+        }
+    };
+
+    const handleUpdatePlanSubtitles = async (subtitles: Record<SubscriptionPlan, string>) => {
+        try {
+            await updateAppSettings('plan_subtitles', { subtitles });
+            setPlanSubtitles(subtitles);
+            showToast('Subtítulos de planes actualizados', 'success');
+        } catch (error) {
+            console.error('Error updating plan subtitles:', error);
+            showToast('Error al actualizar subtítulos de planes', 'error');
+            throw error;
+        }
+    };
+
+    const handleUpdateAppSettings = async (settings: Partial<AppSettings>) => {
+        try {
+            await updateAppSettings('general_settings', settings);
+            setAppSettings(prev => prev ? { ...prev, ...settings } : settings as AppSettings);
+            showToast('Ajustes de la aplicación actualizados', 'success');
+        } catch (error) {
+            console.error('Error updating app settings:', error);
+            showToast('Error al actualizar ajustes', 'error');
+        }
+    };
+
+    const handleUpdatePolicies = async (data: PolicyData) => {
+        try {
+            await updateAppSettings('policies', data);
+            setPolicyData(data);
+            showToast('Políticas actualizadas correctamente', 'success');
+        } catch (error) {
+            console.error('Error updating policies:', error);
+            showToast('Error al actualizar políticas', 'error');
+            throw error;
+        }
+    };
+
+    const handleRestoreBusiness = async (id: string) => {
+        try {
+            await restoreBusiness(id);
+            const b = deletedBusinesses.find(db => db.id === id);
+            if (b) {
+                setBusinesses(prev => [...prev, b]);
+                setDeletedBusinesses(prev => prev.filter(db => db.id !== id));
+            }
+            showToast('Negocio restaurado exitosamente', 'success');
+        } catch (error) {
+            console.error('Error restoring business:', error);
+            showToast('Error al restaurar negocio', 'error');
+        }
+    };
+
+    // handlePurgeAllReferences moved/consolidated later in file
 
     const handleBusinessImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -883,7 +1074,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (file && targetBusinessId) {
             try {
                 // Square crop for business profile photos, max 800px
-                const dataUrl = await compressImage(file, 800, 0.88, true);
+                const dataUrl = await compressImage(file, { maxWidth: 800, quality: 0.88, squareCrop: true });
                 setBusinesses(prev => prev.map(b =>
                     b.id === targetBusinessId ? { ...b, imageUrl: dataUrl } : b
                 ));
@@ -903,7 +1094,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             try {
                 // 16:9 style max for events (1280px wide), square for business
                 const isSquare = target === 'business';
-                const dataUrl = await compressImage(file, 1280, 0.88, isSquare);
+                const dataUrl = await compressImage(file, { maxWidth: 1280, quality: 0.88, squareCrop: isSquare });
                 if (target === 'event') {
                     setNewEvent((prev: any) => ({ ...prev, imageUrl: dataUrl }));
                 } else {
@@ -1052,8 +1243,82 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         showToast('Ubicación actualizada y guardada.', 'success');
     };
 
+    useEffect(() => {
+        if (!user) return;
+        let unsubscribeUserRooms: () => void;
+        let unsubscribeBizRooms: (() => void) | undefined;
+        
+        let userRooms: ChatRoom[] = [];
+        let bizRooms: ChatRoom[] = [];
+        
+        const updateMergedRooms = () => {
+            const merged = [...userRooms, ...bizRooms];
+            const unique = Array.from(new Map(merged.map(r => [r.id, r])).values());
+            setChatRooms(unique);
+        };
+        
+        // Timeout to allow initial auth states to settle if needed, though usually safe without
+        unsubscribeUserRooms = subscribeToChatRooms(user.id, (rooms) => {
+            userRooms = rooms;
+            updateMergedRooms();
+        });
+        
+        if (user.businessId) {
+            unsubscribeBizRooms = subscribeToChatRooms(user.businessId, (rooms) => {
+                bizRooms = rooms;
+                updateMergedRooms();
+            });
+        }
+        
+        return () => {
+            if (unsubscribeUserRooms) unsubscribeUserRooms();
+            if (unsubscribeBizRooms) unsubscribeBizRooms();
+        };
+    }, [user?.id, user?.businessId]);
+
+    const unreadChatCount = useMemo(() => {
+        if (!user) return 0;
+        let count = 0;
+        chatRooms.forEach(room => {
+            if (room.unreadCounts?.[user.id] && room.unreadCounts[user.id] > 0) {
+                count += room.unreadCounts[user.id];
+            }
+            if (user.businessId && room.unreadCounts?.[user.businessId] && room.unreadCounts[user.businessId] > 0) {
+                count += room.unreadCounts[user.businessId];
+            }
+        });
+        return count;
+    }, [chatRooms, user]);
+
+    const markAllRoomsAsRead = async () => {
+        if (!user) return;
+        const roomsToMark = chatRooms.filter(room => 
+            (room.unreadCounts?.[user.id] && room.unreadCounts[user.id] > 0) ||
+            (user.businessId && room.unreadCounts?.[user.businessId] && room.unreadCounts[user.businessId] > 0)
+        );
+        
+        const promises = roomsToMark.flatMap(room => {
+            const p = [];
+            if (room.unreadCounts?.[user.id] && room.unreadCounts[user.id] > 0) {
+                p.push(markRoomAsRead(room.id, user.id));
+            }
+            if (user.businessId && room.unreadCounts?.[user.businessId] && room.unreadCounts[user.businessId] > 0) {
+                p.push(markRoomAsRead(room.id, user.businessId));
+            }
+            return p;
+        });
+
+        if (promises.length > 0) {
+            await Promise.all(promises);
+        }
+    };
+
     return (
         <DataContext.Provider value={{
+            chatRooms,
+            unreadChatCount,
+            markRoomAsRead,
+            markAllRoomsAsRead,
             events,
             eventsWithLiveCounts,
             businesses,
@@ -1118,13 +1383,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (!authUser) return;
                 const newUser: UserProfile = {
                     id: authUser.uid,
-                    name: regForm.name.split(' ')[0],
-                    surname: regForm.name.split(' ').slice(1).join(' ') || '',
+                    name: regForm.name,
+                    surname: regForm.surname,
                     email: regForm.email,
-                    preferredVibe: regForm.vibe,
-                    role: 'visitor',
-                    avatarUrl: authUser.photoURL || `https://i.pravatar.cc/150?u=${regForm.email}`,
-                    plan: SubscriptionPlan.VISITOR
+                    preferredVibe: Vibe.RELAX,
+                    role: regForm.role,
+                    avatarUrl: authUser.photoURL || undefined,
+                    plan: SubscriptionPlan.FREE
                 };
                 await createUser(authUser.uid, { ...newUser, avatarUrl: newUser.avatarUrl || null });
                 setUser(newUser);
@@ -1403,12 +1668,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setShowPaymentEdit,
             planPrices,
             handleUpdatePlanPrices,
+            planFeatures,
+            handleUpdatePlanFeatures,
+            planLimits,
+            handleUpdatePlanLimits,
+            planNames,
+            handleUpdatePlanNames,
+            planSubtitles,
+            handleUpdatePlanSubtitles,
             handleUpdateBusinessProfile,
             handleUpdatePaymentDetails,
             handleBusinessImageUpload,
             handleDeleteBusiness,
             handleCreateBusinessOnMap,
             handleUpdateBusinessLocation,
+            handleRestoreBusiness,
+            handlePurgeAllReferences,
+            updateBusiness,
+            appSettings,
+            setAppSettings,
+            handleUpdateAppSettings,
+            policyData,
+            handleUpdatePolicies,
+            communityTab,
+            setCommunityTab,
             showBusinessReg,
             setShowBusinessReg,
             showPublicProfile,
@@ -1450,9 +1733,79 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     imageUrl
                 });
             },
+            handleLikePost: async (postId: string) => {
+                if (!authUser) return;
+                const post = posts.find(p => p.id === postId);
+                if (!post) return;
+                const isLiked = post.likes?.includes(authUser.uid) || false;
+
+                // Optimistic update
+                setPosts(prev => prev.map(p =>
+                    p.id === postId
+                        ? {
+                            ...p,
+                            likes: isLiked
+                                ? (p.likes || []).filter(uid => uid !== authUser.uid)
+                                : [...(p.likes || []), authUser.uid]
+                        }
+                        : p
+                ));
+
+                try {
+                    await toggleLikePost(postId, authUser.uid, isLiked, post.authorId);
+                    // Sincronizar Pulso Global (+1)
+                    if (!isLiked) {
+                        await incrementPulseCount(1);
+                    }
+                } catch (error) {
+                    console.error("Error liking post:", error);
+                    // Rollback
+                    setPosts(posts);
+                    showToast("No se pudo dar like. Intenta de nuevo.", "error");
+                }
+            },
             handleToggleLike: async (postId: string) => {
                 if (!authUser) return;
-                await toggleLikePost(postId, authUser.uid);
+                const post = posts.find(p => p.id === postId);
+                if (!post) return;
+                const isLiked = post.likes?.includes(authUser.uid) || false;
+
+                // Optimistic update
+                setPosts(prev => prev.map(p =>
+                    p.id === postId
+                        ? {
+                            ...p,
+                            likes: isLiked
+                                ? (p.likes || []).filter(uid => uid !== authUser.uid)
+                                : [...(p.likes || []), authUser.uid]
+                        }
+                        : p
+                ));
+
+                try {
+                    await toggleLikePost(postId, authUser.uid, isLiked, post.authorId);
+                    // Sincronizar Pulso Global (+1)
+                    if (!isLiked) {
+                        await incrementPulseCount(1);
+                    }
+                } catch (error) {
+                    console.error("Error toggling like:", error);
+                    // Rollback
+                    setPosts(posts);
+                    showToast("Error al dar like.", "error");
+                }
+            },
+            handleComment: async (postId: string, content: string) => {
+                if (!authUser) return;
+                const authorProfile = user || { name: authUser.displayName || 'Usuario' };
+                await addCommentToPost(postId, {
+                    authorId: authUser.uid,
+                    authorName: (authorProfile as any).name || (authorProfile as any).surname ? `${(authorProfile as any).name} ${(authorProfile as any).surname}`.trim() : (authUser.displayName || 'Usuario'),
+                    authorAvatar: (authorProfile as any).authorAvatar || (authorProfile as any).avatarUrl || authUser.photoURL || undefined,
+                    text: content
+                });
+                // Sincronizar Pulso Global (+2 por comentario)
+                await incrementPulseCount(2);
             },
             handleAddPoints: async (amount: number) => {
                 if (!authUser) return;
@@ -1467,10 +1820,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 await togglePulsePass(authUser.uid, active);
             },
             messages,
-            handleSendMessage: async (content: string, asBusiness: boolean = false, type: 'text' | 'image' | 'system' = 'text') => {
+            handleSendMessage: async (content: string, asBusiness = false, type: 'text' | 'image' | 'system' = 'text', imageUrl?: string) => {
                 if (!authUser) return;
-                
-                const userPlan = user?.plan || SubscriptionPlan.VISITOR;
+                const userPlan = user?.plan || SubscriptionPlan.FREE;
                 let senderId = authUser.uid;
                 let senderName = user ? `${user.name} ${user.surname}` : (authUser.displayName || 'User');
                 let senderAvatar = user?.avatarUrl || authUser.photoURL || undefined;
@@ -1490,8 +1842,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     senderAvatar,
                     text: content,
                     type,
+                    imageUrl,
                     isBusinessMessage: asBusiness
                 });
+                // Sincronizar Pulso Global (+5 por mensaje)
+                await incrementPulseCount(5);
             },
             services,
             handleUpdateServices: async (newServices: ServiceCategory[]) => {
@@ -1506,12 +1861,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     setShowLogin(true);
                     return;
                 }
-                const isNowFollowing = await toggleFollowBusiness(authUser.uid, businessId);
+                const isCurrentlyFollowing = followedBusinessIds.includes(businessId);
+
+                // Optimistic Update
                 setFollowedBusinessIds(prev =>
-                    isNowFollowing
-                        ? [...prev, businessId]
-                        : prev.filter(id => id !== businessId)
+                    isCurrentlyFollowing
+                        ? prev.filter(id => id !== businessId)
+                        : [...prev, businessId]
                 );
+
+                try {
+                    await toggleFollowBusiness(authUser.uid, businessId);
+                } catch (error) {
+                    console.error("Error toggling follow:", error);
+                    // Rollback using latest state from scope
+                    setFollowedBusinessIds(followedBusinessIds);
+                    showToast("Error al seguir este negocio.", "error");
+                }
             },
             filteredEvents,
             filteredBusinesses,
@@ -1522,26 +1888,39 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             notifications,
             markAllAsRead,
             unreadNotificationsCount,
-            user,
-            isAdmin,
+            markAsRead: async (id: string) => {
+                await markNotificationRead(id);
+            },
+            sendPushNotification: async (userId: string, title: string, body: string, type: string, metadata?: any) => {
+                const validTypes: ('system' | 'community' | 'offer' | 'alert')[] = ['system', 'community', 'offer', 'alert'];
+                const notificationType = validTypes.includes(type as any) ? type as any : 'system';
+                await createNotification({ userId, title, body, type: notificationType, metadata });
+            },
+            incrementEventView: async (id: string) => {
+                await incrementEventViewCount(id);
+            },
+            incrementEventClick: async (id: string) => {
+                await serviceIncrementClick(id);
+            },
             showPulseModal,
             setShowPulseModal,
+            deletedBusinesses,
             showPulsePassModal,
             setShowPulsePassModal,
-            updateBusiness,
-            handlePurgeAllReferences,
-            isSuperUser,
-            isSuperAdmin,
             customLocalities,
             customLocalitySectors,
-            handleAddCustomLocality: async (name: string, coords: [number, number], sectors: Sector[]) => {
+            handleAddCustomLocality: async (name: string, coords: [number, number], hasBeach: boolean) => {
                 try {
+                    const sectors = [Sector.CENTRO, Sector.NORTE, Sector.SUR];
+                    if (hasBeach) sectors.push(Sector.PLAYA);
+
                     await createCustomLocality({
                         name,
                         coords,
                         zoom: 15,
                         sectors,
-                        createdBy: authUser?.uid || 'admin'
+                        createdBy: authUser?.uid || 'admin',
+                        hasBeach
                     });
                     setCustomLocalities(prev => [...prev, { name, coords, zoom: 15 }]);
                     setCustomLocalitySectors(prev => ({ ...prev, [name]: sectors }));
@@ -1582,15 +1961,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 };
                 if (paths[view]) navigate(paths[view]);
             },
-            policyData,
-            handleUpdatePolicies: async (data: PolicyData) => {
-                try {
-                    await updateAppSettings('policies', data);
-                    showToast('Políticas actualizadas con éxito', 'success');
-                } catch (error) {
-                    showToast('Error al actualizar políticas', 'error');
-                }
-            }
+            user,
+            authUser,
+            isAdmin,
+            isSuperUser,
+            isSuperAdmin
         }}>
             {children}
         </DataContext.Provider>

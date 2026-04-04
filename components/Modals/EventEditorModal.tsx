@@ -2,8 +2,9 @@ import React, { useRef } from 'react';
 import { X, Camera, Upload, Sparkles, Calendar, Clock, MapPin, Tag, Zap, AlertTriangle, Crown } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Sector, Vibe, SubscriptionPlan } from '../../types';
-import { LOCALITIES, LOCALITY_SECTORS } from '../../constants';
+import { LOCALITIES, LOCALITY_SECTORS, PLAN_LIMITS, DEFAULT_NEW_LOCALITY_SECTORS } from '../../constants';
 import { useAuthContext } from '../../context/AuthContext';
+import { OptimizedImageUploader } from '../OptimizedImageUploader';
 
 export const EventEditorModal: React.FC = () => {
     const { user } = useAuthContext();
@@ -16,51 +17,49 @@ export const EventEditorModal: React.FC = () => {
         handleSaveEvent,
         handleGenerateAIEvent,
         isGeneratingDesc,
-        handleImageUpload,
         generatedDesc,
         businesses,
         events,
         customLocalities
     } = useData();
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const cameraInputRef = useRef<HTMLInputElement>(null);
-
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
     const userBusinessEvents = userBusiness ? events.filter(e => e.businessId === userBusiness.id) : [];
-    const isPremium = userBusiness?.plan === SubscriptionPlan.PREMIUM;
-    const eventLimit = isPremium ? Infinity : 7;
-    const eventsUsed = userBusinessEvents.length;
-    const eventsRemaining = eventLimit === Infinity ? null : eventLimit - eventsUsed;
-    const isAtLimit = eventsRemaining !== null && eventsRemaining <= 0;
+    const isSpecialUser = user?.email === 'ubicameinformacion@gmail.com' || user?.role === 'admin';
+    const isPremium = userBusiness?.plan === SubscriptionPlan.BASIC || userBusiness?.plan === SubscriptionPlan.PREMIUM || userBusiness?.plan === SubscriptionPlan.EXPERT || isSpecialUser;
+    const planCreditsLimit = isPremium ? Infinity : (PLAN_LIMITS[userBusiness?.plan || SubscriptionPlan.FREE] || 0);
+    const availableCredits = userBusiness?.eventCredits ?? 0;
+    const isAtLimit = !isPremium && availableCredits <= 0;
 
     if (!showHostWizard) return null;
 
-    const sectors = LOCALITY_SECTORS[newEvent.locality] || Object.values(Sector);
+    const sectors = LOCALITY_SECTORS[newEvent.locality] || DEFAULT_NEW_LOCALITY_SECTORS;
 
     const handleClose = () => {
-        if (isAtLimit) {
-            alert('Has alcanzado el límite de eventos de tu plan. Actualiza a Premium para crear eventos ilimitados.');
-        }
         setShowHostWizard(false);
     };
 
     return (
-        <div className="fixed inset-0 z-[2100] bg-slate-900/95 backdrop-blur-xl flex flex-col p-6 overflow-y-auto pb-32 no-scrollbar animate-in fade-in duration-300">
-            <div className="flex items-center justify-between mb-6">
+        <div className="fixed inset-0 z-[2100] bg-slate-900/98 backdrop-blur-2xl flex flex-col p-6 overflow-y-auto pb-32 no-scrollbar animate-in fade-in duration-300">
+            <div className="flex items-center justify-between mb-8 sticky top-0 py-2 bg-slate-900/50 backdrop-blur-md z-30 -mx-6 px-6">
                 <button
                     onClick={handleClose}
-                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                    className="text-slate-400 font-bold hover:text-white transition-colors text-sm"
                 >
-                    <X className="w-6 h-6 text-slate-400" />
+                    Cerrar
                 </button>
                 <div className="flex flex-col items-center">
-                    <h2 className="text-white font-black uppercase tracking-[0.2em] text-xs">
+                    <h2 className="text-white font-black uppercase tracking-[0.2em] text-[11px]">
                         {editingEventId ? 'EDITAR PULSO' : 'NUEVO PULSO'}
                     </h2>
-                    <div className="h-1 w-8 bg-orange-500 rounded-full mt-1"></div>
                 </div>
-                <div className="w-10" />
+                <button
+                    onClick={handleSaveEvent}
+                    disabled={!newEvent.title || (isAtLimit && !editingEventId && !isPremium)}
+                    className="text-orange-500 font-black uppercase tracking-widest text-[11px] disabled:opacity-30"
+                >
+                    Guardar
+                </button>
             </div>
 
             {/* Plan Info Banner */}
@@ -79,13 +78,13 @@ export const EventEditorModal: React.FC = () => {
                             )}
                             <div>
                                 <p className="text-xs font-black text-white uppercase tracking-wider">
-                                    {isPremium ? 'Plan Premium' : 'Plan Básico'}
+                                    {isSpecialUser ? 'Plan Admin' : userBusiness?.plan === SubscriptionPlan.EXPERT ? 'Plan Expert' : userBusiness?.plan === SubscriptionPlan.PREMIUM ? 'Plan Premium' : userBusiness?.plan === SubscriptionPlan.BASIC ? 'Plan Basic' : 'Plan Gratis'}
                                 </p>
-                                {isPremium ? (
-                                    <p className="text-[10px] text-amber-400 font-medium">Eventos ilimitados</p>
+                                {isSpecialUser ? (
+                                    <p className="text-[10px] text-amber-400 font-medium">Pulses ilimitados</p>
                                 ) : (
                                     <p className="text-[10px] text-orange-400 font-medium">
-                                        {eventsRemaining} {eventsRemaining === 1 ? 'evento restante' : 'eventos restantes'}
+                                        {availableCredits}/{planCreditsLimit} Créditos de pulse restantes
                                     </p>
                                 )}
                             </div>
@@ -99,10 +98,10 @@ export const EventEditorModal: React.FC = () => {
                             </button>
                         )}
                     </div>
-                    {!isPremium && eventsRemaining !== null && eventsRemaining <= 3 && eventsRemaining > 0 && (
+                    {!isPremium && availableCredits <= 1 && availableCredits > 0 && (
                         <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2 text-[10px] text-orange-400">
                             <AlertTriangle className="w-3 h-3" />
-                            <span>Te quedan pocos eventos. ¡Actualiza a Premium para ilimitados!</span>
+                            <span>Te queda poco crédito de pulse. ¡Actualiza a Premium para ilimitados!</span>
                         </div>
                     )}
                 </div>
@@ -110,44 +109,10 @@ export const EventEditorModal: React.FC = () => {
 
             <div className="max-w-xl mx-auto w-full space-y-8">
                 {/* Image Upload Section */}
-                <div className="relative w-full aspect-video bg-slate-800 rounded-[2.5rem] overflow-hidden group border-2 border-dashed border-slate-700 hover:border-orange-500/50 transition-colors">
-                    <img
-                        src={newEvent.imageUrl || "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&q=80&w=600"}
-                        className="w-full h-full object-cover opacity-60"
-                        alt="Event preview"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center gap-6 bg-black/40 opacity-100 group-hover:bg-black/20 transition-all">
-                        <button
-                            type="button"
-                            onClick={() => cameraInputRef.current?.click()}
-                            className="p-5 bg-white/10 backdrop-blur-md rounded-3xl hover:bg-white/20 hover:scale-110 transition-all border border-white/10"
-                        >
-                            <Camera className="w-7 h-7 text-white" />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="p-5 bg-white/10 backdrop-blur-md rounded-3xl hover:bg-white/20 hover:scale-110 transition-all border border-white/10"
-                        >
-                            <Upload className="w-7 h-7 text-white" />
-                        </button>
-                    </div>
-                </div>
-
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handleImageUpload(e, 'event')}
-                />
-                <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={(e) => handleImageUpload(e, 'event')}
+                <OptimizedImageUploader 
+                    path={`events/${user?.id || 'anonymous'}`}
+                    currentImageUrl={newEvent.imageUrl}
+                    onImageProcessed={(url) => setNewEvent({ ...newEvent, imageUrl: url })}
                 />
 
                 {/* Form Fields */}
@@ -172,7 +137,7 @@ export const EventEditorModal: React.FC = () => {
                             <select
                                 className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-5 py-5 font-bold text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50"
                                 value={newEvent.locality}
-                                onChange={e => setNewEvent({ ...newEvent, locality: e.target.value, sector: (LOCALITY_SECTORS[e.target.value] || [])[0] || Sector.CENTRO })}
+                                onChange={e => setNewEvent({ ...newEvent, locality: e.target.value, sector: (LOCALITY_SECTORS[e.target.value] || DEFAULT_NEW_LOCALITY_SECTORS)[0] || Sector.CENTRO })}
                             >
                                 {[...LOCALITIES, ...(customLocalities || [])].map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                             </select>
@@ -274,7 +239,7 @@ export const EventEditorModal: React.FC = () => {
                     </button>
                     {isAtLimit && !isPremium && (
                         <p className="text-center text-[10px] text-red-400 mt-2">
-                            Has alcanzado el límite de eventos. ¡Actualiza a Premium para continuar creando!
+                            No tienes créditos de pulse suficientes para este mes. ¡Actualiza tu plan!
                         </p>
                     )}
                 </div>
@@ -282,3 +247,5 @@ export const EventEditorModal: React.FC = () => {
         </div>
     );
 };
+
+

@@ -80,6 +80,8 @@ interface MapViewProps {
   onMoveBusinessComplete?: () => void;
   customLocalities?: { name: string; coords: [number, number]; zoom: number }[];
   onAddLocality?: (name: string, coords: [number, number]) => void;
+  activeTab?: 'events' | 'directory' | 'landmarks' | null;
+  events?: any[];
 }
 
 export const MapView: React.FC<MapViewProps> = ({
@@ -113,7 +115,9 @@ export const MapView: React.FC<MapViewProps> = ({
   movingBusinessId,
   onMoveBusinessComplete,
   customLocalities = [],
-  onAddLocality
+  onAddLocality,
+  activeTab,
+  events = []
 }: MapViewProps) => {
   const { showToast, showConfirm, showPrompt } = useToast();
   const mapRef = useRef<L.Map | null>(null);
@@ -241,94 +245,120 @@ export const MapView: React.FC<MapViewProps> = ({
       }
     });
 
-    // Render Markers
-    businesses.forEach(business => {
-      const isRef = business.isReference || business.id.startsWith('ref-');
-      const matchesLocality = business.locality === localityName;
-      const matchesSector = !selectedSector || business.sector === selectedSector;
-      const matchesSearch = !searchQuery || 
-        (business.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (business.description ?? '').toLowerCase().includes(searchQuery.toLowerCase());
-
-      if (!isRef && (!matchesLocality || !matchesSector || !matchesSearch)) return;
-      if (isRef && !matchesLocality) return;
-      if (!business.coordinates || business.coordinates.some(isNaN)) return;
-
-      const info = SECTOR_INFO[business.sector] || SECTOR_INFO[Sector.CENTRO];
-      const vibeClass = activeFilter === 'Party' ? 'vibe-party' : 
-        activeFilter === 'Relax' ? 'vibe-relax' : 'vibe-default';
-
-      const { icon: iconNode, color: iconColor } = getIconForBusiness(business);
-      const isPremium = business.plan === SubscriptionPlan.PREMIUM;
-
-      // Color logic based on category and type
-      let markerBg: string, markerBorder: string, markerGlow: string;
-      
-      if (isRef) {
-        markerBg = 'linear-gradient(135deg, #0369a1, #0284c7)';
-        markerBorder = '#38bdf8';
-        markerGlow = '0 0 18px rgba(56,189,248,0.6)';
-      } else if (isPremium) {
-        markerBg = 'linear-gradient(135deg, #b45309, #d97706)';
-        markerBorder = '#fbbf24';
-        markerGlow = '0 0 20px rgba(251,191,36,0.5)';
-      } else {
-        markerBg = `linear-gradient(135deg, ${iconColor}, ${iconColor}cc)`;
-        markerBorder = iconColor;
-        markerGlow = `0 0 16px ${iconColor}66`;
-      }
-
-      const iconSvg = ReactDOMServer.renderToString(
-        React.cloneElement(iconNode as React.ReactElement<{ className?: string; style?: React.CSSProperties }>, { className: 'w-6 h-6', style: { color: 'white', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' } })
-      );
-
-      const customIcon = L.divIcon({
-        className: 'custom-marker',
-        html: `
-          <div class="relative group">
-            <div class="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 bg-slate-900/90 backdrop-blur-md border border-white/20 rounded-lg text-[10px] font-black text-white whitespace-nowrap opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none shadow-xl z-[1001]">
-              ${business.name}
-              <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r border-b border-white/20 rotate-45"></div>
-            </div>
-
-            <div class="w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg backdrop-blur-md transform transition-all duration-300 group-hover:scale-125 group-hover:border-white ${vibeClass} ${isEditorFocus ? 'cursor-grab active:cursor-grabbing' : ''}" 
-                 style="background: ${markerBg}; border-color: ${markerBorder}; box-shadow: ${markerGlow}">
-              <div class="drop-shadow-lg">${iconSvg}</div>
-              ${isPremium ? '<div class="absolute inset-0 rounded-full animate-pulse ring-4 ring-amber-400/30"></div>' : ''}
-              ${isRef ? '<div class="absolute inset-0 rounded-full animate-pulse ring-4 ring-sky-400/20"></div>' : ''}
-            </div>
-          </div>`,
-        iconSize: [48, 48],
-        iconAnchor: [24, 24]
-      });
-
-      const marker = L.marker(business.coordinates as L.LatLngExpression, {
-        icon: customIcon,
-        draggable: !!(isAdmin || isSuperUser) && !!isEditorFocus
-      }).addTo(markersLayerRef.current!);
-
-      marker.on('dragend', (e) => {
-        const { lat, lng } = e.target.getLatLng();
-        onUpdateBusiness?.(business.id, lat, lng);
-        showToast(`Ubicación de ${business.name} actualizada.`, 'success');
-      });
-
-      marker.on('click', (e) => {
-        L.DomEvent.stopPropagation(e as any);
-        if (isAdmin || isSuperUser) {
-          // Right click for quick edit, left click for selection
-          if ((e as any).originalEvent?.button === 2 || e.originalEvent?.ctrlKey) {
-            setQuickEditBusiness(business);
-            setShowQuickEdit(true);
-          } else {
-            setAdminSelectedBusiness(business);
-          }
-        } else {
-          onBusinessSelect(business);
+    // Render Markers - Only if a tab is active
+    if (activeTab) {
+      businesses.forEach(business => {
+        const isRef = business.isReference || business.id.startsWith('ref-');
+        const matchesLocality = business.locality === localityName;
+        
+        // Tab Filtering
+        if (activeTab === 'landmarks' && !isRef) return;
+        if (activeTab === 'directory' && isRef) return;
+        if (activeTab === 'events') {
+          if (isRef) return;
+          const hasActiveEvent = events.some(e => e.businessId === business.id);
+          if (!hasActiveEvent) return;
         }
-      });
-    });
 
+        const matchesSector = !selectedSector || business.sector === selectedSector;
+        const sq = (searchQuery || '').toLowerCase();
+        const matchesSearch = !sq || 
+          (business.name ?? '').toLowerCase().includes(sq) ||
+          (business.description ?? '').toLowerCase().includes(sq);
+
+        if (!isRef && (!matchesLocality || !matchesSector || !matchesSearch)) return;
+        if (isRef && !matchesLocality) return;
+        if (!business.coordinates || business.coordinates.some(isNaN)) return;
+
+        const vibeClass = activeFilter === 'Party' ? 'vibe-party' : 
+          activeFilter === 'Relax' ? 'vibe-relax' : 'vibe-default';
+
+        const { icon: iconNode, color: iconColor } = getIconForBusiness(business);
+        const isPremium = business.plan === SubscriptionPlan.EXPERT;
+
+        let markerBg: string, markerBorder: string, markerGlow: string;
+        
+        if (isRef) {
+          markerBg = 'linear-gradient(135deg, #0369a1, #0284c7)';
+          markerBorder = '#38bdf8';
+          markerGlow = '0 0 18px rgba(56,189,248,0.6)';
+        } else if (isPremium) {
+          markerBg = 'linear-gradient(135deg, #b45309, #d97706)';
+          markerBorder = '#fbbf24';
+          markerGlow = '0 0 20px rgba(251,191,36,0.5)';
+        } else {
+          markerBg = `linear-gradient(135deg, ${iconColor}, ${iconColor}cc)`;
+          markerBorder = iconColor;
+          markerGlow = `0 0 16px ${iconColor}66`;
+        }
+
+        const iconSvg = ReactDOMServer.renderToString(
+          React.cloneElement(iconNode as React.ReactElement<{ className?: string; style?: React.CSSProperties }>, { 
+            className: 'w-6 h-6', 
+            style: { color: 'white', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' } 
+          })
+        );
+
+        const isEventLive = (startTime: string, endTime?: string) => {
+          if (!startTime) return false;
+          const now = new Date();
+          const start = new Date(startTime);
+          const end = endTime ? new Date(endTime) : new Date(start.getTime() + 4 * 3600000);
+          return now >= start && now <= end;
+        };
+
+        const liveEvents = events.filter(e => e.businessId === business.id && isEventLive(e.startAt, e.endAt));
+        const isLiveNow = liveEvents.length > 0;
+
+        const customIcon = L.divIcon({
+          className: 'custom-marker',
+          html: `
+            <div class="relative group">
+              <div class="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 bg-slate-900/90 backdrop-blur-md border border-white/20 rounded-lg text-[10px] font-black text-white whitespace-nowrap opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none shadow-xl z-[1001]">
+                ${business.name} ${isLiveNow ? '•🔴 LIVE' : ''}
+                <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r border-b border-white/20 rotate-45"></div>
+              </div>
+
+              <div class="w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg backdrop-blur-md transform transition-all duration-300 group-hover:scale-125 group-hover:border-white ${vibeClass} ${isEditorFocus ? 'cursor-grab active:cursor-grabbing' : ''}" 
+                   style="background: ${markerBg}; border-color: ${isLiveNow ? '#ef4444' : markerBorder}; box-shadow: ${isLiveNow ? '0 0 25px rgba(239,68,68,0.6)' : markerGlow}">
+                <div class="drop-shadow-lg">${iconSvg}</div>
+                ${isLiveNow ? '<div class="absolute inset-0 rounded-full animate-pulse ring-8 ring-red-500/40"></div>' : 
+                  isPremium ? '<div class="absolute inset-0 rounded-full animate-pulse ring-4 ring-amber-400/30"></div>' : ''}
+                ${isRef ? '<div class="absolute inset-0 rounded-full animate-pulse ring-4 ring-sky-400/20"></div>' : ''}
+                ${isLiveNow ? '<div class="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full border-2 border-slate-900 animate-bounce"></div>' : ''}
+              </div>
+            </div>`,
+          iconSize: [48, 48],
+          iconAnchor: [24, 24]
+        });
+
+        const marker = L.marker(business.coordinates as L.LatLngExpression, {
+          icon: customIcon,
+          draggable: !!(isAdmin || isSuperUser) && !!isEditorFocus
+        }).addTo(markersLayerRef.current!);
+
+        marker.on('dragend', (e) => {
+          const { lat, lng } = e.target.getLatLng();
+          onUpdateBusiness?.(business.id, lat, lng);
+        });
+
+        marker.on('click', (e) => {
+          L.DomEvent.stopPropagation(e as any);
+          if (isAdmin || isSuperUser) {
+            if ((e as any).originalEvent?.button === 2 || e.originalEvent?.ctrlKey) {
+              setQuickEditBusiness(business);
+              setShowQuickEdit(true);
+            } else {
+              setAdminSelectedBusiness(business);
+            }
+          } else {
+            onBusinessSelect(business);
+          }
+        });
+      });
+    }
+
+    // Auto Zoom/Focus when sector is selected
     if (selectedSector) {
       const coords = sectorPolygons[selectedSector];
       if (coords && coords.length > 0) {
@@ -343,8 +373,7 @@ export const MapView: React.FC<MapViewProps> = ({
     } else if (mapCenter) {
       map.flyTo(mapCenter, 15, { duration: 1.2 });
     }
-
-  }, [businesses, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, isSuperUser, editingSector, tempCoords, mapCenter, sectorFocusCoords, localityName, isEditorFocus]);
+  }, [businesses, events, activeTab, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, isSuperUser, editingSector, tempCoords, mapCenter, sectorFocusCoords, localityName, isEditorFocus]);
 
   // 4. Handle Map Events (Click, Mousemove)
   useEffect(() => {
@@ -454,10 +483,10 @@ export const MapView: React.FC<MapViewProps> = ({
       {isSuperUser && onAddLocality && (
         <div className="absolute top-4 right-4 z-[1001] pointer-events-auto">
           <button
-            onClick={() => {
-              const name = prompt('Nombre del nuevo pueblo:');
+            onClick={async () => {
+              const name = await showPrompt('Nombre del nuevo pueblo:', 'Nombre del pueblo');
               if (name) {
-                const coordsStr = prompt('Coordenadas (lat, lng):', '-1.825, -80.753');
+                const coordsStr = await showPrompt('Coordenadas (lat, lng):', '-1.825, -80.753');
                 if (coordsStr) {
                   const coords = coordsStr.split(',').map(s => parseFloat(s.trim())) as [number, number];
                   if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
@@ -693,3 +722,5 @@ export const MapView: React.FC<MapViewProps> = ({
     </div>
   );
 };
+
+
