@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight } from 'lucide-react';
-import { Business, UserProfile, MontanitaEvent, BusinessReview } from '../types';
+import { Business, UserProfile, MontanitaEvent, ProfileReview } from '../types';
 import { useData } from '../context/DataContext';
-import { subscribeToBusinessReviews, addBusinessReview, getUser, incrementBusinessViewCount } from '../services/firestoreService';
+import { subscribeToProfileReviews, addProfileReview, getUser, incrementBusinessViewCount } from '../services/firestoreService';
 import { useAuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -22,7 +22,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     const { businesses, events, allUsers, handleToggleFollow, isBusinessFollowed, setPublicProfileId, setPublicProfileType, setShowPublicProfile } = useData();
     const { user: currentUser } = useAuthContext();
     const { showToast } = useToast();
-    const [reviews, setReviews] = useState<BusinessReview[]>([]);
+    const [reviews, setReviews] = useState<ProfileReview[]>([]);
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -68,20 +68,23 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
 
         fetchTargetUser();
 
-        if (businessId && isOpen) {
-            incrementBusinessViewCount(businessId);
-            return subscribeToBusinessReviews(businessId, setReviews);
+        if ((businessId || userId) && isOpen) {
+            const targetId = (businessId || userId) as string;
+            if (businessId) incrementBusinessViewCount(businessId);
+            return subscribeToProfileReviews(targetId, setReviews);
         }
     }, [businessId, userId, business?.ownerId, isOpen, allUsers]);
 
     const handleSubmitReview = async () => {
-        if (!currentUser || !businessId) return;
+        const targetId = businessId || userId;
+        if (!currentUser || !targetId) return;
         if (!newReview.comment.trim()) return;
 
         setIsSubmitting(true);
         try {
-            await addBusinessReview({
-                businessId,
+            await addProfileReview({
+                targetId,
+                targetType: businessId ? 'business' : 'user',
                 userId: currentUser.id,
                 userName: `${currentUser.name} ${currentUser.surname}`,
                 userAvatar: currentUser.avatarUrl,
@@ -206,11 +209,11 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                             <p className="text-[10px] text-slate-500 font-bold uppercase">Followers</p>
                         </div>
                         <div className="text-center">
-                            <p className="text-xl font-black text-white">{business?.reviewCount || 0}</p>
+                            <p className="text-xl font-black text-white">{business?.reviewCount || userProfile?.reviewCount || 0}</p>
                             <p className="text-[10px] text-slate-500 font-bold uppercase">Reviews</p>
                         </div>
                         <div className="text-center">
-                            <p className="text-xl font-black text-white">{business?.rating || '0.0'}</p>
+                            <p className="text-xl font-black text-white">{business?.rating || userProfile?.rating || '0.0'}</p>
                             <p className="text-[10px] text-slate-500 font-bold uppercase">Rating</p>
                         </div>
                     </div>
@@ -313,7 +316,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                     )}
 
                     {/* Reviews Section */}
-                    {businessId && (
+                    {(businessId || userId) && (
                         <div className="space-y-4 pt-4 border-t border-white/5">
                             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                                 <Star className="w-3 h-3 text-amber-400" />
@@ -340,7 +343,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                             </div>
 
                             {/* Add Review Form */}
-                            {currentUser && (
+                            {currentUser && currentUser.id !== userId && (
                                 <div className="p-4 bg-slate-800/30 rounded-2xl border border-white/5 space-y-3">
                                     <div className="flex items-center justify-between">
                                         <span className="text-[10px] font-black text-slate-500 uppercase">Tu Calificación</span>

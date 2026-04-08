@@ -15,6 +15,7 @@ interface MapViewProps {
   onFilterChange: (filter: string) => void;
   isAdmin?: boolean;
   isSuperAdmin?: boolean;
+  isSuperUser?: boolean;
   isPremiumUser?: boolean;
   userBusinessId?: string;
   userId?: string;
@@ -44,6 +45,8 @@ interface MapViewProps {
   activeTab: 'events' | 'directory' | 'landmarks';
   onAddLocality?: (name: string, coords: [number, number], hasBeach: boolean) => void;
   focusedBusinessId?: string | null;
+  directionsFrom?: [number, number] | null;
+  directionsTo?: [number, number] | null;
 }
 
 const CATEGORY_COLORS: Record<string, { bg: string; border: string; shadow: string }> = {
@@ -105,6 +108,7 @@ export const MapView: React.FC<MapViewProps> = ({
   onFilterChange,
   isAdmin,
   isSuperAdmin,
+  isSuperUser,
   isPremiumUser,
   userBusinessId,
   userId,
@@ -216,15 +220,7 @@ export const MapView: React.FC<MapViewProps> = ({
       onBusinessSelect(business);
       return;
     }
-    const action = await showPrompt(
-      "1. Editar Mi Negocio\n2. Eliminar Mi Negocio",
-      "Introduce 1 o 2",
-      `MI NEGOCIO - ${business.name}`
-    );
-    if (action === '1') onEditBusiness?.(business.id);
-    else if (action === '2' && await showConfirm(`¿Eliminar ${business.name}?`, "Confirmar Eliminación")) {
-      onDeleteBusiness?.(business.id);
-    }
+    onEditBusiness?.(business.id);
   };
 
   useEffect(() => {
@@ -408,7 +404,7 @@ export const MapView: React.FC<MapViewProps> = ({
         });
 
         const isOwnBusiness = business.id === userBusinessId || business.ownerId === userId;
-        const canEdit = isSuperAdmin || (isPremiumUser && isOwnBusiness);
+        const canEdit = isSuperUser || (isPremiumUser && isOwnBusiness);
         
         // Get coordinates - use default locality coords if missing
         const businessLocality = business.locality || localityName || 'Montañita';
@@ -427,7 +423,7 @@ export const MapView: React.FC<MapViewProps> = ({
           .addTo(markersLayerRef.current!)
           .on('click', (e) => {
             L.DomEvent.stopPropagation(e as any);
-            if (isSuperAdmin) {
+            if (isSuperUser) {
               handleSuperAdminAction(business);
             } else if (isPremiumUser && isOwnBusiness) {
               handlePremiumAction(business);
@@ -503,7 +499,7 @@ export const MapView: React.FC<MapViewProps> = ({
         map.flyTo(mapCenter, 15, { duration: 1.2 });
       }
     }
-  }, [businesses, events, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, isSuperAdmin, editingSector, tempCoords, mapCenter, localityName, showHeatmap, posts, isEditorFocus, activeTab]);
+  }, [businesses, events, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, isSuperAdmin, isSuperUser, editingSector, tempCoords, mapCenter, localityName, showHeatmap, posts, isEditorFocus, activeTab]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -514,7 +510,7 @@ export const MapView: React.FC<MapViewProps> = ({
         setTempCoords(prev => [...prev, [lat, lng]]);
       } else if (isAddingPoint && onAddBusiness) {
         const isRef = addingPointType === 'reference';
-        if (isSuperAdmin || (!isRef && isPremiumUser)) {
+        if (isSuperUser || (!isRef && isPremiumUser)) {
           onAddBusiness(lat, lng, isRef);
           setIsAddingPoint(false);
           [100, 300, 600, 1000, 2000].forEach(delay =>
@@ -535,7 +531,7 @@ export const MapView: React.FC<MapViewProps> = ({
       map.off('click', onClick);
       map.off('mousemove', onMouseMove);
     };
-  }, [isSuperAdmin, isPremiumUser, isAddingPoint, addingPointType, editingSector, isMovingBusiness, movingBusinessId, onAddBusiness, onUpdateBusiness, onMoveBusinessComplete]);
+  }, [isSuperAdmin, isSuperUser, isPremiumUser, isAddingPoint, addingPointType, editingSector, isMovingBusiness, movingBusinessId, onAddBusiness, onUpdateBusiness, onMoveBusinessComplete]);
 
   // Invalidate map whenever UI interaction states change
   useEffect(() => {
@@ -616,8 +612,8 @@ export const MapView: React.FC<MapViewProps> = ({
           </div>
         )}
 
-        {/* SuperAdmin Tools */}
-        {isSuperAdmin && onAddLocality && (
+        {/* SuperUser Tools */}
+        {isSuperUser && onAddLocality && (
           <div className="absolute top-4 right-4 z-[1001] pointer-events-auto">
             <button
               onClick={async () => {
@@ -698,7 +694,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
         {/* Action Buttons */}
         <div className="absolute right-4 bottom-24 z-[1000] flex flex-col gap-2 pointer-events-auto">
-          {isSuperAdmin && (
+          {isSuperUser && (
             <>
               <button
                 onClick={() => {
@@ -745,7 +741,7 @@ export const MapView: React.FC<MapViewProps> = ({
             </>
           )}
 
-          {isPremiumUser && !isSuperAdmin && userBusinessId && (
+          {isPremiumUser && !isSuperUser && userBusinessId && (
             <button
               onClick={() => {
                 const newState = !isAddingPoint;

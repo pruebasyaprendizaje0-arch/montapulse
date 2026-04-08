@@ -2,7 +2,9 @@ import { initializeApp } from 'firebase/app';
 import {
     initializeFirestore,
     persistentLocalCache,
-    persistentMultipleTabManager
+    persistentSingleTabManager,
+    terminate,
+    clearIndexedDbPersistence
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
@@ -21,7 +23,7 @@ const app = initializeApp(firebaseConfig);
 
 const db = initializeFirestore(app, {
     localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
+        tabManager: persistentSingleTabManager({ forceOwnership: true })
     })
 });
 
@@ -29,5 +31,18 @@ const storage = getStorage(app);
 const auth = getAuth(app);
 const messaging = typeof window !== 'undefined' ? getMessaging(app) : null;
 
-export { db, storage, auth, messaging };
+const resetFirestoreCache = async () => {
+    try {
+        await terminate(db);
+        await clearIndexedDbPersistence(db);
+        console.log('Firestore cache cleared successfully');
+        if (typeof window !== 'undefined') {
+            window.location.reload();
+        }
+    } catch (error) {
+        console.error('Error resetting Firestore cache:', error);
+    }
+};
+
+export { db, storage, auth, messaging, resetFirestoreCache };
 export default app;

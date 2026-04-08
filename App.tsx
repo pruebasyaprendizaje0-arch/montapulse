@@ -1,14 +1,21 @@
 import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, ChevronRight, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck, Palmtree, Mountain, Activity, Users, Sun, Moon } from 'lucide-react';
-import { MapView } from './components/MapView.tsx';
-import { EventCard } from './components/EventCard.tsx';
-import { EventModal } from './components/EventModal.tsx';
 import { getToken } from 'firebase/messaging';
 import { messaging } from './firebase.config.ts';
 import { saveFCMToken } from './services/firestoreService.ts';
-import { MigrationPanel } from './components/MigrationPanel.tsx';
-import { LoginScreen } from './components/LoginScreen.tsx';
+
+// Lazy load heavy components
+const MapView = lazy(() => import('./components/MapView.tsx').then(m => ({ default: m.MapView })));
+const EventCard = lazy(() => import('./components/EventCard.tsx').then(m => ({ default: m.EventCard })));
+const EventModal = lazy(() => import('./components/EventModal.tsx').then(m => ({ default: m.EventModal })));
+const MigrationPanel = lazy(() => import('./components/MigrationPanel.tsx').then(m => ({ default: m.MigrationPanel })));
+const LoginScreen = lazy(() => import('./components/LoginScreen.tsx').then(m => ({ default: m.LoginScreen })));
+const PulseModal = lazy(() => import('./components/Modals/PulseModal.tsx').then(m => ({ default: m.PulseModal })));
+const PulsePassModal = lazy(() => import('./components/Modals/PulsePassModal.tsx').then(m => ({ default: m.PulsePassModal })));
+const BusinessEditModal = lazy(() => import('./components/Modals/BusinessEditModal.tsx').then(m => ({ default: m.BusinessEditModal })));
+const EventEditorModal = lazy(() => import('./components/Modals/EventEditorModal.tsx').then(m => ({ default: m.EventEditorModal })));
+const PublicProfileModal = lazy(() => import('./components/PublicProfileModal.tsx').then(m => ({ default: m.PublicProfileModal })));
 
 // Lazy load pages for better performance
 const Community = lazy(() => import('./pages/Community.tsx').then(m => ({ default: m.Community })));
@@ -40,14 +47,9 @@ import {
 import { compressImage } from './utils/imageUtils.ts';
 import { BottomNav } from './components/Layout/BottomNav.tsx';
 import { Sidebar } from './components/Layout/Sidebar.tsx';
-import { PulseModal } from './components/Modals/PulseModal.tsx';
-import { PulsePassModal } from './components/Modals/PulsePassModal.tsx';
 import { useToast } from './context/ToastContext.tsx';
 import { useData } from './context/DataContext.tsx';
 import { useTranslation } from 'react-i18next';
-import { BusinessEditModal } from './components/Modals/BusinessEditModal.tsx';
-import { EventEditorModal } from './components/Modals/EventEditorModal.tsx';
-import { PublicProfileModal } from './components/PublicProfileModal.tsx';
 import { useTheme } from './hooks/useTheme.ts';
 
 export const suggestIconFromDescription = (description: string): string => {
@@ -462,18 +464,22 @@ const Dashboard: React.FC = () => {
       <BottomNav />
 
       {showBusinessReg && (
-        <BusinessEditModal
-          isRegistration
-          onClose={() => {
-            setShowBusinessReg(false);
-            [50, 200, 500, 1000].forEach(delay =>
-              setTimeout(() => window.dispatchEvent(new Event('resize')), delay)
-            );
-          }}
-        />
+        <Suspense fallback={<PageLoader />}>
+          <BusinessEditModal
+            isRegistration
+            onClose={() => {
+              setShowBusinessReg(false);
+              [50, 200, 500, 1000].forEach(delay =>
+                setTimeout(() => window.dispatchEvent(new Event('resize')), delay)
+              );
+            }}
+          />
+        </Suspense>
       )}
 
-      <EventEditorModal />
+      <Suspense fallback={null}>
+        <EventEditorModal />
+      </Suspense>
 
       {showProfileEdit && user && (
         <div className="fixed inset-0 z-[2100] bg-slate-900/80 backdrop-blur-md flex items-end justify-center">
@@ -595,12 +601,14 @@ const Dashboard: React.FC = () => {
       )}
 
       {showBusinessEdit && (
-        <BusinessEditModal
-          onClose={() => {
-            setShowBusinessEdit(false);
-            setEditingBusinessId(null);
-          }}
-        />
+        <Suspense fallback={<PageLoader />}>
+          <BusinessEditModal
+            onClose={() => {
+              setShowBusinessEdit(false);
+              setEditingBusinessId(null);
+            }}
+          />
+        </Suspense>
       )}
 
       {showPaymentEdit && isAdmin && (
@@ -698,11 +706,15 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      <PulseModal />
-      <PulsePassModal
-        isOpen={showPulsePassModal}
-        onClose={() => setShowPulsePassModal(false)}
-      />
+      <Suspense fallback={null}>
+        <PulseModal />
+      </Suspense>
+      <Suspense fallback={null}>
+        <PulsePassModal
+          isOpen={showPulsePassModal}
+          onClose={() => setShowPulsePassModal(false)}
+        />
+      </Suspense>
 
       {/* Global Pulse Window FAB */}
       {!isEditorFocus && (
@@ -727,7 +739,9 @@ const Dashboard: React.FC = () => {
       {/* Global Login Modal Overlay */}
       {showLogin && !user && (
         <div className="fixed inset-0 z-[3000] bg-slate-900/90 backdrop-blur-xl animate-in fade-in duration-300">
-          <LoginScreen />
+          <Suspense fallback={<PageLoader />}>
+            <LoginScreen />
+          </Suspense>
           <div className="absolute top-6 right-6 z-[100]">
             <button
               onClick={() => {
@@ -744,42 +758,50 @@ const Dashboard: React.FC = () => {
 
       {/* Event Modal with Navigation */}
       {selectedEvent && (
-        <EventModal
-          event={events.find(e => e.id === selectedEvent.id) || selectedEvent}
-          business={businesses.find(b => b.id === selectedEvent.businessId)}
-          onClose={() => setSelectedEvent(null)}
-          onNext={navigateToNextEvent}
-          onPrevious={navigateToPreviousEvent}
-          hasNext={hasNextEvent}
-          hasPrevious={hasPreviousEvent}
-          isAdmin={isAdmin}
-          onEdit={event => {
-            handleEditEvent(event);
-            setSelectedEvent(null);
-          }}
-          onDelete={id => {
-            handleDeleteEvent(id);
-            setSelectedEvent(null);
-          }}
-          onEditBusiness={handleEditBusiness}
-          onRsvp={() => handleRSVP(selectedEvent.id)}
-          isRsvp={!!rsvpStatus[selectedEvent.id]}
-        />
+        <Suspense fallback={<PageLoader />}>
+          <EventModal
+            event={events.find(e => e.id === selectedEvent.id) || selectedEvent}
+            business={businesses.find(b => b.id === selectedEvent.businessId)}
+            onClose={() => setSelectedEvent(null)}
+            onNext={navigateToNextEvent}
+            onPrevious={navigateToPreviousEvent}
+            hasNext={hasNextEvent}
+            hasPrevious={hasPreviousEvent}
+            isAdmin={isAdmin}
+            onEdit={event => {
+              handleEditEvent(event);
+              setSelectedEvent(null);
+            }}
+            onDelete={id => {
+              handleDeleteEvent(id);
+              setSelectedEvent(null);
+            }}
+            onEditBusiness={handleEditBusiness}
+            onRsvp={() => handleRSVP(selectedEvent.id)}
+            isRsvp={!!rsvpStatus[selectedEvent.id]}
+          />
+        </Suspense>
       )}
 
       {/* Public Profile Modal */}
       {showPublicProfile && (
-        <PublicProfileModal
-          isOpen={showPublicProfile}
-          onClose={() => {
-            setShowPublicProfile(false);
-            setPublicProfileId(null);
-          }}
-          businessId={publicProfileType === 'business' ? publicProfileId || undefined : undefined}
-          userId={publicProfileType === 'user' ? publicProfileId || undefined : undefined}
-        />
+        <Suspense fallback={<PageLoader />}>
+          <PublicProfileModal
+            isOpen={showPublicProfile}
+            onClose={() => {
+              setShowPublicProfile(false);
+              setPublicProfileId(null);
+            }}
+            businessId={publicProfileType === 'business' ? publicProfileId || undefined : undefined}
+            userId={publicProfileType === 'user' ? publicProfileId || undefined : undefined}
+          />
+        </Suspense>
       )}
-      {showMigrationPanel && <MigrationPanel onClose={() => setShowMigrationPanel(false)} />}
+      {showMigrationPanel && (
+        <Suspense fallback={null}>
+          <MigrationPanel onClose={() => setShowMigrationPanel(false)} />
+        </Suspense>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, ShieldCheck, Flame, Star, Search, Filter, Layers, ChevronDown, ChevronUp, TrendingUp, Clock, Trash2, ArrowRight, Radio } from 'lucide-react';
+import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, ShieldCheck, Flame, Star, Search, Filter, Layers, ChevronDown, ChevronUp, TrendingUp, Clock, Trash2, ArrowRight, Radio, Navigation, Route } from 'lucide-react';
 import { MapView } from '../components/Map/MapView';
 import { EventCard } from '../components/EventCard';
 import { Sector, MontanitaEvent, Business, BusinessCategory, Vibe, SubscriptionPlan } from '../types';
@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { ItineraryModal } from '../components/Modals/ItineraryModal';
 import { AIRecommendationModal } from '../components/Modals/AIRecommendationModal';
+import { PlannerChatModal } from '../components/Modals/PlannerChatModal';
 
 interface ExploreProps {
     onEditBusiness?: (id: string) => void;
@@ -25,7 +26,7 @@ export const Explore: React.FC<ExploreProps> = ({
 }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user, authUser, isAdmin, isSuperAdmin } = useAuthContext();
+    const { user, authUser, isAdmin, isSuperAdmin, isSuperUser } = useAuthContext();
     
     // Unified State
     const [activeTab, setActiveTab] = useState<'events' | 'directory' | 'landmarks' | null>('events');
@@ -80,6 +81,7 @@ export const Explore: React.FC<ExploreProps> = ({
     const [aiRecData, setAiRecData] = useState<PlannerSection[] | null>(null);
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [showItinerary, setShowItinerary] = useState(false);
+    const [showPlannerChat, setShowPlannerChat] = useState(false);
 
     // Ask Anything State
     const [askRecData, setAskRecData] = useState<PlannerSection[] | null>(null);
@@ -88,6 +90,8 @@ export const Explore: React.FC<ExploreProps> = ({
     const [showLocalityMenu, setShowLocalityMenu] = useState(false);
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [focusedBusinessId, setFocusedBusinessId] = useState<string | null>(null);
+    const [showingDirections, setShowingDirections] = useState<string | null>(null);
+    const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const mapRef = useRef<any>(null);
 
     useEffect(() => {
@@ -108,7 +112,7 @@ export const Explore: React.FC<ExploreProps> = ({
     const handleAiAsk = async () => {
         setIsAiLoading(true);
         setAiRecData(null);
-        const data = await getPlannerRecommendations(businesses, currentLocality.name);
+        const data = await getPlannerRecommendations(user, businesses, currentLocality.name);
         setAiRecData(data);
         setIsAiLoading(false);
     };
@@ -120,13 +124,60 @@ export const Explore: React.FC<ExploreProps> = ({
         setIsAskLoading(true);
         setShowAskModal(true);
         try {
-            const results = await getRecommendationForUser(events, question);
+            const results = await getRecommendationForUser(events, businesses, question);
             setAskRecData(results);
         } catch (error) {
             console.error("AI Ask error:", error);
         } finally {
             setIsAskLoading(false);
         }
+    };
+
+    const focusBusinessOnMap = (businessId: string) => {
+        const business = businesses.find(b => b.id === businessId);
+        if (business?.coordinates) {
+            mapRef.current?.flyTo?.([business.coordinates[0], business.coordinates[1]], 17, { duration: 1.2 });
+            setFocusedBusinessId(businessId);
+            setShowingDirections(null);
+        }
+    };
+
+    const getDirectionsTo = async (businessId: string) => {
+        const business = businesses.find(b => b.id === businessId);
+        if (!business?.coordinates) return;
+
+        let userLat: number, userLng: number;
+
+        if (navigator.geolocation) {
+            try {
+                const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 });
+                });
+                userLat = pos.coords.latitude;
+                userLng = pos.coords.longitude;
+                setUserLocation([userLat, userLng]);
+            } catch {
+                userLat = -1.825;
+                userLng = -80.753;
+            }
+        } else {
+            userLat = -1.825;
+            userLng = -80.753;
+        }
+
+        setShowingDirections(businessId);
+        const [bizLat, bizLng] = business.coordinates;
+
+        if (mapRef.current) {
+            const bounds = [
+                [userLat, userLng],
+                [bizLat, bizLng]
+            ];
+            mapRef.current.flyToBounds(bounds, { padding: [60, 60], duration: 1.2 });
+        }
+
+        const url = `https://www.google.com/maps/dir/${userLat},${userLng}/${bizLat},${bizLng}`;
+        window.open(url, '_blank');
     };
 
     // Map Handlers (Admin Logic moved here or passed via props? Some logic needs Auth/Admin checks which are passed)
@@ -454,18 +505,7 @@ export const Explore: React.FC<ExploreProps> = ({
                     {/* Quick Tools Bar */}
                     <div className="flex items-center gap-2 pointer-events-auto">
                         <button
-                            onClick={() => handleAskAnything()}
-                            className="px-6 py-2.5 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl flex items-center gap-2.5 hover:bg-slate-900 transition-all shadow-xl hover:scale-105 active:scale-95 group"
-                        >
-                            <div className="relative">
-                                <Sparkles className="w-4 h-4 text-sky-400 fill-sky-400 font-black animate-pulse" />
-                                <div className="absolute inset-0 bg-sky-400/20 blur-md rounded-full" />
-                            </div>
-                            <span className="text-[10px] font-black text-white italic tracking-tighter uppercase tracking-widest">IA Chat</span>
-                        </button>
-
-                        <button
-                            onClick={() => setShowItinerary(true)}
+                            onClick={() => setShowPlannerChat(true)}
                             className="px-6 py-2.5 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl flex items-center gap-2.5 hover:bg-slate-900 transition-all shadow-xl hover:scale-105 active:scale-95 group"
                         >
                             <div className="relative">
@@ -515,6 +555,7 @@ export const Explore: React.FC<ExploreProps> = ({
                         onFilterChange={setActiveFilter}
                         isAdmin={isAdmin}
                         isSuperAdmin={isSuperAdmin}
+                        isSuperUser={isSuperUser}
                         isPremiumUser={isPremiumUser}
                         userBusinessId={userBusinessIdResolved}
                         userId={authUser?.uid}
@@ -539,7 +580,7 @@ export const Explore: React.FC<ExploreProps> = ({
                             const loc = LOCALITIES.find(l => l.name === name) || customLocalities.find(l => l.name === name);
                             if (loc) setCurrentLocality(loc);
                         }}
-                        onAddLocality={isSuperAdmin ? async (name, coords, hasBeach) => {
+                        onAddLocality={isSuperUser ? async (name, coords, hasBeach) => {
                             await handleAddCustomLocality(name, coords, hasBeach);
                         } : undefined}
                         onResetFilters={() => {
@@ -747,6 +788,95 @@ export const Explore: React.FC<ExploreProps> = ({
                                             <p className="text-[11px] text-slate-300 leading-relaxed">{section.recommendation}</p>
                                         </div>
                                     ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {askRecData && askRecData.length > 0 && (
+                            <div className="mb-8 relative">
+                                <button onClick={() => { setAskRecData(null); setShowingDirections(null); }} className="absolute -top-2 -right-2 z-10 w-7 h-7 bg-slate-800 rounded-full flex items-center justify-center text-slate-400 hover:text-white border border-white/10 transition-colors">
+                                    <X className="w-4 h-4" />
+                                </button>
+                                <div className="flex items-center gap-2 mb-4 px-2">
+                                    <Sparkles className="w-4 h-4 text-sky-400" />
+                                    <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Resultados IA</h3>
+                                </div>
+                                <div className="space-y-3">
+                                    {askRecData.map((rec) => {
+                                        const biz = rec.businessId ? businesses.find(b => b.id === rec.businessId) : null;
+                                        const hasLocation = !!(biz?.coordinates || biz?.location);
+                                        const isDirectionsActive = showingDirections === rec.businessId;
+
+                                        return (
+                                            <div
+                                                key={rec.title + rec.businessName}
+                                                className={`relative p-4 rounded-[1.75rem] border transition-all ${rec.isPremium
+                                                    ? 'bg-gradient-to-br from-amber-500/15 to-orange-500/10 border-amber-500/30'
+                                                    : 'bg-slate-900/60 border-white/5'
+                                                    }`}
+                                            >
+                                                {rec.isPremium && (
+                                                    <span className="absolute top-3 right-3 text-[9px] font-black uppercase tracking-widest bg-amber-500 text-black px-2 py-0.5 rounded-full">⭐ Premium</span>
+                                                )}
+                                                <div className="flex items-start gap-3">
+                                                    <span className="text-2xl shrink-0">{rec.emoji}</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className="text-[9px] font-black text-sky-400 uppercase tracking-widest bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">{rec.category}</span>
+                                                        </div>
+                                                        <h4 className="text-sm font-black text-white uppercase italic tracking-tight mb-1">{rec.title}</h4>
+                                                        {rec.businessName && (
+                                                            <div className="flex items-center gap-1.5 mb-2">
+                                                                <MapPin className="w-3 h-3 text-slate-400" />
+                                                                <span className="text-[11px] font-bold text-slate-300">{rec.businessName}</span>
+                                                            </div>
+                                                        )}
+                                                        <p className="text-[11px] text-slate-400 leading-relaxed mb-3">{rec.recommendation}</p>
+                                                        {hasLocation && (
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (rec.businessId) {
+                                                                            focusBusinessOnMap(rec.businessId);
+                                                                        }
+                                                                    }}
+                                                                    disabled={!rec.businessId}
+                                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/20 border border-sky-500/30 rounded-xl text-[10px] font-black text-sky-400 uppercase tracking-widest hover:bg-sky-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                                                >
+                                                                    <MapPin className="w-3 h-3" />
+                                                                    Ver en mapa
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => rec.businessId && getDirectionsTo(rec.businessId)}
+                                                                    disabled={!rec.businessId}
+                                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${isDirectionsActive
+                                                                        ? 'bg-emerald-500/30 border border-emerald-500/50 text-emerald-400'
+                                                                        : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
+                                                                        }`}
+                                                                >
+                                                                    <Navigation className="w-3 h-3" />
+                                                                    Cómo llegar
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {isAskLoading && (
+                            <div className="mb-8 px-2">
+                                <div className="p-6 rounded-[2rem] bg-slate-900/60 border border-white/5 flex items-center gap-3">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-2 h-2 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                        <div className="w-2 h-2 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                        <div className="w-2 h-2 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                    </div>
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Buscando las mejores opciones...</span>
                                 </div>
                             </div>
                         )}
@@ -985,6 +1115,10 @@ export const Explore: React.FC<ExploreProps> = ({
             <ItineraryModal
                 isOpen={showItinerary}
                 onClose={() => setShowItinerary(false)}
+            />
+            <PlannerChatModal
+                isOpen={showPlannerChat}
+                onClose={() => setShowPlannerChat(false)}
             />
         </>
     );

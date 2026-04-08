@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, MoreVertical, Sparkles, Edit3, MessageCircle, MessageSquare, Users, Hash, ChevronRight, X, UserPlus, Heart, Zap, Building2, MapPin, User, ChevronDown, Smile, Camera, Upload, X as XIcon, Star, Lock, Plus, CheckCircle, Trash2, Bell, Clock, Info, Download, Globe, Gift, AlertTriangle, Calendar, History, Layout, Share2, Phone, Instagram, Store } from 'lucide-react';
+import { Search, Radar, MoreVertical, Sparkles, Edit3, MessageCircle, MessageSquare, Users, Hash, ChevronRight, X, UserPlus, Heart, Zap, Building2, MapPin, User, ChevronDown, Smile, Camera, Upload, X as XIcon, Star, Lock, Plus, CheckCircle, Trash2, Bell, Clock, Info, Download, Globe, Gift, AlertTriangle, Calendar, History, Layout, Share2, Phone, Instagram, Store } from 'lucide-react';
 import { useAuthContext } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
@@ -9,6 +9,7 @@ import { ChatRoom } from '../components/Chat/ChatRoom';
 import { MassBroadcastHistory } from '../components/Community/MassBroadcastHistory';
 import { subscribeToChatRooms, subscribeToUsers, createChatRoom, sendMessage, sendRoomMessage, deleteGlobalMessage, createAnnouncement, subscribeToAnnouncements, deleteAnnouncement, subscribeToActiveBoosts, purchaseBoost } from '../services/firestoreService';
 import { useData } from '../context/DataContext';
+import { CommunityBottomNav } from '../components/Community/CommunityBottomNav';
 import { compressImage } from '../utils/imageUtils';
 import { LOCALITIES, MASS_MESSAGE_CREDITS } from '../constants';
 
@@ -50,7 +51,22 @@ export const Community: React.FC = () => {
     const { user, isAdmin, isSuperAdmin } = useAuthContext();
     const { showToast, showConfirm } = useToast();
     const navigate = useNavigate();
-    const { messages, handleSendMessage: sendGlobalMessage, businesses, followedBusinessIds, businessFollowers, customLocalities = [], notifications, sendPushNotification, markAsRead, setShowBusinessReg, setEditingBusinessId, setShowBusinessEdit } = useData();
+    const { 
+        messages, 
+        handleSendMessage: sendGlobalMessage, 
+        businesses, 
+        followedBusinessIds, 
+        businessFollowers, 
+        customLocalities = [], 
+        notifications, 
+        sendPushNotification, 
+        markAsRead, 
+        setShowBusinessReg, 
+        setEditingBusinessId, 
+        setShowBusinessEdit,
+        communityTab,
+        setCommunityTab
+    } = useData();
     const [activeTab, setActiveTab] = useState<'groups' | 'direct' | 'global' | 'notifications' | 'history'>('global');
     const [selectedRoom, setSelectedRoom] = useState<ChatRoomType | null>(null);
     const [selectedBusinessForProfile, setSelectedBusinessForProfile] = useState<Business | null>(null);
@@ -98,22 +114,28 @@ export const Community: React.FC = () => {
     const [boostTimeLeft, setBoostTimeLeft] = useState<string>('');
     const [isPurchasingBoost, setIsPurchasingBoost] = useState(false);
     const [showCreditsModal, setShowCreditsModal] = useState(false);
+    const [groupFilter, setGroupFilter] = useState<'suggestions' | 'my-city' | 'near-me'>('suggestions');
+    const [userSearchQuery, setUserSearchQuery] = useState('');
     
     // New navigation and section states
-    type CommunitySection = 'whatsapp' | 'chat' | 'catalog' | 'community' | 'profile';
-    const [currentSection, setCurrentSection] = useState<CommunitySection>('community');
-    type CommunitySubTab = 'noticias' | 'grupos' | 'directos' | 'notis';
+    // Navigation state handled by communityTab from useData context
     const location = useLocation();
-    const [activeSubTab, setActiveSubTab] = useState<CommunitySubTab>(
-        (location.state as any)?.subTab || 'noticias'
-    );
 
     useEffect(() => {
         const state = location.state as any;
         if (state?.subTab) {
-            setActiveSubTab(state.subTab);
+            // Map incoming subTab from location state to communityTab
+            const tabMap: Record<string, any> = {
+                'noticias': 'updates',
+                'grupos': 'groups',
+                'directos': 'chats',
+                'notis': 'notifications'
+            };
+            if (tabMap[state.subTab]) {
+                setCommunityTab(tabMap[state.subTab]);
+            }
         }
-    }, [location.state]);
+    }, [location.state, setCommunityTab]);
 
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
     const userRole = user?.role || 'visitor';
@@ -274,12 +296,24 @@ export const Community: React.FC = () => {
     const filteredGroups = useMemo(() => {
         const sq = searchQuery || '';
         const query = sq.toLowerCase();
-        if (!sq.trim()) return (mockRooms || []).filter(r => r?.type === 'group').slice(0, 3);
-        return (mockRooms || []).filter(r =>
-            r?.type === 'group' &&
-            ((r?.name || '').toLowerCase().includes(query) || (r?.lastMessage || '').toLowerCase().includes(query))
+        let results = (rooms.length > 0 ? rooms : mockRooms).filter(r => r?.type === 'group');
+
+        if (groupFilter === 'my-city' && user?.locality) {
+            results = results.filter(r => r.locality === user.locality);
+        } else if (groupFilter === 'near-me') {
+            // For now, near-me also uses locality as a proxy, or could be expanded with coordinates
+            results = results.filter(r => r.locality === user?.locality);
+        }
+
+        if (!sq.trim()) {
+            return groupFilter === 'suggestions' ? results.slice(0, 3) : results;
+        }
+
+        return results.filter(r =>
+            (r?.name || '').toLowerCase().includes(query) ||
+            (r?.lastMessage || '').toLowerCase().includes(query)
         );
-    }, [searchQuery]);
+    }, [searchQuery, rooms, groupFilter, user?.locality]);
 
     const estimatedAudience = useMemo(() => {
         let count = 0;
@@ -410,9 +444,9 @@ export const Community: React.FC = () => {
         const query = sq.toLowerCase();
         let filtered = (rooms || []);
 
-        if (activeSubTab === 'grupos') {
+        if (communityTab === 'communities') {
             filtered = filtered.filter(room => room?.type === 'group');
-        } else if (activeSubTab === 'directos') {
+        } else if (communityTab === 'chats') {
             filtered = filtered.filter(room => room?.type === 'direct');
             if (user) {
                 const userIds = user.businessId ? [user.id, user.businessId] : [user.id];
@@ -443,21 +477,24 @@ export const Community: React.FC = () => {
             (room?.name || '').toLowerCase().includes(query) ||
             (room?.lastMessage || '').toLowerCase().includes(query)
         );
-    }, [rooms, activeSubTab, searchQuery, user, selectedLocality, businesses, allUsers]);
+    }, [rooms, communityTab, searchQuery, user, selectedLocality, businesses, allUsers]);
 
     const filteredUsers = useMemo(() => {
-        const sq = searchQuery || '';
+        const sq = (userSearchQuery || searchQuery || '').trim();
         const query = sq.toLowerCase();
         let results = (allUsers || []).filter(u => u.id !== user?.id);
+        
         if (selectedLocality) {
             results = results.filter(u => u.locality === selectedLocality);
         }
-        if (!sq.trim()) return results.slice(0, 8);
-        return results.filter(u => 
-            (u.name.toLowerCase().includes(query) || 
-            u.surname.toLowerCase().includes(query))
-        );
-    }, [allUsers, searchQuery, user, selectedLocality]);
+
+        if (!sq) return results.slice(0, 8);
+        
+        return results.filter(u => {
+            const fullName = `${u.name} ${u.surname || ''}`.toLowerCase();
+            return fullName.includes(query) || u.email.toLowerCase().includes(query);
+        });
+    }, [allUsers, searchQuery, userSearchQuery, user, selectedLocality]);
 
     const unreadGroupsCount = useMemo(() => 
         rooms.filter(r => r.type === 'group').reduce((acc, r) => acc + (r.unreadCount || 0), 0)
@@ -907,24 +944,21 @@ export const Community: React.FC = () => {
                 <div className="flex items-center justify-between gap-4 p-1.5 bg-slate-900/40 backdrop-blur-xl border border-white/5 rounded-[2rem] mb-6 shadow-2xl">
                     <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1">
                         {[
-                            { id: 'noticias', label: 'Noticias', icon: MessageSquare, section: 'community', subTab: 'noticias', color: 'text-blue-400', bg: 'bg-blue-500/20' },
-                            { id: 'grupos', label: 'Grupos', icon: Users, section: 'community', subTab: 'grupos', color: 'text-purple-400', bg: 'bg-purple-500/20' },
-                            { id: 'directos', label: 'Directos', icon: MessageCircle, section: 'community', subTab: 'directos', color: 'text-green-400', bg: 'bg-green-500/20' },
-                            { id: 'notis', label: 'Notis', icon: Bell, section: 'community', subTab: 'notis', color: 'text-amber-400', bg: 'bg-amber-500/20' }
+                            { id: 'updates', label: 'Noticias', icon: MessageSquare, color: 'text-blue-400', bg: 'bg-blue-500/20' },
+                            { id: 'communities', label: 'Grupos', icon: Users, color: 'text-purple-400', bg: 'bg-purple-500/20' },
+                            { id: 'chats', label: 'Directos', icon: MessageCircle, color: 'text-green-400', bg: 'bg-green-500/20' },
+                            { id: 'notifications', label: 'Notis', icon: Bell, color: 'text-amber-400', bg: 'bg-amber-500/20' }
                         ].map((item) => {
-                            const isActive = currentSection === 'community' && activeSubTab === item.subTab;
-                            const count = item.id === 'grupos' ? unreadGroupsCount : (item.id === 'directos' ? unreadDirectsCount : (item.id === 'notis' ? unreadNotifsCount : 0));
+                            const isActive = communityTab === item.id;
+                            const count = item.id === 'groups' ? unreadGroupsCount : (item.id === 'chats' ? unreadDirectsCount : (item.id === 'notifications' ? unreadNotifsCount : 0));
 
                             return (
                                 <button
                                     key={item.id}
-                                    onClick={() => {
-                                        setCurrentSection(item.section as any);
-                                        if (item.subTab) setActiveSubTab(item.subTab as any);
-                                    }}
-                                    className={`relative flex items-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300 min-w-max ${isActive ? (item.id === 'mundo' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : `${item.bg} ${item.color} border border-white/10 shadow-lg`) : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                                    onClick={() => setCommunityTab(item.id as any)}
+                                    className={`relative flex items-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300 min-w-max ${isActive ? `${item.bg} ${item.color} border border-white/10 shadow-lg` : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
                                 >
-                                    <item.icon className={`w-4 h-4 ${isActive && item.id !== 'mundo' ? item.color : ''}`} />
+                                    <item.icon className={`w-4 h-4 ${isActive ? item.color : ''}`} />
                                     <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
                                     {count > 0 && (
                                         <span className="absolute -top-1 -right-1 flex h-4 w-4">
@@ -1130,7 +1164,7 @@ export const Community: React.FC = () => {
                                                             window.dispatchEvent(new CustomEvent('openBusinessProfile', { detail: r.id }));
                                                         } else {
                                                             setSearchQuery(r.name.split(' ')[0]);
-                                                            setActiveSubTab('directos');
+                                                            setCommunityTab('chats');
                                                         }
                                                         setShowMassMessage(false);
                                                     }}
@@ -1345,7 +1379,7 @@ export const Community: React.FC = () => {
 
 
             <div className="px-6 flex-1 overflow-hidden pb-4 relative z-10">
-                {currentSection === 'community' && activeSubTab === 'noticias' ? (
+                {communityTab === 'updates' ? (
                     <div className="h-full flex flex-col bg-[#111111]/80 rounded-[2.5rem] border border-white/5 overflow-hidden backdrop-blur-3xl shadow-2xl relative">
                         {/* Global Chat Header Overlay */}
                         <div className="flex bg-white/[0.02] border-b border-white/5 p-4 items-center justify-between gap-3 flex-wrap md:flex-nowrap">
@@ -1632,7 +1666,7 @@ export const Community: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                ) : currentSection === 'community' && activeSubTab === 'notis' ? (
+                ) : communityTab === 'notifications' ? (
                     <div className="h-full flex flex-col bg-[#1b1b1b]/95 rounded-[2.5rem] border border-white/5 overflow-hidden backdrop-blur-3xl shadow-2xl relative">
                         {/* Redesigned Notification Header & Filters */}
                         <div className="p-6 bg-gradient-to-b from-white/[0.05] to-transparent border-b border-white/5">
@@ -1792,8 +1826,32 @@ export const Community: React.FC = () => {
                             )}
                         </div>
                     </div>
-                ) : currentSection === 'community' && activeSubTab === 'grupos' ? (
-                    <div className="h-full overflow-y-auto no-scrollbar space-y-4 pb-20">
+                ) : communityTab === 'communities' ? (
+                    <div className="h-full overflow-y-auto no-scrollbar space-y-6 pb-20 pt-4">
+                        {/* Interactive Filter Bar */}
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar px-2 pb-2">
+                            {[
+                                { id: 'suggestions', label: 'Sugeridos', icon: Sparkles, color: 'orange' },
+                                { id: 'my-city', label: 'Mi Ciudad', icon: MapPin, color: 'blue' },
+                                { id: 'near-me', label: 'Cerca de mí', icon: Radar, color: 'green' }
+                            ].map((f) => (
+                                <button
+                                    key={f.id}
+                                    onClick={() => setGroupFilter(f.id as any)}
+                                    className={`
+                                        flex items-center gap-2 px-4 py-2.5 rounded-2xl whitespace-nowrap transition-all duration-300 border
+                                        ${groupFilter === f.id 
+                                            ? `bg-${f.color}-500/20 border-${f.color}-500/40 text-${f.color}-400 shadow-lg shadow-${f.color}-500/10 scale-105` 
+                                            : 'bg-white/[0.03] border-white/5 text-slate-500 hover:bg-white/[0.05] hover:text-slate-300'
+                                        }
+                                    `}
+                                >
+                                    <f.icon className={`w-3.5 h-3.5 ${groupFilter === f.id ? `text-${f.color}-500` : ''}`} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{f.label}</span>
+                                </button>
+                            ))}
+                        </div>
+
                         <div className="space-y-4">
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 px-2 flex items-center gap-2">
                                 <Users className="w-3 h-3 text-orange-500" /> Grupos Sugeridos
@@ -1831,9 +1889,25 @@ export const Community: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                ) : currentSection === 'community' && activeSubTab === 'directos' ? (
-                    <div className="space-y-6 pb-24">
-                        {/* Chats Activos con unread messages prominently */}
+                ) : communityTab === 'chats' ? (
+                    <div className="space-y-6 pb-24 pt-4">
+                        {/* Modern User Search */}
+                        <div className="px-2">
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                                    <Search className="w-4 h-4 text-slate-500 group-focus-within:text-orange-500 transition-colors" />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={userSearchQuery}
+                                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                                    placeholder="Buscar personas o negocios..."
+                                    className="w-full bg-white/[0.03] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-orange-500/50 focus:bg-white/[0.06] transition-all duration-300"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Chats Activos with unread messages prominently */}
                         {filteredRooms.length > 0 && (
                             <div className="space-y-3">
                                 <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest px-2">Chats Activos</h3>
@@ -1851,7 +1925,6 @@ export const Community: React.FC = () => {
                                                 key={room.id}
                                                 onClick={() => {
                                                     setSelectedRoom(room);
-                                                    setCurrentSection('chat');
                                                 }}
                                                 className="group relative flex items-center gap-4 bg-[#111111]/60 backdrop-blur-md p-4 rounded-[1.5rem] border border-white/5 hover:border-orange-500/30 transition-all cursor-pointer hover:bg-white/5"
                                             >
@@ -2049,7 +2122,7 @@ export const Community: React.FC = () => {
             )}
 
             {/* Perfil Section */}
-            {currentSection === 'profile' && (
+            {communityTab === 'profile' && (
                 <div className="h-full overflow-y-auto no-scrollbar pb-24 px-6">
                     {/* Lista de Negocios - Like Chat but shows business summary on click */}
                     <div className="space-y-3">
@@ -2186,6 +2259,7 @@ export const Community: React.FC = () => {
                     </div>
                 </div>
             )}
+            <CommunityBottomNav />
         </div>
     );
 };

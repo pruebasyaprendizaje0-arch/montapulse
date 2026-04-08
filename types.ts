@@ -101,6 +101,8 @@ export interface UserProfile {
   locality?: string;
   acceptedTerms?: boolean;
   points?: number;
+  rating?: number;
+  reviewCount?: number;
 }
 
 export interface Business {
@@ -146,9 +148,10 @@ export interface Business {
   };
 }
 
-export interface BusinessReview {
+export interface ProfileReview {
   id?: string;
-  businessId: string;
+  targetId: string; // Puede ser businessId o userId
+  targetType: 'business' | 'user';
   userId: string;
   userName: string;
   userAvatar?: string;

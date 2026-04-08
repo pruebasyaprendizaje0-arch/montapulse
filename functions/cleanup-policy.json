@@ -1,0 +1,11 @@
+[
+  {
+    "id": "delete-after-7-days",
+    "action": {
+      "type": "Delete"
+    },
+    "condition": {
+      "olderThan": "604800s"
+    }
+  }
+]

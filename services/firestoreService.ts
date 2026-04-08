@@ -20,7 +20,7 @@ import {
     arrayRemove
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, BusinessReview, PulseNotification, Announcement } from '../types';
+import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, ProfileReview, PulseNotification, Announcement } from '../types';
 
 // Helper to sanitize data for Firestore
 const sanitizeData = (data: any): any => {
@@ -38,49 +38,71 @@ const sanitizeData = (data: any): any => {
     return data;
 };
 
+// Error handling for Firestore SDK bugs
+export const handleFirestoreError = (error: any, context: string) => {
+    console.error(`Firestore Error [${context}]:`, error);
+    const errorStr = String(error);
+    if (errorStr.includes('INTERNAL ASSERTION FAILED') || errorStr.includes('ID: ca9') || errorStr.includes('ID: b815')) {
+        console.warn('Critical Firestore Assertion Failure detected. The SDK internal state may be corrupted.');
+        if (typeof window !== 'undefined') {
+            // Dispatch a custom event so the UI can react
+            window.dispatchEvent(new CustomEvent('firestore-assertion-failure', { detail: { error, context } }));
+        }
+    }
+    return error;
+};
+
 // ==================== REVIEWS ====================
 
-export const subscribeToBusinessReviews = (businessId: string, callback: (reviews: BusinessReview[]) => void) => {
+export const subscribeToProfileReviews = (targetId: string, callback: (reviews: ProfileReview[]) => void) => {
     const reviewsRef = collection(db, 'businessReviews');
-    const q = query(reviewsRef, where('businessId', '==', businessId), orderBy('timestamp', 'desc'));
+    // Intentamos buscar por targetId (nuevo) o businessId (legacy para negocios)
+    // Como Firestore no permite un OR simple sin configurar índices compuestos complejos si hay orderBy,
+    // usaremos targetId principalmente. Para negocios legacy seguiremos usando businessId si targetId no existe.
+    const q = query(reviewsRef, where('targetId', '==', targetId), orderBy('timestamp', 'desc'));
+    
+    // Si queremos soportar legacy businessId sin migración, tendríamos que hacer dos queries o un or() si el SDK lo permite.
+    // Asumiremos que a partir de ahora se usa targetId.
     return onSnapshot(q, (snapshot) => {
         const reviews = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
             timestamp: doc.data().timestamp?.toDate() || new Date()
-        })) as BusinessReview[];
+        })) as ProfileReview[];
         callback(reviews);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToProfileReviews'));
 };
 
-export const addBusinessReview = async (review: BusinessReview) => {
+export const addProfileReview = async (review: ProfileReview) => {
     try {
         const reviewsRef = collection(db, 'businessReviews');
-        const reviewDoc = await addDoc(reviewsRef, {
+        await addDoc(reviewsRef, {
             ...review,
+            // Para compatibilidad con legacy businessId si es un negocio
+            ...(review.targetType === 'business' ? { businessId: review.targetId } : {}),
             timestamp: serverTimestamp()
         });
 
-        // Update business reviewCount and calculate new rating
-        const businessRef = doc(db, 'businesses', review.businessId);
-        const businessSnap = await getDoc(businessRef);
+        // Update statistics for either business or user
+        const collectionName = review.targetType === 'business' ? 'businesses' : 'users_v2';
+        const targetRef = doc(db, collectionName, review.targetId);
+        const targetSnap = await getDoc(targetRef);
         
-        if (businessSnap.exists()) {
-            const businessData = businessSnap.data();
-            const currentReviewCount = businessData.reviewCount || 0;
-            const currentRating = businessData.rating || 0;
+        if (targetSnap.exists()) {
+            const data = targetSnap.data();
+            const currentReviewCount = data.reviewCount || 0;
+            const currentRating = data.rating || 0;
             
-            // Calculate new average rating
-            const newReviewCount = currentReviewCount + 1;
-            const newRating = ((currentRating * currentReviewCount) + review.rating) / newReviewCount;
+            const newReviewCount = (currentReviewCount || 0) + 1;
+            const newRating = (((currentRating || 0) * (currentReviewCount || 0)) + review.rating) / newReviewCount;
             
-            await updateDoc(businessRef, {
+            await updateDoc(targetRef, {
                 reviewCount: newReviewCount,
                 rating: Math.round(newRating * 10) / 10
             });
         }
     } catch (error) {
-        console.error('Error adding business review:', error);
+        console.error('Error adding profile review:', error);
         throw error;
     }
 };
@@ -198,7 +220,7 @@ export const subscribeToEvents = (callback: (events: MontanitaEvent[]) => void) 
             endAt: doc.data().endAt?.toDate() || new Date()
         })) as MontanitaEvent[];
         callback(events);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToEvents'));
 };
 
 // ==================== BUSINESSES ====================
@@ -242,18 +264,19 @@ export const createBusiness = async (business: Omit<Business, 'id'>) => {
 };
 
 
-export const updateBusiness = async (id: string, data: Partial<Business>) => {
+export const updateBusiness = async (id: string, data: Partial<Business>): Promise<void> => {
     try {
         const businessRef = doc(db, 'businesses', id);
+        const sanitized = sanitizeData(data);
+        delete sanitized.updatedAt;
 
-        // Using setDoc with merge to support reference points that may not exist in Firestore yet
-        await setDoc(businessRef, {
-            ...sanitizeData(data),
-            updatedAt: serverTimestamp()
-        }, { merge: true });
-    } catch (error) {
+        await updateDoc(businessRef, {
+            ...sanitized,
+            updatedAt: new Date().toISOString()
+        });
+    } catch (error: any) {
         console.error('Error updating business:', error);
-        throw error;
+        throw error; // Re-throw to allow caller to handle
     }
 };
 
@@ -372,7 +395,7 @@ export const subscribeToBusinesses = (callback: (businesses: Business[]) => void
             ...doc.data()
         })) as Business[];
         callback(businesses);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToBusinesses'));
 };
 
 export const incrementBusinessViewCount = async (businessId: string) => {
@@ -476,7 +499,7 @@ export const subscribeToUsers = (callback: (users: UserProfile[]) => void) => {
             ...doc.data()
         })) as UserProfile[];
         callback(users);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToUsers'));
 };
 
 // ==================== POINTS & PASS ====================
@@ -544,7 +567,7 @@ export const subscribeToUserFollows = (userId: string, callback: (businessIds: s
     const q = query(followsRef, where('userId', '==', userId));
     return onSnapshot(q, (snapshot) => {
         callback(snapshot.docs.map(doc => doc.data().businessId));
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToUserFollows'));
 };
 
 export const getBusinessFollowers = async (businessId: string): Promise<string[]> => {
@@ -559,7 +582,7 @@ export const subscribeToBusinessFollowers = (businessId: string, callback: (user
     const q = query(followsRef, where('businessId', '==', businessId));
     return onSnapshot(q, (snapshot) => {
         callback(snapshot.docs.map(doc => doc.data().userId));
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToBusinessFollowers'));
 };
 
 // ==================== FAVORITES ====================
@@ -600,7 +623,7 @@ export const subscribeToUserFavorites = (userId: string, callback: (eventIds: st
     return onSnapshot(q, (snapshot) => {
         const eventIds = snapshot.docs.map(doc => doc.data().eventId);
         callback(eventIds);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToUserFavorites'));
 };
 
 // ==================== RSVPS ====================
@@ -643,7 +666,7 @@ export const subscribeToUserRSVPs = (userId: string, callback: (eventIds: string
     return onSnapshot(q, (snapshot) => {
         const eventIds = snapshot.docs.map(doc => doc.data().eventId);
         callback(eventIds);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToUserRSVPs'));
 };
 
 export const subscribeToRSVPCounts = (callback: (counts: Record<string, number>) => void) => {
@@ -662,7 +685,7 @@ export const subscribeToRSVPCounts = (callback: (counts: Record<string, number>)
             counts[eventId] = (counts[eventId] || 0) + 1;
         });
         callback(counts);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToRSVPCounts'));
 };
 
 // ==================== SETTINGS ====================
@@ -697,7 +720,7 @@ export const subscribeToAppSettings = (settingId: string, callback: (data: any) 
         if (doc.exists()) {
             callback(doc.data());
         }
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToAppSettings'));
 };
 
 // ==================== COMMUNITY ====================
@@ -713,7 +736,7 @@ export const subscribeToPosts = (callback: (posts: any[]) => void) => {
             timestamp: doc.data().timestamp?.toDate() || new Date()
         }));
         callback(posts);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToPosts'));
 };
 
 export const createPost = async (post: any) => {
@@ -790,7 +813,7 @@ export const subscribeToMessages = (limitNum: number, callback: (messages: any[]
             timestamp: doc.data().timestamp?.toDate() || new Date()
         }));
         callback(messages.reverse());
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToMessages'));
 };
 
 export const sendMessage = async (message: any) => {
@@ -840,7 +863,7 @@ export const subscribeToChatRooms = (userId: string, callback: (rooms: ChatRoom[
             lastMessageTime: doc.data().lastMessageTime?.toDate() || new Date()
         })) as ChatRoom[];
         callback(rooms);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToChatRooms'));
 };
 
 export const sendRoomMessage = async (roomId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>): Promise<string> => {
@@ -904,7 +927,7 @@ export const subscribeToRoomMessages = (roomId: string, callback: (messages: Cha
             timestamp: doc.data().timestamp?.toDate() || new Date()
         })) as ChatMessage[];
         callback(messages);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToRoomMessages'));
 };
 
 /**
@@ -1076,7 +1099,7 @@ export const subscribeToCustomLocalities = (callback: (localities: CustomLocalit
             createdAt: doc.data().createdAt?.toDate() || new Date()
         })) as CustomLocality[];
         callback(localities);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToCustomLocalities'));
 };
 
 export const createCustomLocality = async (locality: Omit<CustomLocality, 'id' | 'createdAt'>): Promise<string> => {
@@ -1147,7 +1170,7 @@ export const subscribeToNotifications = (userId: string, callback: (notification
             createdAt: doc.data().createdAt?.toDate() || new Date()
         })).sort((a, b) => b.createdAt - a.createdAt) as PulseNotification[];
         callback(notifications);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToNotifications'));
 };
 
 export const markNotificationRead = async (notificationId: string) => {
@@ -1184,7 +1207,7 @@ export const subscribeToAnnouncements = (senderId: string, callback: (announceme
             timestamp: doc.data().timestamp?.toDate() || new Date()
         })) as Announcement[];
         callback(announcements);
-    });
+    }, (error) => handleFirestoreError(error, 'subscribeToAnnouncements'));
 };
 
 export const deleteAnnouncement = async (announcementId: string, roomMessages?: { roomId: string, messageId: string }[]) => {

@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Security
+montapulse-app-firebase-adminsdk-*.json
+*-adminsdk-*.json
+.env
+.env.local
+.env.*.local

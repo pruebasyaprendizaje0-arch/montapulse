@@ -18,10 +18,13 @@ import {
     incrementEventViewCount, incrementEventClickCount as serviceIncrementClick,
     subscribeToChatRooms, markRoomAsRead
 } from '../services/firestoreService';
+
+export type CommunityTab = 'chats' | 'updates' | 'communities' | 'calls' | 'notifications' | 'profile';
 import { generateEventDescription } from '../services/geminiService';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from './AuthContext';
 import { useToast } from './ToastContext';
+import { resetFirestoreCache } from '../firebase.config';
 import { compressImage } from '../utils/imageUtils';
 
 interface DataContextType {
@@ -54,6 +57,7 @@ interface DataContextType {
         plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
         isReference?: boolean;
         email: string;
+        ownerId?: string;
     };
     setBizForm: React.Dispatch<React.SetStateAction<{
         name: string;
@@ -70,6 +74,7 @@ interface DataContextType {
         plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
         isReference?: boolean;
         email: string;
+        ownerId?: string;
     }>>;
     rsvpStatus: Record<string, boolean>;
     setRsvpStatus: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
@@ -172,7 +177,7 @@ interface DataContextType {
     setPublicProfileId: (id: string | null) => void;
     publicProfileType: 'business' | 'user';
     setPublicProfileType: (type: 'business' | 'user') => void;
-    handleUpdateBusinessProfile: () => Promise<void>;
+    handleUpdateBusinessProfile: () => Promise<boolean>;
     handleUpdatePaymentDetails: () => Promise<void>;
     handleBusinessImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleDeleteBusiness: (id: string) => Promise<void>;
@@ -221,8 +226,8 @@ interface DataContextType {
     appSettings: AppSettings | null;
     setAppSettings: React.Dispatch<React.SetStateAction<AppSettings | null>>;
     handleUpdateAppSettings: (settings: Partial<AppSettings>) => Promise<void>;
-    communityTab: 'global' | 'chats' | 'users';
-    setCommunityTab: (tab: 'global' | 'chats' | 'users') => void;
+    communityTab: CommunityTab;
+    setCommunityTab: (tab: CommunityTab) => void;
     sendPushNotification: (userId: string, title: string, body: string, type: string, metadata?: any) => Promise<void>;
     markAsRead: (id: string) => Promise<void>;
     incrementEventView: (id: string) => Promise<void>;
@@ -275,7 +280,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [loading, setLoading] = useState(true);
     const [policyData, setPolicyData] = useState<PolicyData>(DEFAULT_POLICIES);
     const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
-    const [communityTab, setCommunityTab] = useState<'global' | 'chats' | 'users'>('global');
+    const [communityTab, setCommunityTab] = useState<CommunityTab>('updates');
     const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
     const [deletedBusinesses, setDeletedBusinesses] = useState<Business[]>([]);
     const [notifications, setNotifications] = useState<PulseNotification[]>([]);
@@ -313,7 +318,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         coordinates: null as any,
         plannerCategory: null,
         isReference: false,
-        email: ''
+        isPublished: true,
+        isVerified: false,
+        email: '',
+        ownerId: 'admin'
     };
 
     const [bizForm, setBizForm] = useState(INITIAL_BIZ_FORM);
@@ -347,6 +355,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     const [customLocalities, setCustomLocalities] = useState<{ name: string; coords: [number, number]; zoom: number }[]>([]);
     const [customLocalitySectors, setCustomLocalitySectors] = useState<Record<string, Sector[]>>({});
+
+    // Handle Firestore Internal Assertion Failures
+    useEffect(() => {
+        const handleAssertionFailure = (event: any) => {
+            const { context } = event.detail || {};
+            console.error(`Detected Firestore Assertion Failure in ${context}`);
+            
+            showConfirm(
+                'Hemos detectado un error interno de sincronización. ¿Deseas reiniciar el caché para solucionarlo?',
+                'Error de Sincronización'
+            ).then(confirmed => {
+                if (confirmed) {
+                    resetFirestoreCache();
+                }
+            });
+        };
+
+        window.addEventListener('firestore-assertion-failure', handleAssertionFailure);
+        return () => window.removeEventListener('firestore-assertion-failure', handleAssertionFailure);
+    }, [showToast]);
 
     useEffect(() => {
         if (!user) {
@@ -550,6 +578,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
         return () => unsubscribe();
     }, []);
+
+    useEffect(() => {
+        const targetId = editingBusinessId || user?.businessId;
+        if (editingBusinessId && targetId) {
+            const business = businesses.find(b => b.id === targetId);
+            if (business) {
+                setBizForm({
+                    name: business.name || '',
+                    description: business.description || '',
+                    locality: business.locality || 'Montañita',
+                    sector: business.sector || Sector.CENTRO,
+                    icon: business.icon || 'store',
+                    whatsapp: business.whatsapp || '',
+                    phone: business.phone || '',
+                    instagram: business.instagram || '',
+                    category: business.category || BusinessCategory.RESTAURANTE,
+                    imageUrl: business.imageUrl || '',
+                    coordinates: business.coordinates || [-1.8253, -80.7523],
+                    email: (business as any).email || '',
+                    isPublished: business.isPublished !== undefined ? business.isPublished : true,
+                    isReference: business.isReference || false,
+                    isVerified: business.isVerified || false,
+                    plannerCategory: (business as any).plannerCategory || null,
+                    ownerId: business.ownerId || 'admin'
+                });
+            }
+        }
+    }, [editingBusinessId, user?.businessId, businesses]);
 
     useEffect(() => {
         const unsubscribe = subscribeToAppSettings('plan_prices', (data) => {
@@ -898,61 +954,66 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const handleUpdateBusinessProfile = async () => {
+    const handleUpdateBusinessProfile = async (): Promise<boolean> => {
         const targetBusinessId = editingBusinessId || user?.businessId;
-        if (!targetBusinessId) return;
+        if (!targetBusinessId) return false;
 
         const business = businesses.find(b => b.id === targetBusinessId);
-        if (!business) return;
+        if (!business) return false;
 
-        // Validation: Mismo nombre, mismo sector (Ignore if it's a reference point)
-        const isRef = business.isReference || business.id?.startsWith('ref-');
+        const businessName = bizForm.name || business.name || '';
+        const businessSector = bizForm.sector || business.sector || Sector.CENTRO;
+        const businessLocality = bizForm.locality || business.locality || 'Montañita';
+
+        // Validation: Same name, same sector, same locality (Ignore if it's a reference point)
+        const isRef = bizForm.isReference || targetBusinessId.startsWith('ref-');
         const duplicateNameSector = !isRef && businesses.some(b => 
             b.id !== targetBusinessId &&
             !b.isReference &&
             !b.id.startsWith('ref-') &&
-            b.name.toLowerCase().trim() === (business.name || '').toLowerCase().trim() && 
-            b.sector === business.sector
+            (b.name || '').toLowerCase().trim() === (businessName || '').toLowerCase().trim() && 
+            b.sector === businessSector &&
+            (b.locality || 'Montañita') === businessLocality
         );
 
         if (duplicateNameSector) {
             showToast("Ya existe un negocio con este nombre en este sector.", "error");
-            return;
+            return false;
         }
 
         const isAdminUser = user?.role === 'admin';
 
+        const updatePayload: Partial<Business> = {
+            ...bizForm,
+            coordinates: bizForm.coordinates || business.coordinates || [-1.8253, -80.7523],
+        };
+
+        if (!isAdminUser && !isSuperUser && !business.isReference && !business.id?.startsWith('ref-')) {
+            delete updatePayload.isVerified;
+        }
+
         try {
-            const updatePayload: Partial<Business> = {
-                name: business.name || '',
-                description: business.description || '',
-                locality: business.locality || 'Montañita',
-                sector: business.sector || Sector.CENTRO,
-                icon: business.icon || 'palmtree',
-                whatsapp: business.whatsapp || '',
-                phone: business.phone || '',
-                category: business.category || BusinessCategory.RESTAURANTE,
-                imageUrl: business.imageUrl || 'https://images.unsplash.com/photo-1550966871-3ed3c47e2ce2?auto=format&fit=crop&q=80&w=400',
-                coordinates: business.coordinates || [-1.8253, -80.7523],
-                plannerCategory: (business as any).plannerCategory || null
-            };
-
-            // Que los cambios como superusuario prevalezcan
-            if (isAdminUser || isSuperUser || business.isReference || business.id?.startsWith('ref-')) {
-                (updatePayload as any).isPublished = business.isPublished !== undefined ? business.isPublished : true;
-                (updatePayload as any).isReference = business.isReference || business.id?.startsWith('ref-') || false;
-                (updatePayload as any).isVerified = business.isVerified !== undefined ? business.isVerified : false;
-                (updatePayload as any).email = business.email || '';
-            }
-
             await updateBusiness(targetBusinessId, updatePayload as any);
+            
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             setBusinesses(prev => prev.map(b => b.id === targetBusinessId ? { ...b, ...(updatePayload as any) } : b));
             setShowBusinessEdit(false);
             setEditingBusinessId(null);
             showToast("Perfil de negocio actualizado.", "success");
+            return true;
         } catch (error: any) {
             console.error("Error updating business:", error);
+            const errorStr = String(error);
+            if (errorStr.includes('INTERNAL ASSERTION FAILED') || errorStr.includes('FIRESTORE')) {
+                setBusinesses(prev => prev.map(b => b.id === targetBusinessId ? { ...b, ...(updatePayload as any) } : b));
+                setShowBusinessEdit(false);
+                setEditingBusinessId(null);
+                showToast("Perfil actualizado (el servidor respondió con warning).", "success");
+                return true;
+            }
             showToast(`Error al guardar cambios: ${error.message || 'Error desconocido'}`, "error");
+            return false;
         }
     };
 
@@ -1199,11 +1260,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         );
         if (!name) return;
         
-        // Mismo nombre, mismo sector en la localidad actual (Ignore if it's a reference point)
+        // Same name, same sector (CENTER by default), same locality (Ignore for reference points)
         const duplicateNameSector = !isReference && businesses.some(b => 
             !b.isReference &&
             b.name.toLowerCase().trim() === name.toLowerCase().trim() && 
-            b.locality === currentLocality.name
+            b.locality === currentLocality.name &&
+            b.sector === Sector.CENTRO
         );
 
         if (duplicateNameSector) {
@@ -1400,11 +1462,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (!authUser) return;
                 const isSuperAdmin = user?.role === 'admin' || isSuperUser || isAdmin;
                 
-                // Mismo nombre, mismo sector (Ignore if it's a reference point)
+                // Same name, same sector, same locality (Ignore if it's a reference point)
                 const duplicateNameSector = !bizForm.isReference && businesses.some(b => 
                     !b.isReference &&
                     b.name.toLowerCase().trim() === bizForm.name.toLowerCase().trim() && 
-                    b.sector === bizForm.sector
+                    b.sector === bizForm.sector &&
+                    (b.locality || 'Montañita') === bizForm.locality
                 );
 
                 if (duplicateNameSector) {

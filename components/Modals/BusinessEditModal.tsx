@@ -272,22 +272,13 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                     const newLoc = e.target.value;
                                     const allLocalities = [...LOCALITIES, ...(customLocalities || [])];
                                     const locObj = allLocalities.find(l => l.name === newLoc);
-                                    if (isRegistration) {
-                                        setBizForm({
-                                            ...bizForm,
-                                            locality: newLoc,
-                                            sector: (LOCALITY_SECTORS[newLoc] || [])[0] || Sector.CENTRO
-                                        });
-                                    } else {
-                                        setBusinesses(prev => prev.map(b =>
-                                            b.id === targetBusinessId ? {
-                                                ...b,
-                                                locality: newLoc,
-                                                sector: (LOCALITY_SECTORS[newLoc] || [])[0] || Sector.CENTRO,
-                                                coordinates: locObj ? locObj.coords : b.coordinates
-                                            } : b
-                                        ));
-                                    }
+                                    
+                                    setBizForm(prev => ({
+                                        ...prev,
+                                        locality: newLoc,
+                                        sector: (LOCALITY_SECTORS[newLoc] || [])[0] || Sector.CENTRO,
+                                        coordinates: locObj ? locObj.coords : prev.coordinates
+                                    }));
                                 }}
                                 className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none appearance-none transition-all"
                             >
