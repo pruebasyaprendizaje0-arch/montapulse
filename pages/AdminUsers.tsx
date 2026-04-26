@@ -21,6 +21,7 @@ import { PLAN_LIMITS } from '../constants';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
+import { useAuthContext } from '../context/AuthContext';
 
 export const AdminUsers: React.FC = () => {
     const { 
@@ -30,6 +31,7 @@ export const AdminUsers: React.FC = () => {
     } = useData();
     const navigate = useNavigate();
     const { showToast, showConfirm, showPrompt } = useToast();
+    const { user: currentUser } = useAuthContext();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -63,95 +65,89 @@ export const AdminUsers: React.FC = () => {
     return (
         <div className="h-auto w-full bg-slate-950 font-['Outfit'] pb-48">
             {/* Header section with glassmorphism */}
-            <div className="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-2xl border-b border-white/5 pt-20 pb-6 px-6">
+            <div className="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-2xl border-b border-white/5 pt-12 pb-2 px-4 shadow-md shadow-black/20">
                 <div className="max-w-2xl mx-auto">
-                    <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center justify-between mb-2">
                         <button
                             onClick={() => navigate('/host')}
-                            className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-white/10"
+                            className="p-1.5 bg-white/5 rounded-lg hover:bg-white/10 transition-all border border-white/10"
                         >
-                            <ChevronLeft className="w-5 h-5 text-white" />
+                            <ChevronLeft className="w-4 h-4 text-white" />
                         </button>
                         <div className="text-center">
-                            <h1 className="text-xl font-black tracking-[0.2em] text-white uppercase flex items-center gap-3">
-                                <Users className="w-5 h-5 text-orange-400" />
+                            <h1 className="text-sm font-black tracking-[0.2em] text-white uppercase flex items-center gap-1.5">
+                                <Users className="w-3.5 h-3.5 text-orange-400" />
                                 Gestión de Usuarios
                             </h1>
                         </div>
-                        <div className="w-11"></div>
+                        <div className="w-7"></div>
                     </div>
 
-                    {/* Stats Overview */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-                        {[
-                            { label: 'Total', value: stats.total, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-                            { label: 'Admins', value: stats.admins, color: 'text-amber-400', bg: 'bg-amber-500/10' },
-                            { label: 'Premium', value: stats.premium, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-                            { label: 'Expert', value: stats.expert, color: 'text-cyan-400', bg: 'bg-cyan-500/10' }
-                        ].map((stat, i) => (
-                            <div key={i} className={`${stat.bg} p-4 rounded-2xl border border-white/5`}>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">{stat.label}</p>
-                                <p className="text-2xl font-black ${stat.color}">{stat.value}</p>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Search & Filters */}
-                    <div className="space-y-4">
-                        <div className="relative">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-                            <input
-                                type="text"
-                                placeholder="Buscar por nombre o email..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all"
-                            />
+                    {/* Compact Stats & Filters */}
+                    <div className="flex flex-col gap-1.5 mb-1">
+                        {/* Stats Row */}
+                        <div className="flex justify-between items-center bg-white/5 border border-white/5 rounded-lg p-1.5">
+                            {[
+                                { label: 'Tot', value: stats.total, color: 'text-orange-400' },
+                                { label: 'Adm', value: stats.admins, color: 'text-amber-400' },
+                                { label: 'Pre', value: stats.premium, color: 'text-purple-400' },
+                                { label: 'Exp', value: stats.expert, color: 'text-cyan-400' }
+                            ].map((stat, i) => (
+                                <div key={i} className="flex flex-col items-center flex-1 border-r border-white/5 last:border-0">
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-white/50 leading-none mb-0.5">{stat.label}</p>
+                                    <p className={`text-xs font-black leading-none ${stat.color}`}>{stat.value}</p>
+                                </div>
+                            ))}
                         </div>
 
-                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                        {/* Search & Filters Row */}
+                        <div className="flex gap-1.5">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/40" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-7 pr-2 text-xs text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-orange-500/50 transition-all"
+                                />
+                            </div>
                             <select
                                 value={roleFilter}
                                 onChange={(e) => setRoleFilter(e.target.value)}
-                                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-white outline-none"
+                                className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[9px] font-bold text-white outline-none w-20"
                             >
-                                <option value="all" className="bg-slate-900">Todos los Roles</option>
-                                <option value="visitor" className="bg-slate-900">Exploradores</option>
-                                <option value="host" className="bg-slate-900">Hosts</option>
-                                <option value="admin" className="bg-slate-900">Admins</option>
+                                <option value="all" className="bg-slate-900">Roles</option>
+                                <option value="visitor" className="bg-slate-900">Exp</option>
+                                <option value="host" className="bg-slate-900">Host</option>
+                                <option value="admin" className="bg-slate-900">Admin</option>
                             </select>
-
                             <select
                                 value={planFilter}
                                 onChange={(e) => setPlanFilter(e.target.value)}
-                                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-white outline-none"
+                                className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[9px] font-bold text-white outline-none w-24"
                             >
-                                <option value="all" className="bg-slate-900">Todos los Planes</option>
-                                <option value={SubscriptionPlan.FREE} className="bg-slate-900">Gratis - 0 eventos</option>
-                                <option value={SubscriptionPlan.BASIC} className="bg-slate-900">Basic - 4 eventos, 1 anuncio</option>
-                                <option value={SubscriptionPlan.PREMIUM} className="bg-slate-900">Premium - 10 eventos, 4 anuncios</option>
-                                <option value={SubscriptionPlan.EXPERT} className="bg-slate-900">Expert - Ilimitado (Admin)</option>
+                                <option value="all" className="bg-slate-900">Planes</option>
+                                <option value={SubscriptionPlan.FREE} className="bg-slate-900">Gratis</option>
+                                <option value={SubscriptionPlan.BASIC} className="bg-slate-900">Basic</option>
+                                <option value={SubscriptionPlan.PREMIUM} className="bg-slate-900">Premium</option>
+                                <option value={SubscriptionPlan.EXPERT} className="bg-slate-900">Expert</option>
                             </select>
                         </div>
                     </div>
 
                     {/* Dangerous Actions - Only for SuperUser/Admin */}
                     {isSuperUser && (
-                        <div className="mt-8 pt-6 border-t border-white/5">
+                        <div className="mt-1.5 pt-1.5 border-t border-white/5">
                             <button
                                 onClick={handlePurgeAllReferences}
-                                className="w-full group bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-400 p-4 rounded-2xl transition-all duration-300 flex items-center justify-between"
+                                className="w-full group bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-400 py-1.5 px-3 rounded-lg transition-all duration-300 flex items-center justify-between"
                             >
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-red-500/20 group-hover:bg-black/20 rounded-xl transition-colors">
-                                        <Trash2 className="w-5 h-5 text-red-500 group-hover:text-white" />
-                                    </div>
-                                    <div className="text-left">
-                                        <p className="text-xs font-black uppercase tracking-widest text-red-500 group-hover:text-white">Zona de Peligro</p>
-                                        <p className="text-[10px] font-bold text-red-500/60 group-hover:text-white/80">Borrar todos los puntos de referencia</p>
-                                    </div>
+                                <div className="flex items-center gap-2">
+                                    <Trash2 className="w-3 h-3 text-red-500 group-hover:text-white" />
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-red-500 group-hover:text-white">Borrar puntos (Peligro)</p>
                                 </div>
-                                <ArrowUpRight className="w-5 h-5 text-red-500 group-hover:text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
+                                <ArrowUpRight className="w-3 h-3 text-red-500 group-hover:text-white" />
                             </button>
                         </div>
                     )}
@@ -171,14 +167,19 @@ export const AdminUsers: React.FC = () => {
                         const userBusiness = u.businessId ? (businesses.find(b => b.id === u.businessId) || deletedBusinesses.find(b => b.id === u.businessId)) : null;
                         const isDeleted = (userBusiness && 'isDeleted' in userBusiness && userBusiness.isDeleted) || false;
 
-                        return (
+                        const SUPERUSER_EMAILS = ['fhernandezcalle@gmail.com', 'pruebasyaprendizaje0@gmail.com'];
+                        const isTargetSuperuser = SUPERUSER_EMAILS.includes(u.email || '');
+                        const isCurrentUserSuperuser = SUPERUSER_EMAILS.includes(currentUser?.email || '');
+                        const canModify = !isTargetSuperuser || isCurrentUserSuperuser;
 
-                            <div key={u.id} className="group bg-slate-900/50 backdrop-blur-sm border border-white/5 rounded-[2rem] overflow-hidden hover:border-white/10 transition-all duration-300">
-                                <div className="p-6">
-                                    <div className="flex items-start justify-between mb-6">
-                                        <div className="flex items-center gap-4">
-                                            <div className="relative">
-                                                <div className="w-16 h-16 rounded-[1.25rem] bg-gradient-to-br from-orange-500/20 to-amber-500/20 overflow-hidden ring-2 ring-white/10 group-hover:ring-orange-500/30 transition-all">
+                        return (
+                            <div key={u.id} className="group bg-slate-900/50 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:border-orange-500/30 hover:bg-slate-900/80 transition-all duration-300 shadow-xl shadow-black/20">
+                                <div className="p-4 sm:p-5">
+                                    {/* Top Header: Avatar, Info, Badges */}
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative shrink-0">
+                                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 overflow-hidden ring-2 ring-white/10 group-hover:ring-orange-500/30 transition-all">
                                                     <img
                                                         src={u.avatarUrl || `https://ui-avatars.com/api/?name=${u.name || 'User'}+${u.surname || 'Name'}&background=f97316&color=fff&bold=true`}
                                                         className="w-full h-full object-cover"
@@ -186,403 +187,233 @@ export const AdminUsers: React.FC = () => {
                                                     />
                                                 </div>
                                                 {u.plan === SubscriptionPlan.EXPERT && (
-                                                    <div className="absolute -top-2 -right-2 bg-amber-500 p-1.5 rounded-lg shadow-lg shadow-amber-500/20 border border-amber-400">
-                                                        <Crown className="w-3 h-3 text-black" />
+                                                    <div className="absolute -top-1.5 -right-1.5 bg-amber-500 p-1 rounded-md shadow-lg shadow-amber-500/40 border border-amber-300">
+                                                        <Crown className="w-2.5 h-2.5 text-black" />
                                                     </div>
                                                 )}
                                             </div>
-                                            <div>
+                                            <div className="min-w-0">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <p className="text-white font-black text-xl tracking-tight">{u.name || 'Usuario'} {u.surname || ''}</p>
-                                                    {u.role === 'admin' && (
-                                                        <div className="bg-orange-500/10 px-1.5 py-0.5 rounded-md border border-orange-500/20">
-                                                            <ShieldCheck className="w-3.5 h-3.5 text-orange-500" />
-                                                        </div>
+                                                    <p className="text-white font-black text-sm tracking-tight truncate max-w-[120px] sm:max-w-[200px]">{u.name || 'Usuario'} {u.surname || ''}</p>
+                                                    {(u.role === 'admin' || isTargetSuperuser) && (
+                                                        <ShieldCheck className={`w-4 h-4 shrink-0 ${isTargetSuperuser ? 'text-amber-500' : 'text-orange-500'}`} />
                                                     )}
                                                 </div>
-                                                <div className="flex items-center gap-2 text-slate-500 text-xs font-medium">
-                                                    <Mail className="w-3 h-3" />
-                                                    {u.email}
+                                                <div className="flex items-center gap-1.5 text-slate-400 text-[10px] sm:text-xs font-medium">
+                                                    <Mail className="w-3 h-3 shrink-0 text-slate-500" />
+                                                    <span className="truncate max-w-[120px] sm:max-w-[200px]">{u.email}</span>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] border ${u.plan === SubscriptionPlan.EXPERT
-                                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 shadow-lg shadow-amber-500/10'
-                                            : 'bg-white/5 border-white/10 text-slate-400'
-                                            }`}>
-                                            {u.plan}
+                                        <div className="flex flex-col items-end gap-1.5 shrink-0 ml-3">
+                                            <div className={`px-2 py-1 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-wider border ${u.plan === SubscriptionPlan.EXPERT
+                                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 shadow-sm shadow-amber-500/10'
+                                                : 'bg-white/5 border-white/10 text-slate-400'
+                                                }`}>
+                                                {u.plan}
+                                            </div>
+                                            <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md border ${isTargetSuperuser ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-sm shadow-amber-500/10' : 'bg-white/5 text-white/40 border-white/5'}`}>
+                                                {isTargetSuperuser ? 'MASTER ADMIN' : u.role}
+                                            </span>
                                         </div>
                                     </div>
 
-                                    {/* Additional Info */}
-                                    <div className="grid grid-cols-2 gap-4 mb-6">
-                                        <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
-                                            <p className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-1 flex items-center gap-2">
-                                                <ShieldCheck className="w-3 h-3 text-orange-400" /> Rol Actual
-                                            </p>
-                                            <p className="text-sm font-bold text-white capitalize">{u.role}</p>
+                                    {/* Action Buttons & Details */}
+                                    <div className="mt-4 pt-4 border-t border-white/5">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
+                                                <p className="text-xs font-bold text-white truncate max-w-[200px]">
+                                                    {userBusiness ? (
+                                                        <span className={isDeleted ? "text-red-400 italic" : ""}>
+                                                            {userBusiness.name} {isDeleted && "(Papelera)"}
+                                                        </span>
+                                                    ) : <span className="text-white/40">Sin negocio asociado</span>}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
-                                            <p className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-1 flex items-center gap-2">
-                                                <Building2 className="w-3 h-3 text-amber-400" /> Negocio
-                                            </p>
-                                            <p className="text-sm font-bold text-white truncate">
-                                                {userBusiness ? (
-                                                    <span className={isDeleted ? "text-red-400 italic" : ""}>
-                                                        {userBusiness.name} {isDeleted && "(Borrador/Trash)"}
-                                                    </span>
-                                                ) : 'Ninguno'}
-                                            </p>
 
-                                        </div>
-                                    </div>
-
-                                    {/* Action Buttons */}
-                                    <div className="flex flex-col gap-3">
-                                        <div className="grid grid-cols-2 gap-3">
+                                        {/* Primary Actions Grid */}
+                                        <div className="grid grid-cols-2 gap-2">
                                             <button
                                                 onClick={async () => {
+                                                    if (!canModify) {
+                                                        showToast('Acción denegada.', 'error'); return;
+                                                    }
                                                     const nextRole = u.role === 'admin' ? 'visitor' : 'admin';
-                                                    const confirmed = await showConfirm(
-                                                        `¿Cambiar rol de ${u.name || 'este usuario'} a ${nextRole === 'admin' ? 'ADMINISTRADOR' : 'Explorador'}?`,
-                                                        'Cambiar Rol'
-                                                    );
-                                                    if (confirmed) {
+                                                    if (await showConfirm(`¿Cambiar rol a ${nextRole === 'admin' ? 'ADMINISTRADOR' : 'Explorador'}?`, 'Cambiar Rol')) {
                                                         try {
                                                             await updateUser(u.id, { role: nextRole as any });
                                                             setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, role: nextRole } : user));
-                                                            const roleLabel = nextRole === 'admin' ? 'ADMINISTRADOR' : 'Explorador';
-                                                            showToast(`Rol de ${u.name || 'Usuario'} actualizado a ${roleLabel}`, 'success');
-                                                        } catch (error) {
-                                                            console.error('Error updating role:', error);
-                                                            showToast('Error al actualizar el rol', 'error');
-                                                        }
+                                                            showToast('Rol actualizado', 'success');
+                                                        } catch (e) { showToast('Error', 'error'); }
                                                     }
                                                 }}
-                                                className={`group/btn relative py-4 px-4 rounded-2xl border transition-all overflow-hidden ${u.role === 'admin' ? 'bg-amber-500 border-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                                                className={`py-2.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 ${u.role === 'admin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-inner shadow-amber-500/20' : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:border-white/20'}`}
                                             >
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${u.role === 'admin' ? 'bg-black/20' : 'bg-amber-500/10 group-hover/btn:bg-amber-500/20'}`}>
-                                                        <ShieldCheck className={`w-4 h-4 ${u.role === 'admin' ? 'text-black' : 'text-amber-400'}`} />
-                                                    </div>
-                                                    <span className={`text-xs font-black uppercase tracking-widest ${u.role === 'admin' ? 'text-black' : 'text-white'}`}>
-                                                        {u.role === 'admin' ? 'Admin' : 'Hacer Admin'}
-                                                    </span>
-                                                </div>
+                                                <ShieldCheck className="w-3 h-3" />
+                                                {u.role === 'admin' ? 'Es Admin' : 'Hacer Admin'}
                                             </button>
+
                                             <button
                                                 onClick={async () => {
-                                                    const planCycle = [SubscriptionPlan.FREE, SubscriptionPlan.BASIC, SubscriptionPlan.PREMIUM, SubscriptionPlan.EXPERT];
-                                                    const currentIndex = planCycle.indexOf(u.plan || SubscriptionPlan.FREE);
-                                                    const newPlan = planCycle[(currentIndex + 1) % planCycle.length];
-
-                                                    const confirmed = await showConfirm(
-                                                        `¿Cambiar plan de ${u.name || 'este usuario'} a ${newPlan.toUpperCase()}?`,
-                                                        'Actualizar Plan'
-                                                    );
-                                                    if (confirmed) {
+                                                    if (!canModify) {
+                                                        showToast('Acción denegada.', 'error'); return;
+                                                    }
+                                                    const plans = [SubscriptionPlan.FREE, SubscriptionPlan.BASIC, SubscriptionPlan.PREMIUM, SubscriptionPlan.EXPERT];
+                                                    const nextPlan = plans[(plans.indexOf(u.plan || SubscriptionPlan.FREE) + 1) % plans.length];
+                                                    if (await showConfirm(`¿Cambiar plan a ${nextPlan}?`, 'Actualizar Plan')) {
                                                         try {
-                                                            // 1. Update User Plan
-                                                            await updateUser(u.id, { plan: newPlan });
-                                                            setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, plan: newPlan } : user));
-
-                                                            // 2. Update Business Plan and Credits if linked
+                                                            await updateUser(u.id, { plan: nextPlan });
+                                                            setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, plan: nextPlan } : user));
                                                             if (u.businessId) {
-                                                                const newCredits = PLAN_LIMITS[newPlan as keyof typeof PLAN_LIMITS] || 0;
-                                                                await updateBusiness(u.businessId, { 
-                                                                    plan: newPlan,
-                                                                    eventCredits: newCredits,
-                                                                    lastResetDate: new Date().toISOString()
-                                                                });
-                                                                
-                                                                // Update local businesses state
-                                                                setBusinesses(prev => prev.map(b => 
-                                                                    b.id === u.businessId ? { ...b, plan: newPlan, eventCredits: newCredits } : b
-                                                                ));
+                                                                const creds = PLAN_LIMITS[nextPlan as keyof typeof PLAN_LIMITS] || 0;
+                                                                await updateBusiness(u.businessId, { plan: nextPlan, eventCredits: creds, lastResetDate: new Date().toISOString() });
+                                                                setBusinesses(prev => prev.map(b => b.id === u.businessId ? { ...b, plan: nextPlan, eventCredits: creds } : b));
                                                             }
-
-                                                            showToast(`Plan de ${u.name || 'Usuario'} actualizado a ${newPlan}`, 'success');
-                                                        } catch (error) {
-                                                            console.error('Error updating plan:', error);
-                                                            showToast('Error al actualizar el plan', 'error');
-                                                        }
+                                                            showToast('Plan actualizado', 'success');
+                                                        } catch (e) { showToast('Error', 'error'); }
                                                     }
                                                 }}
-                                                className={`py-4 px-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 border ${u.plan === SubscriptionPlan.EXPERT
-                                                        ? 'bg-amber-500 text-black border-amber-400 shadow-lg shadow-amber-500/20'
-                                                        : u.plan === SubscriptionPlan.PREMIUM
-                                                            ? 'bg-purple-500 text-white border-purple-400 shadow-lg shadow-purple-500/20'
-                                                            : u.plan === SubscriptionPlan.BASIC
-                                                                ? 'bg-orange-500 text-white border-orange-400'
-                                                                : 'bg-white/5 border-white/10 text-slate-400'
-                                                    } hover:scale-[1.02] active:scale-95`}
+                                                className={`py-2.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 ${u.plan === SubscriptionPlan.EXPERT ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-inner shadow-amber-500/20' : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:border-white/20'}`}
                                             >
-                                                <Zap className={`w-4 h-4 ${u.plan === SubscriptionPlan.EXPERT ? 'fill-current' : ''}`} />
-                                                <span>Plan: {u.plan || 'Ninguno'}</span>
+                                                <Zap className="w-3 h-3" /> Plan: {u.plan}
                                             </button>
                                         </div>
 
-                                        {/* Advanced Admin Actions */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <button
-                                                onClick={async () => {
-                                                    const newStatus = !u.pulsePassActive;
-                                                    const confirmed = await showConfirm(
-                                                        `¿${newStatus ? 'Activar' : 'Desactivar'} Pulse Pass para ${u.name || 'este usuario'}?`,
-                                                        'Pulse Pass'
-                                                    );
-                                                    if (confirmed) {
-                                                        try {
-                                                            await togglePulsePass(u.id, newStatus);
-                                                            setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, pulsePassActive: newStatus } : user));
-                                                            showToast(`Pulse Pass de ${u.name || 'Usuario'} ${newStatus ? 'activado' : 'desactivado'}`, 'success');
-                                                        } catch (error) {
-                                                            console.error('Error toggling Pulse Pass:', error);
-                                                            showToast('Error al actualizar Pulse Pass', 'error');
-                                                        }
-                                                    }
-                                                }}
-                                                className={`py-3 px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${u.pulsePassActive
-                                                    ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
-                                                    : 'bg-slate-800/50 border-white/5 text-slate-500'
-                                                    }`}
-                                            >
-                                                <Zap className={`w-3.5 h-3.5 ${u.pulsePassActive ? 'fill-current' : ''}`} />
-                                                <span>Pulse Pass: {u.pulsePassActive ? 'ON' : 'OFF'}</span>
-                                            </button>
-
-                                            {u.role !== 'admin' ? (
-                                                <button
-                                                    onClick={async () => {
-                                                        const confirmed = await showConfirm(
-                                                            `¡ADVERTENCIA! ¿Estás SEGURO de promover a ${u.name || 'este usuario'} a ADMINISTRADOR?\nTendrá acceso total al sistema.`,
-                                                            'Promover a Admin'
-                                                        );
-                                                        if (confirmed) {
-                                                            try {
-                                                                await updateUser(u.id, { role: 'admin' });
-                                                                setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, role: 'admin' } : user));
-                                                                showToast(`${u.name || 'Usuario'} promovido a Administrador`, 'success');
-                                                            } catch (error) {
-                                                                console.error('Error promoting to admin:', error);
-                                                                showToast('Error al promover a administrador', 'error');
-                                                            }
-                                                        }
-                                                    }}
-                                                    className="py-3 px-4 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all flex items-center justify-center gap-2"
-                                                >
-                                                    <Crown className="w-3.5 h-3.5" />
-                                                    Promover Admin
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={async () => {
-                                                        const confirmed = await showConfirm(
-                                                            `¿Quitar permisos de administrador a ${u.name || 'este usuario'}?`,
-                                                            'Degradar Admin'
-                                                        );
-                                                        if (confirmed) {
-                                                            try {
-                                                                await updateUser(u.id, { role: 'visitor' });
-                                                                setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, role: 'visitor' } : user));
-                                                                showToast(`Permisos de administrador quitados a ${u.name || 'este usuario'}`, 'success');
-                                                            } catch (error) {
-                                                                console.error('Error demoting admin:', error);
-                                                                showToast('Error al quitar permisos de administrador', 'error');
-                                                            }
-                                                        }
-                                                    }}
-                                                    className="py-3 px-4 rounded-2xl bg-slate-800 border border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:border-orange-500 hover:text-orange-500 transition-all flex items-center justify-center gap-2"
-                                                >
-                                                    <ShieldCheck className="w-3.5 h-3.5" />
-                                                    Quitar Admin
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        {userBusiness && (
-                                            <button
-                                                onClick={async () => {
-                                                    const newVerified = !userBusiness.isVerified;
-                                                    const confirmed = await showConfirm(
-                                                        `¿${newVerified ? 'Verificar' : 'Quitar verificación'} a ${userBusiness.name}?`,
-                                                        'Verificación de Negocio'
-                                                    );
-                                                    if (confirmed) {
-                                                        try {
-                                                            await updateBusiness(userBusiness.id, { isVerified: newVerified });
-                                                            setBusinesses(prev => prev.map(b => b.id === userBusiness.id ? { ...b, isVerified: newVerified } : b));
-                                                            showToast(`Estado de negocio de ${userBusiness.name} actualizado`, 'success');
-                                                        } catch (error) {
-                                                            console.error('Error verifying business:', error);
-                                                            showToast('Error al verificar el negocio', 'error');
-                                                        }
-                                                    }
-                                                }}
-                                                className={`w-full py-3 px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${userBusiness.isVerified
-                                                    ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
-                                                    : 'bg-slate-800/50 border-orange-500/20 text-orange-400'
-                                                    }`}
-                                            >
-                                                <CheckCircle className={`w-3.5 h-3.5 ${userBusiness.isVerified ? 'fill-current' : ''}`} />
-                                                <span>{userBusiness.isVerified ? 'Negocio Verificado' : 'Verificar Negocio'}</span>
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Admin Business Management (Red Theme) */}
-                                    <div className="mt-6 pt-6 border-t border-white/5 space-y-3">
-                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-500/60 px-2 italic">
-                                            Gestión de Negocio / Puntos (Solo Admin)
-                                        </p>
-                                        
-                                        {!userBusiness ? (
-                                            <button
-                                                onClick={async () => {
-                                                    const businessName = await showPrompt(
-                                                        `Nombre del negocio para ${u.name || 'este usuario'}:`,
-                                                        'Crear Nuevo Negocio',
-                                                        'Mi Negocio Pulse'
-                                                    );
-                                                    
-                                                    if (businessName) {
-                                                        const existing = businesses.find(b => b.name.toLowerCase().trim() === businessName.toLowerCase().trim());
-                                                        const deleted = deletedBusinesses.find(b => b.name.toLowerCase().trim() === businessName.toLowerCase().trim());
-                                                        const duplicate = existing || deleted;
-
-                                                        if (duplicate) {
-                                                            const merge = await showConfirm(`Ya existe un negocio con el nombre "${businessName}" en el sistema ${deleted ? '(está en la papelera)' : ''}.\n\n¿Deseas ASIGNAR el negocio existente a este usuario en lugar de crear uno nuevo?`, 'Negocio Duplicado');
-                                                            if (merge) {
-                                                                try {
-                                                                    await updateBusiness(duplicate.id, { ownerId: u.id, isDeleted: false, isPublished: true });
-                                                                    await updateUser(u.id, { businessId: duplicate.id });
-                                                                    setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, businessId: duplicate.id } : user));
-                                                                    
-                                                                    if (deleted) {
-                                                                        // Mover de deleted a active en el estado local
-                                                                        setBusinesses(prev => [...prev, { ...duplicate, ownerId: u.id, isDeleted: false, isPublished: true }]);
-                                                                        // No es necesario actualizar handleRestoreBusiness localmente si se hace vía update
-                                                                    } else {
-                                                                        setBusinesses(prev => prev.map(b => b.id === duplicate.id ? { ...b, ownerId: u.id, isDeleted: false, isPublished: true } : b));
-                                                                    }
-                                                                    
-                                                                    showToast(`Negocio "${duplicate.name}" asignado correctamente.`, 'success');
-                                                                    return;
-                                                                } catch (error) {
-                                                                    showToast('Error al reasignar negocio.', 'error');
-                                                                    return;
-                                                                }
-                                                            }
-                                                        }
-
-                                                        const confirmed = await showConfirm(
-                                                            `¿Confirmas la creación del negocio "${businessName}" para ${u.email}?`,
-                                                            'Confirmar Creación'
-                                                        );
-                                                        
-                                                        if (confirmed) {
-                                                            try {
-                                                                const newBusinessId = await createBusiness({
-                                                                    name: businessName,
-                                                                    ownerId: u.id,
-                                                                    plan: u.plan || SubscriptionPlan.FREE,
-                                                                    isVerified: true,
-                                                                    description: 'Negocio gestionado por administración.',
-                                                                    sector: 'Centro' as any,
-                                                                    imageUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800',
-                                                                    category: 'Restaurante' as any,
-                                                                    coordinates: [-0.747, -80.752]
-                                                                });
-
-                                                                await updateUser(u.id, { businessId: newBusinessId });
-                                                                setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, businessId: newBusinessId } : user));
-                                                                showToast(`Negocio "${businessName}" creado con éxito`, 'success');
-                                                            } catch (error) {
-                                                                console.error('Error creating admin business:', error);
-                                                                showToast('Error al crear el negocio', 'error');
-                                                            }
-                                                        }
-                                                    }
-                                                }}
-                                                className="w-full py-4 px-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
-                                            >
-                                                <Building2 className="w-4 h-4" />
-                                                Crear Negocio para Usuario
-                                            </button>
-                                        ) : (
-                                            <div className="flex flex-col gap-3">
-                                                <div className={`p-4 rounded-2xl border ${isDeleted ? 'bg-red-500/10 border-red-500/30' : 'bg-red-500/5 border-red-500/10'}`}>
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <span className={`text-[10px] font-bold uppercase ${isDeleted ? 'text-red-400' : 'text-red-500/70'}`}>
-                                                            {isDeleted ? 'EN PAPELERA' : 'Negocio Actual'}
-                                                        </span>
-                                                        <span className="text-[10px] font-black text-red-500 uppercase tracking-tighter">ID: {userBusiness.id.slice(0, 8)}...</span>
-                                                    </div>
-                                                    <p className={`text-sm font-black ${isDeleted ? 'text-red-400' : 'text-white'}`}>{userBusiness.name}</p>
-                                                </div>
-                                                
-                                                {isDeleted ? (
-                                                    <button
-                                                        onClick={() => {
-                                                            handleRestoreBusiness(userBusiness.id);
-                                                            showToast(`Negocio "${userBusiness.name}" restaurado`, 'success');
-                                                        }}
-                                                        className="w-full py-4 px-4 rounded-2xl bg-orange-500 text-black text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-                                                    >
-                                                        <ArrowUpRight className="w-4 h-4" />
-                                                        Restaurar Negocio
-                                                    </button>
-                                                ) : (
+                                        {/* Expandable Advanced Options */}
+                                        <details className="group/details mt-2 border border-white/5 rounded-xl bg-black/20 overflow-hidden">
+                                            <summary className="cursor-pointer text-[10px] font-bold text-slate-400 hover:text-white transition-colors flex items-center justify-between p-3 select-none hover:bg-white/5">
+                                                <span>Opciones Avanzadas</span>
+                                                <MoreHorizontal className="w-4 h-4 group-open/details:hidden" />
+                                                <ChevronLeft className="w-4 h-4 hidden group-open/details:block -rotate-90" />
+                                            </summary>
+                                            <div className="p-3 pt-3 space-y-2 border-t border-white/5 bg-black/40">
+                                                <div className="grid grid-cols-2 gap-2">
                                                     <button
                                                         onClick={async () => {
-                                                            const confirmed = await showConfirm(
-                                                                `¿Mover el negocio "${userBusiness.name}" a la Papelera de Reciclaje?`,
-                                                                'Mover a Papelera'
-                                                            );
-                                                            
-                                                            if (confirmed) {
+                                                            if (!canModify) { showToast('Denegado.', 'error'); return; }
+                                                            const n = !u.pulsePassActive;
+                                                            if (await showConfirm(`¿${n ? 'Activar' : 'Desactivar'} Pulse Pass?`, 'Pulse Pass')) {
                                                                 try {
-                                                                    await deleteBusiness(userBusiness.id, false); // false for soft delete
-                                                                    showToast(`Negocio movido a la papelera`, 'success');
-                                                                } catch (error) {
-                                                                    console.error('Error soft-deleting business:', error);
-                                                                    showToast('Error al mover a la papelera', 'error');
-                                                                }
+                                                                    await togglePulsePass(u.id, n);
+                                                                    setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, pulsePassActive: n } : user));
+                                                                    showToast('Actualizado', 'success');
+                                                                } catch (e) { showToast('Error', 'error'); }
                                                             }
                                                         }}
-                                                        className="w-full py-4 px-4 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
+                                                        className={`py-2 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 ${u.pulsePassActive ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 shadow-inner shadow-orange-500/10' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'}`}
                                                     >
-                                                        <Trash2 className="w-4 h-4" />
-                                                        Mover a Papelera
+                                                        <Zap className="w-3 h-3" /> Pulse: {u.pulsePassActive ? 'ON' : 'OFF'}
                                                     </button>
-                                                )}
+                                                    
+                                                    {userBusiness && (
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!canModify) { showToast('Denegado.', 'error'); return; }
+                                                                const v = !userBusiness.isVerified;
+                                                                if (await showConfirm(`¿${v ? 'Verificar' : 'Quitar verificación'}?`, 'Verificar')) {
+                                                                    try {
+                                                                        await updateBusiness(userBusiness.id, { isVerified: v });
+                                                                        setBusinesses(prev => prev.map(b => b.id === userBusiness.id ? { ...b, isVerified: v } : b));
+                                                                        showToast('Actualizado', 'success');
+                                                                    } catch (e) { showToast('Error', 'error'); }
+                                                                }
+                                                            }}
+                                                            className={`py-2 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 ${userBusiness.isVerified ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 shadow-inner shadow-orange-500/10' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'}`}
+                                                        >
+                                                            <CheckCircle className="w-3 h-3" /> {userBusiness.isVerified ? 'Verificado' : 'Verificar'}
+                                                        </button>
+                                                    )}
+                                                </div>
 
-                                                <button
-                                                    onClick={async () => {
-                                                        const confirmed = await showConfirm(
-                                                            `¿Confirmar ELIMINACIÓN PERMANENTE de "${userBusiness.name}"?\nEsta acción es irreversible y borrará el ID del usuario.`,
-                                                            'BORRADO DEFINITIVO'
-                                                        );
-                                                        
-                                                        if (confirmed) {
-                                                            try {
-                                                                await deleteBusiness(userBusiness.id, true); // true for permanent delete
-                                                                await updateUser(u.id, { businessId: "" });
-                                                                setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, businessId: "" } : user));
-                                                                showToast(`Negocio eliminado de forma permanente`, 'error');
-                                                            } catch (error) {
-                                                                console.error('Error hard-deleting business:', error);
-                                                                showToast('Error al eliminar definitivamente', 'error');
-                                                            }
-                                                        }
-                                                    }}
-                                                    className="w-full py-2 px-4 rounded-xl border border-red-900/40 text-red-900 text-[9px] font-black uppercase tracking-widest hover:bg-red-900 hover:text-white transition-all"
-                                                >
-                                                    Eliminación Irreversible
-                                                </button>
-
+                                                <div className="pt-1 border-t border-white/5 mt-2">
+                                                    {!userBusiness ? (
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!canModify) { showToast('Denegado.', 'error'); return; }
+                                                                const bName = await showPrompt(`Nombre del negocio:`, 'Crear Negocio', 'Mi Negocio');
+                                                                if (bName) {
+                                                                    const dup = businesses.find(b => b.name.toLowerCase() === bName.toLowerCase()) || deletedBusinesses.find(b => b.name.toLowerCase() === bName.toLowerCase());
+                                                                    if (dup) {
+                                                                        if (await showConfirm(`¿Asignar negocio existente "${dup.name}"?`, 'Duplicado')) {
+                                                                            try {
+                                                                                await updateBusiness(dup.id, { ownerId: u.id, isDeleted: false, isPublished: true });
+                                                                                await updateUser(u.id, { businessId: dup.id });
+                                                                                setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, businessId: dup.id } : user));
+                                                                                setBusinesses(prev => {
+                                                                                    if (deletedBusinesses.find(d => d.id === dup.id)) {
+                                                                                        return [...prev, { ...dup, ownerId: u.id, isDeleted: false, isPublished: true }];
+                                                                                    }
+                                                                                    return prev.map(b => b.id === dup.id ? { ...b, ownerId: u.id, isDeleted: false, isPublished: true } : b);
+                                                                                });
+                                                                                showToast('Negocio asignado', 'success');
+                                                                            } catch (e) { showToast('Error', 'error'); }
+                                                                        }
+                                                                        return;
+                                                                    }
+                                                                    if (await showConfirm(`¿Crear negocio "${bName}"?`, 'Confirmar')) {
+                                                                        try {
+                                                                            const nId = await createBusiness({
+                                                                                name: bName, ownerId: u.id, plan: u.plan || SubscriptionPlan.FREE,
+                                                                                isVerified: true, description: 'Negocio admin', sector: 'Centro' as any,
+                                                                                imageUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800',
+                                                                                category: 'Restaurante' as any, coordinates: [-0.747, -80.752]
+                                                                            });
+                                                                            await updateUser(u.id, { businessId: nId });
+                                                                            setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, businessId: nId } : user));
+                                                                            showToast('Creado', 'success');
+                                                                        } catch (e) { showToast('Error', 'error'); }
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className="mt-2 w-full py-2.5 px-3 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition-all flex justify-center items-center gap-1.5 shadow-inner shadow-red-500/10"
+                                                        >
+                                                            <Building2 className="w-3 h-3" /> Crear Negocio
+                                                        </button>
+                                                    ) : (
+                                                        <div className="flex gap-2 mt-2">
+                                                            {isDeleted ? (
+                                                                <button
+                                                                    onClick={() => { if (!canModify) return; handleRestoreBusiness(userBusiness.id); showToast('Restaurado', 'success'); }}
+                                                                    className="flex-1 py-2 px-2 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-[9px] font-black uppercase hover:bg-orange-500 hover:text-white transition-all text-center"
+                                                                >
+                                                                    Restaurar
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        if (!canModify) return;
+                                                                        if (await showConfirm('¿Mover a papelera?', 'Papelera')) {
+                                                                            try { await deleteBusiness(userBusiness.id, false); showToast('Movido', 'success'); } catch (e) {}
+                                                                        }
+                                                                    }}
+                                                                    className="flex-1 py-2 px-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-black uppercase hover:bg-red-500 hover:text-white transition-all text-center shadow-inner shadow-red-500/10"
+                                                                >
+                                                                    Papelera
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                onClick={async () => {
+                                                                    if (!canModify) return;
+                                                                    if (await showConfirm('¿Borrado IRREVERSIBLE?', '¡PELIGRO!')) {
+                                                                        try {
+                                                                            await deleteBusiness(userBusiness.id, true);
+                                                                            await updateUser(u.id, { businessId: "" });
+                                                                            setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, businessId: "" } : user));
+                                                                            showToast('Eliminado permanentemente', 'success');
+                                                                        } catch (e) {}
+                                                                    }
+                                                                }}
+                                                                className="flex-1 py-2 px-2 rounded-lg bg-black text-red-600 border border-red-900/50 text-[9px] font-black uppercase hover:bg-red-900 hover:text-white transition-all text-center"
+                                                            >
+                                                                Destruir
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        )}
+                                        </details>
                                     </div>
                                 </div>
                             </div>

@@ -77,6 +77,8 @@ export enum SubscriptionPlan {
   FREE = 'Free',
   BASIC = 'Basic',
   PREMIUM = 'Premium',
+  PRO = 'Pro',
+  ELITE = 'Elite',
   EXPERT = 'Expert'
 }
 
@@ -103,6 +105,14 @@ export interface UserProfile {
   points?: number;
   rating?: number;
   reviewCount?: number;
+  // Subscription tracking
+  subscriptionEndDate?: number;
+  paymentStatus?: 'pending' | 'active' | 'expired';
+  // Event/Announcement quota tracking
+  monthlyEventCount?: number;
+  monthlyAnnouncementCount?: number;
+  lastEventResetDate?: number;
+  lastAnnouncementResetDate?: number;
 }
 
 export interface Business {
@@ -292,9 +302,11 @@ export interface Announcement {
   imageUrl?: string;
   timestamp: any;
   recipientCount: number;
-  type: 'system' | 'offer' | 'alert' | 'info';
+  type: 'system' | 'offer' | 'alert' | 'info' | 'ventas' | 'novedad' | 'atencion' | 'urgente' | 'evento';
   target?: string;
   locality?: string;
+  vibe?: Vibe;
+  expiresAt?: any;
   scheduledAt?: any;
   roomMessages?: { roomId: string, messageId: string }[];
 }

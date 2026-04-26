@@ -50,6 +50,12 @@ service firebase.storage {
       allow write: if isAuthenticated() && (isValidImage() || isValidVideo());
     }
     
+    // Announcements - anyone can read, authenticated users can upload
+    match /announcements/{fileName} {
+      allow read: if true;
+      allow write: if isAuthenticated() && isValidImage();
+    }
+
     // Default - deny everything
     match /{allPaths=**} {
       allow read, write: if false;

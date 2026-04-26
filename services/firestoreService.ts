@@ -20,7 +20,7 @@ import {
     arrayRemove
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, ProfileReview, PulseNotification, Announcement } from '../types';
+import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, ProfileReview, PulseNotification, Announcement, SubscriptionPlan } from '../types';
 
 // Helper to sanitize data for Firestore
 const sanitizeData = (data: any): any => {
@@ -109,8 +109,16 @@ export const addProfileReview = async (review: ProfileReview) => {
 
 // ==================== EVENTS ====================
 
-export const createEvent = async (event: Omit<MontanitaEvent, 'id'>) => {
+export const createEvent = async (event: Omit<MontanitaEvent, 'id'>, userPlan?: SubscriptionPlan, hasBusiness?: boolean) => {
     try {
+        // Validate plan for event creation (client-side + server-side via rules)
+        if (!hasBusiness) {
+            const validPlans = [SubscriptionPlan.PREMIUM, SubscriptionPlan.PRO, SubscriptionPlan.ELITE, SubscriptionPlan.EXPERT];
+            if (userPlan === SubscriptionPlan.FREE || !validPlans.includes(userPlan as SubscriptionPlan)) {
+                throw new Error('UPGRADE_REQUIRED');
+            }
+        }
+
         const eventsRef = collection(db, 'events');
         const docRef = await addDoc(eventsRef, {
             ...sanitizeData(event),
@@ -120,6 +128,9 @@ export const createEvent = async (event: Omit<MontanitaEvent, 'id'>) => {
         });
         return docRef.id;
     } catch (error) {
+        if ((error as Error).message === 'UPGRADE_REQUIRED') {
+            throw error;
+        }
         console.error('Error creating event:', error);
         throw error;
     }
@@ -739,7 +750,12 @@ export const subscribeToPosts = (callback: (posts: any[]) => void) => {
     }, (error) => handleFirestoreError(error, 'subscribeToPosts'));
 };
 
-export const createPost = async (post: any) => {
+export const createPost = async (post: any, isAuthenticated: boolean = false) => {
+    // Validate user is authenticated before creating post
+    if (!isAuthenticated) {
+        throw new Error('AUTH_REQUIRED');
+    }
+    
     try {
         const postsRef = collection(db, 'posts');
         await addDoc(postsRef, {
@@ -751,6 +767,9 @@ export const createPost = async (post: any) => {
             commentsCount: 0
         });
     } catch (error) {
+        if ((error as Error).message === 'AUTH_REQUIRED') {
+            throw error;
+        }
         console.error('Error creating post:', error);
         throw error;
     }
@@ -1187,9 +1206,27 @@ export const markNotificationRead = async (notificationId: string) => {
 export const createAnnouncement = async (announcement: Omit<Announcement, 'id' | 'timestamp'>) => {
     try {
         const announcementsRef = collection(db, 'announcements');
+        
+        // Calculate expiration
+        const expiresAt = new Date();
+        if (announcement.type === 'ventas' || announcement.type === 'offer') {
+            // Oferta: 7 days
+            expiresAt.setDate(expiresAt.getDate() + 7);
+        } else if (announcement.type === 'urgente' || announcement.type === 'system' || announcement.type === 'alert') {
+            // Alerta & Sistema: 24 hours
+            expiresAt.setDate(expiresAt.getDate() + 1);
+        } else if (announcement.type === 'evento') {
+            // Evento: 72 hours (3 days)
+            expiresAt.setDate(expiresAt.getDate() + 3);
+        } else {
+            // Default: 24 hours (as per user request "todos los mensajes se borrarán automaticamente")
+            expiresAt.setDate(expiresAt.getDate() + 1);
+        }
+
         await addDoc(announcementsRef, {
             ...sanitizeData(announcement),
-            timestamp: serverTimestamp()
+            timestamp: serverTimestamp(),
+            expiresAt: Timestamp.fromDate(expiresAt)
         });
     } catch (error) {
         console.error('Error creating announcement:', error);
@@ -1199,13 +1236,24 @@ export const createAnnouncement = async (announcement: Omit<Announcement, 'id' |
 
 export const subscribeToAnnouncements = (senderId: string, callback: (announcements: Announcement[]) => void) => {
     const announcementsRef = collection(db, 'announcements');
-    const q = query(announcementsRef, where('senderId', '==', senderId), orderBy('timestamp', 'desc'));
+    // Show all announcements - own + ones sent to "all" (mass broadcasts)
+    // We get all and filter client-side for "all" target OR own senderId
+    const q = query(announcementsRef, orderBy('timestamp', 'desc'));
     return onSnapshot(q, (snapshot) => {
-        const announcements = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            timestamp: doc.data().timestamp?.toDate() || new Date()
-        })) as Announcement[];
+        const announcements = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const expiresAt = data.expiresAt?.toDate();
+            return {
+                id: doc.id,
+                ...data,
+                timestamp: data.timestamp?.toDate() || new Date(),
+                expiresAt
+            };
+        }).filter(a => {
+            const isVisible = a.target === 'all' || a.senderId === senderId;
+            const isNotExpired = !a.expiresAt || a.expiresAt > new Date();
+            return isVisible && isNotExpired;
+        }) as Announcement[];
         callback(announcements);
     }, (error) => handleFirestoreError(error, 'subscribeToAnnouncements'));
 };

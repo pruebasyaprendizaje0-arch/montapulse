@@ -502,19 +502,8 @@ export const Explore: React.FC<ExploreProps> = ({
                         )}
                     </div>
 
-                    {/* Quick Tools Bar */}
-                    <div className="flex items-center gap-2 pointer-events-auto">
-                        <button
-                            onClick={() => setShowPlannerChat(true)}
-                            className="px-6 py-2.5 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl flex items-center gap-2.5 hover:bg-slate-900 transition-all shadow-xl hover:scale-105 active:scale-95 group"
-                        >
-                            <div className="relative">
-                                <Zap className="w-4 h-4 text-amber-500 font-black" />
-                                <div className="absolute inset-0 bg-amber-500/10 blur-sm rounded-full" />
-                            </div>
-                            <span className="text-[10px] font-black text-white italic tracking-tighter uppercase tracking-widest">24h Planner</span>
-                        </button>
-
+                    {/* Quick Tools Bar -hidden- */}
+                    <div className="hidden pointer-events-auto">
                         {(isAdmin || isSuperAdmin) && (
                             <button
                                 onClick={async () => {
@@ -609,6 +598,13 @@ export const Explore: React.FC<ExploreProps> = ({
 
                         {/* Top Tab Switcher */}
                         <div className="flex p-1.5 bg-black/40 backdrop-blur-3xl rounded-[2rem] border border-white/5 mb-8 ring-1 ring-white/5 mx-2">
+                            <button
+                                onClick={() => setIsPanelMinimized(true)}
+                                className="flex items-center justify-center gap-2 py-3 px-4 rounded-[1.6rem] transition-all duration-500 text-slate-400 hover:text-white hover:bg-white/5"
+                            >
+                                <MapPin className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t('explore.seeMap')}</span>
+                            </button>
                             <button
                                 onClick={() => setActiveTab(activeTab === 'events' ? null : 'events')}
                                 className={`flex-1 flex items-center justify-center gap-3 py-3.5 rounded-[1.6rem] transition-all duration-500 relative overflow-hidden group ${activeTab === 'events' ? 'text-white shadow-2xl shadow-sky-500/20' : 'text-slate-500 hover:text-slate-300'}`}
@@ -716,16 +712,7 @@ export const Explore: React.FC<ExploreProps> = ({
                                         <Layers className="w-4 h-4" />
                                     </button>
                                 )}
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setIsPanelMinimized(true);
-                                    }}
-                                    className="bg-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-white px-4 py-2.5 rounded-2xl border border-white/5 transition-all flex items-center gap-2 lg:hidden"
-                                >
-                                    <MapPin className="w-4 h-4" />
-                                    <span className="text-[11px] font-black uppercase tracking-wider">{t('explore.seeMap')}</span>
-                                </button>
+                                
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();

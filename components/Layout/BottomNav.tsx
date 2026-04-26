@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, User, MessageSquare, Home, Info } from 'lucide-react';
+import { Calendar, User, Bell, Home, Info } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useData } from '../../context/DataContext';
@@ -8,14 +8,14 @@ export const BottomNav: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { t } = useTranslation();
-    const { setActiveView, unreadChatCount, markAllRoomsAsRead } = useData();
+    const { setActiveView } = useData();
     const currentPath = location.pathname;
 
     const navItems = [
         { id: 'home', icon: Home, label: 'HOME', path: '/', action: null },
         { id: 'info', icon: Info, label: 'INFO', path: '/info', action: null },
         { id: 'events', icon: Calendar, label: 'PULSOS', path: '/calendar', action: null },
-        { id: 'chat', icon: MessageSquare, label: 'COMUNIDAD', path: '/community', action: null },
+        { id: 'notifications', icon: Bell, label: 'NOTIFICACIONES', path: '/community', action: null },
         { id: 'profile', icon: User, label: 'PASSPORT', path: '/passport', action: 'favorites' }
     ] as const;
 
@@ -41,24 +41,16 @@ export const BottomNav: React.FC = () => {
                                 navigate('/passport');
                                 return;
                             }
-                            if (item.id === 'chat' && unreadChatCount > 0) {
-                                navigate('/community', { state: { subTab: 'directos' } });
-                                markAllRoomsAsRead();
-                                return;
-                            }
+
                             if (item.path) {
                                 navigate(item.path);
                             }
                         }}
                         className="relative flex flex-col items-center gap-1 group py-2 flex-1 transition-all"
                     >
-                        <div className={`relative transition-all duration-500 ${active ? 'text-orange-500 scale-110 -translate-y-0.5' : 'text-slate-500 group-hover:text-slate-300'}`}>
+                        <div className={`relative flex items-center justify-center w-10 h-10 transition-all duration-500 ${active ? 'text-orange-500 scale-110 -translate-y-0.5' : 'text-slate-500 group-hover:text-slate-300'}`}>
                             <Icon className={`w-5 h-5 ${active ? 'fill-orange-500/10 stroke-[2.5px]' : 'stroke-2'}`} />
-                            {item.id === 'chat' && unreadChatCount > 0 && (
-                                <div className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center border-2 border-slate-900 shadow-md">
-                                    {unreadChatCount}
-                                </div>
-                            )}
+
                         </div>
                         <span className={`text-[8px] font-black uppercase tracking-[0.15em] transition-all duration-300 leading-none mt-1 ${active ? 'text-orange-500 scale-105' : 'text-slate-600 group-hover:text-slate-400'}`}>
                             {item.label}

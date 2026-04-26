@@ -1,81 +1,292 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to check if user is admin
+    
+    // ========== HELPER FUNCTIONS ==========
+    
+    // Get user document from Firestore
+    function getUserData() {
+      return get(/databases/$(database)/documents/users_v2/$(request.auth.uid)).data;
+    }
+    
+    // Check if user is admin
     function isAdmin() {
       return request.auth != null && 
-        (get(/databases/$(database)/documents/users_v2/$(request.auth.uid)).data.role == 'admin' || 
-         request.auth.token.admin == true);
+        (getUserData().role == 'admin' || request.auth.token.admin == true);
     }
-
-    // Helper to check ownership
-    function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
+    
+    // Check if user is Expert (internal admin with unlimited access)
+    function isExpert() {
+      return request.auth != null && getUserData().plan == 'Expert';
     }
-
+    
+    // Check if user owns a specific business
+    function isBusinessOwner(businessId) {
+      return request.auth != null && 
+        get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid;
+    }
+    
+    // Check if user is registered (authenticated)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if subscription is active and not expired
+    function hasActiveSubscription() {
+      let userData = getUserData();
+      let plan = userData.plan;
+      
+      return plan == 'Expert' || 
+             plan == 'Free' || 
+             plan == 'Basic' || 
+             ((plan == 'Pro' || plan == 'Elite') && 
+              userData.subscriptionEndDate != null && 
+              userData.subscriptionEndDate > request.time.toMillis());
+    }
+    
+    // Get user's current plan
+    function getUserPlan() {
+      return getUserData().plan;
+    }
+    
+    // Get event count for current billing period (monthly reset)
+    function getEventCount() {
+      let userData = getUserData();
+      let lastReset = userData.lastEventResetDate;
+      let currentCount = userData.monthlyEventCount != null ? userData.monthlyEventCount : 0;
+      let now = request.time.toMillis();
+      
+      // Reset if more than 30 days since last reset
+      return (lastReset == null || (now - lastReset) > 30 * 24 * 60 * 60 * 1000) ? 0 : currentCount;
+    }
+    
+    // Get announcement count for current billing period
+    function getAnnouncementCount() {
+      let userData = getUserData();
+      let lastReset = userData.lastAnnouncementResetDate;
+      let currentCount = userData.monthlyAnnouncementCount != null ? userData.monthlyAnnouncementCount : 0;
+      let now = request.time.toMillis();
+      
+      return (lastReset == null || (now - lastReset) > 30 * 24 * 60 * 60 * 1000) ? 0 : currentCount;
+    }
+    
+    // Check if user can create events based on their plan
+    function canCreateEvent() {
+      let plan = getUserPlan();
+      let count = getEventCount();
+      
+      return plan == 'Expert' || 
+             (plan == 'Elite' && count < 10) || 
+             (plan == 'Pro' && count < 5);
+    }
+    
+    // Check if user can create announcements based on their plan
+    function canCreateAnnouncement() {
+      let plan = getUserPlan();
+      let count = getAnnouncementCount();
+      
+      return plan == 'Expert' || 
+             (plan == 'Elite' && count < 10) || 
+             (plan == 'Pro' && count < 5);
+    }
+    
+    // ========== COLLECTION RULES ==========
+    
+    // --- USERS_V2 (User Profiles) ---
     match /users_v2/{userId} {
-      // Admins can do anything. Users can read/write their own profile.
-      // Allow 'get' for public profile viewing (limited fields should be handled by app logic, 
-      // but Firestore rules can only restrict the whole doc or specific fields via 'list')
-      allow read: if true; 
-      allow write: if isAdmin() || isOwner(userId);
+      allow read: if true;
+      allow write: if request.auth != null && (
+        request.auth.uid == userId || isAdmin()
+      );
     }
-
+    
+    // --- BUSINESSES ---
     match /businesses/{businessId} {
       allow read: if true;
-      // Only admins or the owner of the business can write
-      allow write: if isAdmin() || 
-        (request.auth != null && request.auth.uid == resource.data.ownerId) ||
-        (request.auth != null && !exists(/databases/$(database)/documents/businesses/$(businessId))); // Allow creation
+      
+      // Registered users with active subscription can create
+      allow create: if request.auth != null && 
+                   hasActiveSubscription();
+      
+      // Owner, admin, or expert can update
+      allow update: if request.auth != null && (
+        isBusinessOwner(businessId) || 
+        isAdmin() || 
+        isExpert()
+      );
+      
+      // Only admin or expert can delete
+      allow delete: if isAdmin() || isExpert();
     }
-
+    
+    // --- EVENTS ---
     match /events/{eventId} {
       allow read: if true;
-      // Only admins or the host who created the event can write
-      allow write: if isAdmin() || 
-        (request.auth != null && (get(/databases/$(database)/documents/users_v2/$(request.auth.uid)).data.role == 'host' || isAdmin()));
+      
+      // Only Pro/Elite/Expert can create events (with quota)
+      allow create: if request.auth != null && 
+                   hasActiveSubscription() &&
+                   canCreateEvent();
+      
+      // Owner, business owner, admin, or expert can update
+      allow update: if request.auth != null && (
+        resource.data.ownerId == request.auth.uid ||
+        isBusinessOwner(resource.data.businessId) ||
+        isAdmin() || 
+        isExpert()
+      );
+      
+      // Only owner, business owner, admin, or expert can delete
+      allow delete: if request.auth != null && (
+        resource.data.ownerId == request.auth.uid ||
+        isBusinessOwner(resource.data.businessId) ||
+        isAdmin() || 
+        isExpert()
+      );
     }
-
-    match /follows/{followId} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    
+    // --- ANNOUNCEMENTS ---
+    match /announcements/{announcementId} {
+      // Anyone can read published announcements
+      allow read: if resource.data.isPublished == true || 
+                   request.auth != null;
+      
+      // Only Pro/Elite/Expert can create (with quota)
+      allow create: if request.auth != null && 
+                   hasActiveSubscription() &&
+                   canCreateAnnouncement();
+      
+      // Owner, business owner, admin, or expert can update
+      allow update: if request.auth != null && (
+        resource.data.senderId == request.auth.uid ||
+        isBusinessOwner(resource.data.businessId) ||
+        isAdmin() || 
+        isExpert()
+      );
+      
+      // Only sender, business owner, admin, or expert can delete
+      allow delete: if request.auth != null && (
+        resource.data.senderId == request.auth.uid ||
+        isBusinessOwner(resource.data.businessId) ||
+        isAdmin() || 
+        isExpert()
+      );
     }
-
-    match /favorites/{favId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow write: if request.auth != null && request.auth.uid == request.resource.data.userId;
-    }
-
-    match /rsvps/{rsvpId} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == request.resource.data.userId;
-    }
-
+    
+    // --- REVIEWS (Business Reviews) ---
     match /businessReviews/{reviewId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if isAdmin() || (request.auth != null && request.auth.uid == resource.data.userId);
+      allow create: if request.auth != null && hasActiveSubscription();
+      allow update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin() || isExpert()
+      );
     }
-
-    match /app_settings/{document=**} {
+    
+    // --- NOTIFICATIONS ---
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && 
+                   resource.data.userId == request.auth.uid;
+      // Only authenticated users can create (system notifications)
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin() || isExpert()
+      );
+    }
+    
+    // --- POSTS (Community Posts) ---
+    match /posts/{postId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if request.auth != null && (
+        resource.data.authorId == request.auth.uid ||
+        isAdmin() || isExpert()
+      );
     }
-
-    match /chat_rooms/{roomId} {
-      allow read, write: if request.auth != null && (request.auth.uid in resource.data.participants || isAdmin());
+    
+    // --- FOLLOWS ---
+    match /follows/{followId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+                   request.auth.uid == request.resource.data.userId;
+      allow delete: if request.auth != null && 
+                   request.auth.uid == resource.data.userId;
+    }
+    
+    // --- FAVORITES ---
+    match /favorites/{favId} {
+      allow read: if request.auth != null && 
+                   resource.data.userId == request.auth.uid;
+      allow write: if request.auth != null && 
+                   request.auth.uid == request.resource.data.userId;
+    }
+    
+    // --- RSVPS ---
+    match /rsvps/{rsvpId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+                   request.auth.uid == request.resource.data.userId;
+    }
+    
+    // --- PULSO_GLOBAL ---
+    match /pulso_global/{msgId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // --- APP_SETTINGS ---
+    match /app_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() || isExpert();
+    }
+    
+    // --- APPSETTINGS (CamelCase) ---
+    match /appSettings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() || isExpert();
+    }
+    
+    // --- SETTINGS ---
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() || isExpert();
+    }
+    
+    // --- CUSTOM_LOCALITIES ---
+    match /customLocalities/{localityId} {
+      allow read: if true;
+      allow write: if isAdmin() || isExpert();
+    }
+    
+    // --- CHAT_ROOMS ---
+    match /chatRooms/{roomId} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid in resource.data.participants ||
+        isAdmin() || isExpert()
+      );
       allow create: if request.auth != null;
-    }
 
-    match /messages/{messageId} {
-      allow read: if request.auth != null;
+      // --- ROOM MESSAGES ---
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+    
+    // --- SUBSCRIPTIONS (Payment Records) ---
+    match /subscriptions/{subscriptionId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
       allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
-
-    // Comprehensive fallback for any other collections - DENY by default for safety
+    
+    // --- DEFAULT (Catch-all for unlisted collections) ---
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAdmin() || isExpert();
     }
   }
 }

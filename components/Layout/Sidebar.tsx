@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Calendar, User, MessageSquare, Home, Heart, History, Star, Users, Layout, Info, Building2, Clock, Sun, Moon, LogOut } from 'lucide-react';
+import { Compass, Calendar, User, Bell, Home, Heart, History, Star, Users, Layout, Info, Building2, Clock, Sun, Moon, LogOut } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,7 @@ export const Sidebar: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { t } = useTranslation();
-    const { isNearbyMinimized, setIsNearbyMinimized, setActiveView, unreadChatCount, markAllRoomsAsRead } = useData();
+    const { isNearbyMinimized, setIsNearbyMinimized, setActiveView } = useData();
     const { theme, setTheme, isAuto, setIsAuto } = useTheme();
     const currentPath = location.pathname;
 
@@ -19,7 +19,7 @@ export const Sidebar: React.FC = () => {
         { id: 'explore', icon: Compass, label: 'MAPA PULSE', path: '/explore', action: null },
         { id: 'events', icon: Calendar, label: 'EVENTOS', path: '/calendar', action: null },
         { id: 'favorites', icon: Heart, label: 'PASSPORT', path: '/passport', action: 'favorites' },
-        { id: 'chat', icon: MessageSquare, label: 'COMUNIDAD', path: '/community', action: null },
+        { id: 'notifications', icon: Bell, label: 'NOTIFICACIONES', path: '/community', action: null },
         { id: 'history', icon: History, label: 'HISTORIAL', path: '/history', action: null },
         { id: 'plans', icon: Star, label: 'PLANES', path: '/plans', action: null },
     ] as const;
@@ -58,11 +58,7 @@ export const Sidebar: React.FC = () => {
                                     navigate('/passport');
                                     return;
                                 }
-                                if (item.id === 'chat' && unreadChatCount > 0) {
-                                    navigate('/community', { state: { subTab: 'directos' } });
-                                    markAllRoomsAsRead();
-                                    return;
-                                }
+
                                 if (item.path) navigate(item.path);
                             }}
                             className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 group ${
@@ -75,15 +71,7 @@ export const Sidebar: React.FC = () => {
                             <span className={`text-xs font-black uppercase tracking-widest ${active ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>
                                 {item.label}
                             </span>
-                            {item.id === 'chat' && unreadChatCount > 0 && (
-                                <div className="ml-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
-                                    {unreadChatCount}
-                                </div>
-                            )}
-                            {active && item.id !== 'chat' && (
-                                <div className="ml-auto w-1.5 h-1.5 bg-orange-500 rounded-full shadow-[0_0_10px_#f97316]" />
-                            )}
-                            {active && item.id === 'chat' && unreadChatCount === 0 && (
+                            {active && (
                                 <div className="ml-auto w-1.5 h-1.5 bg-orange-500 rounded-full shadow-[0_0_10px_#f97316]" />
                             )}
                         </button>
@@ -92,7 +80,7 @@ export const Sidebar: React.FC = () => {
 
                 {isSuperAdmin && (
                     <div className="pt-6 mt-6 border-t border-white/5 space-y-2">
-                        <p className="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Master Admin</p>
+                        <p className="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">King Admin</p>
                         <button
                             onClick={() => navigate('/admin-users')}
                             className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 group ${

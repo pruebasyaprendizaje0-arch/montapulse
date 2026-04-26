@@ -18,7 +18,7 @@ const EventEditorModal = lazy(() => import('./components/Modals/EventEditorModal
 const PublicProfileModal = lazy(() => import('./components/PublicProfileModal.tsx').then(m => ({ default: m.PublicProfileModal })));
 
 // Lazy load pages for better performance
-const Community = lazy(() => import('./pages/Community.tsx').then(m => ({ default: m.Community })));
+const Notifications = lazy(() => import('./pages/Notifications.tsx').then(m => ({ default: m.Notifications })));
 const Passport = lazy(() => import('./pages/Passport.tsx').then(m => ({ default: m.Passport })));
 const Explore = lazy(() => import('./pages/Explore.tsx').then(m => ({ default: m.Explore })));
 const InfoPage = lazy(() => import('./pages/InfoPage.tsx').then(m => ({ default: m.InfoPage })));
@@ -361,7 +361,7 @@ const Dashboard: React.FC = () => {
         return <Suspense fallback={<PageLoader />}><Plans /></Suspense>;
       case 'community':
       case 'chat':
-        return <Suspense fallback={<PageLoader />}><Community /></Suspense>;
+        return <Suspense fallback={<PageLoader />}><Notifications /></Suspense>;
       case 'admin-users':
         return <Suspense fallback={<PageLoader />}><AdminUsers /></Suspense>;
       case 'policies':
@@ -419,9 +419,14 @@ const Dashboard: React.FC = () => {
               <div className="flex items-center gap-2.5 pr-2">
                 <div className="flex flex-col items-end">
                   <span className="text-[10px] font-black uppercase tracking-tighter hidden sm:inline">{user.name}</span>
-                  {isSuperAdmin && (
-                    <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 leading-none">Master Admin</span>
-                  )}
+                  <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border leading-none ${
+                    user.role === 'admin' ? 'text-amber-500 bg-amber-500/10 border-amber-500/20' :
+                    user.role === 'host' ? 'text-blue-500 bg-blue-500/10 border-blue-500/20' :
+                    'text-green-500 bg-green-500/10 border-green-500/20'
+                  }`}>
+                    {user.role === 'admin' ? (isSuperAdmin ? 'King Admin' : 'Admin') : 
+                     user.role === 'host' ? 'Host' : 'Visitor'}
+                  </span>
                 </div>
                 <div className="w-8 h-8 rounded-xl border border-orange-500/50 overflow-hidden ring-2 ring-orange-500/20 shadow-lg">
                   <img src={user.avatarUrl} className="w-full h-full object-cover" alt="User avatar" />

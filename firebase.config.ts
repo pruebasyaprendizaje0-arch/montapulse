@@ -1,8 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import {
     initializeFirestore,
-    persistentLocalCache,
-    persistentSingleTabManager,
+    CACHE_SIZE_UNLIMITED,
     terminate,
     clearIndexedDbPersistence
 } from 'firebase/firestore';
@@ -22,9 +21,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 const db = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-        tabManager: persistentSingleTabManager({ forceOwnership: true })
-    })
+    cacheSizeBytes: CACHE_SIZE_UNLIMITED
 });
 
 const storage = getStorage(app);
@@ -41,6 +38,9 @@ const resetFirestoreCache = async () => {
         }
     } catch (error) {
         console.error('Error resetting Firestore cache:', error);
+        if (typeof window !== 'undefined') {
+            window.location.reload();
+        }
     }
 };
 

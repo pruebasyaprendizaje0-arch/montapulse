@@ -60,8 +60,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     if (!isMaster && (profile.role === 'admin' || authUserRole === 'admin')) {
                         console.warn(`Security Alert: User ${authUser.email} attempted to be admin but is unauthorized. Downgrading to visitor.`);
                         secureRole = 'visitor';
-                    } else if (isMaster) {
+                    } else if (isMaster && !profile.role) {
                         secureRole = 'admin';
+                    } else if (isMaster) {
+                        secureRole = profile.role;
                     }
 
                     const profileUpdates: Partial<UserProfile> = {};

@@ -38,15 +38,16 @@ export const EventModal: React.FC<EventModalProps> = ({
 }) => {
     const sectorStyle = SECTOR_INFO[event.sector] || SECTOR_INFO[Sector.CENTRO];
     const eventDate = new Date(event.startAt);
+    const eventEndDate = event.endAt ? new Date(event.endAt) : null;
 
-    const formatDate = () => {
-        const day = eventDate.getDate();
-        const month = eventDate.toLocaleDateString('es-ES', { month: 'short' });
+    const formatDate = (date: Date) => {
+        const day = date.getDate();
+        const month = date.toLocaleDateString('es-ES', { month: 'short' });
         return `${day} ${month}`;
     };
 
-    const formatTime = () => {
-        return eventDate.toLocaleTimeString('es-ES', {
+    const formatTime = (date: Date) => {
+        return date.toLocaleTimeString('es-ES', {
             hour: '2-digit',
             minute: '2-digit',
             hour12: false
@@ -267,8 +268,12 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                 </div>
                                 <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Horario</span>
                             </div>
-                            <p className="text-white font-black text-lg">{formatDate()}, {formatTime()}</p>
-                            <p className="text-slate-400 text-xs mt-1">Hasta {eventDate.getHours() + 3}:00</p>
+                            <p className="text-white font-black text-lg">{formatDate(eventDate)}, {formatTime(eventDate)}</p>
+                            {eventEndDate && (
+                                <p className="text-slate-400 text-xs mt-1">
+                                    Hasta {formatDate(eventEndDate)}, {formatTime(eventEndDate)}
+                                </p>
+                            )}
                         </div>
 
                         <div className="bg-slate-800/50 rounded-2xl p-4 border border-white/5">

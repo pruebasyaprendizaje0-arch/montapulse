@@ -259,12 +259,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         [SubscriptionPlan.FREE]: 'Free',
         [SubscriptionPlan.BASIC]: 'Pulse Pro',
         [SubscriptionPlan.PREMIUM]: 'Pulse Elite',
+        [SubscriptionPlan.PRO]: 'Pulse Pro',
+        [SubscriptionPlan.ELITE]: 'Pulse Elite',
         [SubscriptionPlan.EXPERT]: 'Pulse Expert'
     });
     const [planSubtitles, setPlanSubtitles] = useState<Record<SubscriptionPlan, string>>({
         [SubscriptionPlan.FREE]: 'Tu inicio en la comunidad.',
         [SubscriptionPlan.BASIC]: 'Visibilidad potenciada.',
         [SubscriptionPlan.PREMIUM]: 'Máximo alcance y control.',
+        [SubscriptionPlan.PRO]: 'Crea hasta 4 pulsos/mes.',
+        [SubscriptionPlan.ELITE]: 'Crea hasta 10 pulsos/mes.',
         [SubscriptionPlan.EXPERT]: 'Solución total para tu negocio.'
     });
     const [selectedEvent, setSelectedEvent] = useState<MontanitaEvent | null>(null);
@@ -1621,16 +1625,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 };
 
                 try {
+                    // Pass user plan and business flag for server-side validation
+                    const userPlan = user?.plan || SubscriptionPlan.FREE;
+                    const hasBusiness = !!userBusiness;
+                    
                     if (editingEventId) {
                         await updateEvent(editingEventId, eventData);
                     } else {
-                        await createEvent(eventData);
+                        // This will throw 'UPGRADE_REQUIRED' if user is on FREE plan without business
+                        await createEvent(eventData, userPlan, hasBusiness);
                     }
                     setShowHostWizard(false);
                     setEditingEventId(null);
                     setGeneratedDesc('');
                     showToast("Evento guardado correctamente", "success");
-                } catch (error) {
+                } catch (error: any) {
+                    // Handle upgrade required error - show upgrade modal
+                    if (error?.message === 'UPGRADE_REQUIRED' || error?.code === 'UPGRADE_REQUIRED') {
+                        showToast("Necesitas un plan Pro o superior para crear eventos.", "info");
+                        // TODO: Trigger upgrade modal here
+                        return;
+                    }
                     console.error("Error saving event:", error);
                     showToast("Error al guardar el pulso.", "error");
                 }
@@ -1779,7 +1794,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             hasPreviousEvent,
             posts,
             handleCreatePost: async (content: string, imageUrl?: string) => {
-                if (!authUser) return;
+                // Block if not authenticated - visitor cannot post
+                if (!authUser) {
+                    showToast("Inicia sesión para publicar en la comunidad.", "info");
+                    return;
+                }
+                
                 const authorProfile = user || {
                     id: authUser.uid,
                     name: authUser.displayName?.split(' ')[0] || 'User',
@@ -1787,14 +1807,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     role: 'visitor',
                     avatarUrl: authUser.photoURL || undefined
                 };
-                await createPost({
-                    authorId: authUser.uid,
-                    authorName: `${authorProfile.name} ${authorProfile.surname}`,
-                    authorRole: (authorProfile as any).role || 'visitor',
-                    authorAvatar: authorProfile.avatarUrl || undefined,
-                    content,
-                    imageUrl
-                });
+                
+                try {
+                    await createPost({
+                        authorId: authUser.uid,
+                        authorName: `${authorProfile.name} ${authorProfile.surname}`,
+                        authorRole: (authorProfile as any).role || 'visitor',
+                        authorAvatar: authorProfile.avatarUrl || undefined,
+                        content,
+                        imageUrl
+                    }, !!authUser); // Pass authentication flag
+                    showToast("Publicación creada.", "success");
+                } catch (error: any) {
+                    if (error?.message === 'AUTH_REQUIRED') {
+                        showToast("Inicia sesión para publicar en la comunidad.", "info");
+                        return;
+                    }
+                    console.error("Error creating post:", error);
+                    showToast("Error al crear la publicación.", "error");
+                }
             },
             handleLikePost: async (postId: string) => {
                 if (!authUser) return;

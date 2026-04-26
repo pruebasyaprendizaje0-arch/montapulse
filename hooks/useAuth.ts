@@ -14,32 +14,25 @@ export const useAuth = () => {
             setUser(authUser);
 
             if (authUser) {
-                // PRIMERO: Verificar si es el Super Admin por correo
-                // Esto garantiza que solo TU correo tenga acceso total pase lo que pase en la BD
                 const superAdmin = isSuperAdmin(authUser.email);
 
-                if (superAdmin) {
-                    setIsAdmin(true);
-                    setUserRole('admin');
-                } else {
-                    // Si no es super admin, verificar su rol en la base de datos
-                    try {
-                        const profile = await getUser(authUser.uid);
-                        if (profile && profile.role) {
-                            // Si es admin en la BD o es super admin por correo
-                            const role = profile.role as UserRole;
-                            setUserRole(role);
-                            setIsAdmin(role === 'admin' || superAdmin);
-                        } else {
-                            // Si no tiene perfil, es un visitante
-                            setUserRole('visitor');
-                            setIsAdmin(false);
-                        }
-                    } catch (error) {
-                        console.error('Error fetching user role:', error);
-                        setUserRole('visitor');
-                        setIsAdmin(false);
+                try {
+                    const profile = await getUser(authUser.uid);
+                    if (profile && profile.role) {
+                        const role = profile.role as UserRole;
+                        setUserRole(role);
+                        // IsAdmin true if role is admin. We don't force isAdmin for superadmin
+                        // so they can test the app as visitor/host.
+                        setIsAdmin(role === 'admin');
+                    } else {
+                        // Si no tiene perfil, el superadmin por defecto es admin
+                        setUserRole(superAdmin ? 'admin' : 'visitor');
+                        setIsAdmin(superAdmin);
                     }
+                } catch (error) {
+                    console.error('Error fetching user role:', error);
+                    setUserRole(superAdmin ? 'admin' : 'visitor');
+                    setIsAdmin(superAdmin);
                 }
             } else {
                 setIsAdmin(false);

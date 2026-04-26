@@ -4,7 +4,7 @@ import { useAuthContext } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChatRoom as ChatRoomType, UserProfile, SubscriptionPlan, Business, Announcement } from '../types';
+import { ChatRoom as ChatRoomType, UserProfile, SubscriptionPlan, Business, Announcement, Vibe } from '../types';
 import { ChatRoom } from '../components/Chat/ChatRoom';
 import { MassBroadcastHistory } from '../components/Community/MassBroadcastHistory';
 import { subscribeToChatRooms, subscribeToUsers, createChatRoom, sendMessage, sendRoomMessage, deleteGlobalMessage, createAnnouncement, subscribeToAnnouncements, deleteAnnouncement, subscribeToActiveBoosts, purchaseBoost } from '../services/firestoreService';
@@ -102,6 +102,8 @@ export const Community: React.FC = () => {
     const massCameraInputRef = React.useRef<HTMLInputElement>(null);
     const [isSchedulingMassMessage, setIsSchedulingMassMessage] = useState(false);
     const [massMessageScheduledDate, setMassMessageScheduledDate] = useState<string>('');
+    const [massMessageVibeSelection, setMassMessageVibeSelection] = useState<'all' | 'specific'>('all');
+    const [massMessageSelectedVibe, setMassMessageSelectedVibe] = useState<Vibe | null>(null);
     // Group creation state (Premium businesses only)
     const [showCreateGroup, setShowCreateGroup] = useState(false);
     const [newGroupName, setNewGroupName] = useState('');
@@ -702,6 +704,15 @@ export const Community: React.FC = () => {
                 });
             }
 
+            if (massMessageVibeSelection === 'specific' && massMessageSelectedVibe) {
+                recipientIds = recipientIds.filter(rid => {
+                    const rUser = allUsers.find(u => u.id === rid);
+                    // Filter users by their preferred vibe
+                    if (rUser && rUser.preferredVibe === massMessageSelectedVibe) return true;
+                    return false;
+                });
+            }
+
             if (recipientIds.length === 0) {
                 showToast('No hay destinatarios que cumplan con los criterios seleccionados', 'warning');
                 setIsSendingMass(false);
@@ -1115,6 +1126,44 @@ export const Community: React.FC = () => {
                                     </div>
                                 )}
 
+                                {/* Vibe Targeting (Premium) */}
+                                {(massMessageTarget === 'all' || massMessageTarget === 'followers') && (
+                                    <div className="p-3 bg-slate-800/40 border border-white/5 rounded-2xl animate-in slide-in-from-top-2">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <p className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                                                <Sparkles className="w-3 h-3 text-purple-400" /> Vibes
+                                            </p>
+                                            <span className="text-[8px] font-black text-amber-500 uppercase bg-amber-500/10 px-2 py-0.5 rounded-full">Premium</span>
+                                        </div>
+                                        <div className="flex gap-2 mb-2">
+                                            <button
+                                                onClick={() => setMassMessageVibeSelection('all')}
+                                                className={`flex-1 py-1.5 rounded-lg border text-[8px] font-black uppercase tracking-tight transition-all ${massMessageVibeSelection === 'all' ? 'bg-purple-500/20 border-purple-500 text-white' : 'bg-slate-700/30 border-white/5 text-slate-500'}`}
+                                            >
+                                                Todas las Vibes
+                                            </button>
+                                            <button
+                                                onClick={() => setMassMessageVibeSelection('specific')}
+                                                className={`flex-1 py-1.5 rounded-lg border text-[8px] font-black uppercase tracking-tight transition-all ${massMessageVibeSelection === 'specific' ? 'bg-purple-500/20 border-purple-500 text-white' : 'bg-slate-700/30 border-white/5 text-slate-500'}`}
+                                            >
+                                                Filtrar por Vibe
+                                            </button>
+                                        </div>
+                                        {massMessageVibeSelection === 'specific' && (
+                                            <select
+                                                value={massMessageSelectedVibe || ''}
+                                                onChange={(e) => setMassMessageSelectedVibe(e.target.value as Vibe)}
+                                                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-[10px] font-bold text-white uppercase mt-1 focus:ring-1 focus:ring-purple-500 outline-none"
+                                            >
+                                                <option value="">Seleccionar Vibe</option>
+                                                {Object.values(Vibe).map(vibe => (
+                                                    <option key={vibe} value={vibe}>{vibe}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Notification Type Selection */}
                                 <div>
                                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -1122,15 +1171,16 @@ export const Community: React.FC = () => {
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                         {[
-                                            { id: 'info', label: 'Info', color: 'blue', icon: Info },
-                                            { id: 'offer', label: 'Oferta', color: 'orange', icon: Gift },
-                                            { id: 'alert', label: 'Alerta', color: 'red', icon: AlertTriangle },
-                                            { id: 'system', label: 'Sistema', color: 'purple', icon: Zap }
+                                            { id: 'ventas', label: 'Oferta', color: 'orange', icon: Gift },
+                                            { id: 'urgente', label: 'Alerta', color: 'red', icon: AlertTriangle },
+                                            ...(isAdmin ? [
+                                                { id: 'system', label: 'Sistema', color: 'rose', icon: Zap }
+                                            ] : [])
                                         ].map(type => (
                                             <button
                                                 key={type.id}
                                                 onClick={() => setMassMessageType(type.id as any)}
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[8px] font-black uppercase tracking-widest transition-all ${massMessageType === type.id ? `bg-${type.color}-500/20 border-${type.color}-500 text-white shadow-lg shadow-${type.color}-500/10` : 'bg-slate-800/40 border-white/5 text-slate-500 hover:bg-slate-800'}`}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[8px] font-black uppercase tracking-widest transition-all ${massMessageType === type.id ? `bg-${type.color}-500/20 border-${type.color}-500 text-white shadow-lg shadow-${type.color}-500/10 scale-[1.02]` : 'bg-slate-800/40 border-white/5 text-slate-500 hover:bg-slate-800'}`}
                                             >
                                                 <type.icon className="w-3 h-3" />
                                                 {type.label}

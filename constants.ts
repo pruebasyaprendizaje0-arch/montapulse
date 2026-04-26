@@ -178,6 +178,8 @@ export const PLAN_LIMITS = {
   [SubscriptionPlan.FREE]: 0,
   [SubscriptionPlan.BASIC]: 4,
   [SubscriptionPlan.PREMIUM]: 10,
+  [SubscriptionPlan.PRO]: 4,
+  [SubscriptionPlan.ELITE]: 10,
   [SubscriptionPlan.EXPERT]: 9999
 };
 
@@ -202,6 +204,20 @@ export const PLAN_FEATURES: Record<SubscriptionPlan, PlanFeatureDefinition[]> = 
     { text: "IA Magic Content", description: "Descripciones optimizadas", isIncluded: true, highlight: true },
     { text: "Comunidad exclusiva", isIncluded: true, highlight: true }
   ],
+  [SubscriptionPlan.PRO]: [
+    { text: "10 Pulsos activos/mes", isIncluded: true, highlight: true },
+    { text: "Insignia PRO", isIncluded: true, highlight: true },
+    { text: "Fijado en Mapa", description: "Top en buscadores", isIncluded: true, highlight: true },
+    { text: "Dashboard Host", isIncluded: true, highlight: true },
+    { text: "Anuncios ilimitados", isIncluded: true, highlight: true }
+  ],
+  [SubscriptionPlan.ELITE]: [
+    { text: "15 Pulsos activos/mes", isIncluded: true, highlight: true },
+    { text: "Insignia ELITE", isIncluded: true, highlight: true },
+    { text: "Fijado + destacado", description: "Top 1 en buscador", isIncluded: true, highlight: true },
+    { text: "IA Magic Content", description: "Generación automática", isIncluded: true, highlight: true },
+    { text: "Soporte prioritario", isIncluded: true, highlight: true }
+  ],
   [SubscriptionPlan.EXPERT]: [
     { text: "Pulsos ILIMITADOS", isIncluded: true, highlight: true },
     { text: "Soporte VIP 24/7", isIncluded: true, highlight: true },
@@ -214,6 +230,8 @@ export const MASS_MESSAGE_CREDITS = {
   [SubscriptionPlan.FREE]: 0,
   [SubscriptionPlan.BASIC]: 4,
   [SubscriptionPlan.PREMIUM]: 10,
+  [SubscriptionPlan.PRO]: 10,
+  [SubscriptionPlan.ELITE]: 20,
   [SubscriptionPlan.EXPERT]: Infinity
 };
 
@@ -221,6 +239,8 @@ export const PLAN_PRICES = {
   [SubscriptionPlan.FREE]: 0,
   [SubscriptionPlan.BASIC]: 5.00,
   [SubscriptionPlan.PREMIUM]: 10.00,
+  [SubscriptionPlan.PRO]: 15.00,
+  [SubscriptionPlan.ELITE]: 25.00,
   [SubscriptionPlan.EXPERT]: 0
 };
 
