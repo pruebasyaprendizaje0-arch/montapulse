@@ -21,6 +21,7 @@ import { uploadBase64Image } from '../services/storageService';
 import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
+import { DownloadManuals } from '../components/Passport/DownloadManuals';
 
 const HELP_ICON_MAP: Record<string, any> = {
     Mail, MessageCircle, Info, FileText, ExternalLink, Zap, Star, ShieldCheck, Activity,
@@ -62,7 +63,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         businessFollowers,
         allUsers,
         showLogin,
-        setShowLogin
+        setShowLogin,
+        planNames
     } = useData();
     const { showToast, showConfirm } = useToast();
     const [showProfileEdit, setShowProfileEdit] = useState(false);
@@ -90,7 +92,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const profileCameraInputRef = useRef<HTMLInputElement>(null);
 
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
-    
+
     const businessEvents = useMemo(() => {
         if (!userBusiness) return [];
         return events.filter(e => e.businessId === userBusiness.id);
@@ -105,7 +107,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     }, [favoritedEvents, followedBusinessIds, businessEvents]);
 
     const isSpecialUser = user?.email === 'ubicameinformacion@gmail.com' || user?.role === 'admin';
-    const isPremium = userBusiness?.plan === SubscriptionPlan.BASIC || userBusiness?.plan === SubscriptionPlan.PREMIUM || userBusiness?.plan === SubscriptionPlan.EXPERT || isSpecialUser;
+    const isPremium = userBusiness?.plan === SubscriptionPlan.PRO || userBusiness?.plan === SubscriptionPlan.ELITE || userBusiness?.plan === SubscriptionPlan.EXPERT || isSpecialUser;
     const planCreditsLimit = isPremium ? Infinity : PLAN_LIMITS[userBusiness?.plan || SubscriptionPlan.FREE];
     const availableCredits = userBusiness?.eventCredits ?? 0;
     const creditsRemaining = isPremium ? null : availableCredits;
@@ -125,13 +127,13 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         // Check exact match in label or id
         const icon = MAP_ICONS.find(i => i.label.toLowerCase() === cat || i.id === cat);
         if (icon) return icon.emoji;
-        
+
         // Handle synonyms
         if (cat.includes('restaurante') || cat.includes('comida')) return '🍕';
         if (cat.includes('fiesta') || cat.includes('discoteca') || cat.includes('bar')) return '🍹';
         if (cat.includes('hospedaje') || cat.includes('hotel') || cat.includes('hostal')) return '🏨';
         if (cat.includes('surf')) return '🏄';
-        
+
         return '🏷️';
     };
 
@@ -204,7 +206,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                 ...user,
                 ...updatePayload
             });
-            
+
             setShowProfileEdit(false);
             showToast('Perfil actualizado con éxito', 'success');
         } catch (error) {
@@ -237,12 +239,12 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                 <div className="w-24 h-24 bg-gradient-to-br from-orange-500 to-amber-500 rounded-[3rem] flex items-center justify-center mb-8 shadow-2xl shadow-orange-500/30 animate-pulse">
                     <Sparkles className="w-12 h-12 text-white" />
                 </div>
-                
+
                 <h1 className="text-4xl font-black text-white mb-3 tracking-tight">Mi Passport</h1>
                 <p className="text-slate-400 mb-10 max-w-sm text-sm leading-relaxed">
                     Accede a tu perfil, eventos guardados y beneficios exclusivos
                 </p>
-                
+
                 <div className="flex flex-col gap-4 w-full max-w-xs">
                     <button
                         onClick={() => setShowLogin(true)}
@@ -257,7 +259,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                         Explorar sin cuenta
                     </button>
                 </div>
-                
+
                 {/* Features */}
                 <div className="mt-16 grid grid-cols-3 gap-6 px-4">
                     {[
@@ -301,7 +303,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     <div className="relative group perspective-1000">
                         {/* Interactive Card Background */}
                         <div className="absolute inset-0 bg-gradient-to-br from-orange-600/30 via-transparent to-amber-600/30 rounded-[3rem] blur-3xl opacity-30 group-hover:opacity-50 transition-opacity duration-1000" />
-                        
+
                         <div className="relative glass-panel rounded-[3rem] p-8 overflow-hidden border border-white/10 shadow-3xl">
                             {/* Card Decorative Elements */}
                             <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl -mr-32 -mt-32 animate-pulse" />
@@ -316,14 +318,14 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                 <div className="relative mb-8 pt-4">
                                     <div className="absolute inset-[-8px] rounded-full border border-white/5 animate-spin-slow" />
                                     <div className="absolute inset-[-12px] rounded-full border border-orange-500/10" />
-                                    
+
                                     <div className="relative z-10 w-32 h-32 rounded-full p-1.5 bg-gradient-to-br from-orange-500 via-amber-500 to-orange-400 shadow-2xl shadow-orange-500/20">
                                         <div className="w-full h-full rounded-full bg-slate-900 border-4 border-slate-900 overflow-hidden relative group/avatar">
                                             {user.avatarUrl ? (
-                                                <img 
-                                                    src={user.avatarUrl} 
-                                                    alt="Avatar" 
-                                                    className="w-full h-full object-cover group-hover/avatar:scale-110 transition-transform duration-700" 
+                                                <img
+                                                    src={user.avatarUrl}
+                                                    alt="Avatar"
+                                                    className="w-full h-full object-cover group-hover/avatar:scale-110 transition-transform duration-700"
                                                 />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center text-slate-700 bg-slate-800">
@@ -342,8 +344,19 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                     <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                                         <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 shadow-lg shadow-orange-500/5">
                                             <ShieldCheck className="w-4 h-4 text-orange-500" />
-                                            <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Verified Member</span>
+                                            <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">
+                                                {planNames[user.plan || SubscriptionPlan.FREE]}
+                                            </span>
                                         </div>
+                                        {user.plan !== SubscriptionPlan.ELITE && (
+                                            <button 
+                                                onClick={() => onNavigate?.('plans')}
+                                                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all font-black text-[10px] uppercase tracking-widest group"
+                                            >
+                                                <Zap className="w-3.5 h-3.5 fill-current group-hover:animate-pulse" />
+                                                Mejorar plan
+                                            </button>
+                                        )}
                                         <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/5">
                                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Passport No.</span>
@@ -410,7 +423,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tus eventos guardados</p>
                         </div>
                         {favoritedEvents.length > 3 && (
-                            <button 
+                            <button
                                 onClick={() => setShowAllPulses(!showAllPulses)}
                                 className="px-4 py-2 rounded-full border border-white/5 bg-white/5 text-[10px] font-black text-orange-500 uppercase tracking-[0.2em] hover:bg-white/10 transition-colors"
                             >
@@ -422,8 +435,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                         {favoritedEvents.length > 0 ? (
                             favoritedEvents.slice(0, showAllPulses ? favoritedEvents.length : 3).map((event) => (
                                 <div key={event.id} className="min-w-[280px] w-[280px] shrink-0 transform transition-transform hover:scale-[1.02] duration-500">
-                                    <EventCard 
-                                        event={event} 
+                                    <EventCard
+                                        event={event}
                                         onClick={(e) => setSelectedEvent(e)}
                                     />
                                 </div>
@@ -451,7 +464,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                 const biz = businesses.find(b => b.id === bizId);
                                 if (!biz) return null;
                                 return (
-                                    <div 
+                                    <div
                                         key={biz.id}
                                         onClick={() => {
                                             setPublicProfileId(biz.id);
@@ -489,7 +502,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                 {/* Mi Negocio Section */}
                 <div className="px-8 mb-12">
                     <h3 className="text-lg font-black tracking-tight mb-6">Mi Negocio</h3>
-                    
+
                     {user?.businessId && businesses.find(b => b.id === user.businessId) ? (() => {
                         const biz = businesses.find(b => b.id === user.businessId)!;
                         return (
@@ -501,10 +514,10 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                 className="w-full relative overflow-hidden rounded-[2.5rem] bg-[#111111] border border-white/5 cursor-pointer group shadow-2xl"
                             >
                                 <div className="absolute inset-0">
-                                    <img 
-                                        src={biz.imageUrl} 
-                                        alt="Business" 
-                                        className="w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-700" 
+                                    <img
+                                        src={biz.imageUrl}
+                                        alt="Business"
+                                        className="w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-700"
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/20" />
                                 </div>
@@ -513,10 +526,10 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                         <div className="w-16 h-16 rounded-2xl bg-black/50 backdrop-blur-md p-1 border border-white/10 shadow-2xl overflow-hidden shrink-0 flex items-center justify-center">
                                             {biz.icon ? (
                                                 (biz.icon.startsWith('http') || biz.icon.startsWith('data:image')) ? (
-                                                    <img 
-                                                        src={biz.icon} 
-                                                        alt="Icon" 
-                                                        className="w-full h-full object-cover rounded-xl" 
+                                                    <img
+                                                        src={biz.icon}
+                                                        alt="Icon"
+                                                        className="w-full h-full object-cover rounded-xl"
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center bg-orange-500/10 rounded-xl">
@@ -531,7 +544,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                 </div>
                                             )}
                                         </div>
-                                         <div className="flex flex-col text-left">
+                                        <div className="flex flex-col text-left">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className="text-white font-black text-xl leading-none">{biz.name}</span>
                                                 {biz.isVerified && <CheckCircle className="w-4 h-4 text-sky-400 fill-sky-400/10" />}
@@ -575,7 +588,19 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between mt-2 pt-4 border-t border-white/10">
-                                        <span className="text-xs font-black text-orange-500 uppercase tracking-widest">Gestionar Negocio</span>
+                                        <div className="flex items-center gap-4">
+                                            <span className="text-xs font-black text-orange-500 uppercase tracking-widest">Gestionar Negocio</span>
+                                            <button
+                                                 onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onNavigate?.('plans');
+                                                }}
+                                                className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-amber-500/10 flex items-center gap-1.5"
+                                            >
+                                                <Zap className="w-3 h-3 fill-current" />
+                                                Mejorar Plan
+                                            </button>
+                                        </div>
                                         <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/5 group-hover:bg-orange-500 group-hover:border-orange-400 transition-colors">
                                             <Edit3 className="w-4 h-4 text-white" />
                                         </div>
@@ -604,7 +629,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             {businessFollowers.length > 0 && (
                                 <div className="flex items-center gap-4">
                                     {businessFollowers.length > 8 && (
-                                        <button 
+                                        <button
                                             onClick={() => setShowAllFollowers(!showAllFollowers)}
                                             className="text-[11px] font-black text-amber-500 uppercase tracking-widest"
                                         >
@@ -620,7 +645,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                 </div>
                             )}
                         </div>
-                        
+
                         {businessFollowers.length > 0 ? (
                             <div className={`flex ${showAllFollowers ? 'flex-wrap' : 'overflow-x-auto no-scrollbar'} gap-3 pb-2`}>
                                 {(showAllFollowers ? businessFollowers : businessFollowers.slice(0, 8)).map((followerId) => {
@@ -629,7 +654,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                         const followedBiz = businesses.find(b => b.id === followerId);
                                         if (!followedBiz) return null;
                                         return (
-                                            <div 
+                                            <div
                                                 key={followerId}
                                                 onClick={() => {
                                                     setPublicProfileId(followerId);
@@ -639,8 +664,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                 className="min-w-[80px] w-[80px] shrink-0 flex flex-col items-center gap-2 cursor-pointer group"
                                             >
                                                 <div className="w-16 h-16 rounded-full border-2 border-amber-500/30 p-0.5 group-hover:border-amber-500/60 transition-colors overflow-hidden">
-                                                    <img 
-                                                        src={followedBiz.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(followedBiz.name)}&background=random&color=fff`} 
+                                                    <img
+                                                        src={followedBiz.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(followedBiz.name)}&background=random&color=fff`}
                                                         className="w-full h-full rounded-full object-cover"
                                                         alt={followedBiz.name}
                                                     />
@@ -668,7 +693,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                     }
                                     const followerName = follower.name || 'Member';
                                     return (
-                                        <div 
+                                        <div
                                             key={followerId}
                                             onClick={() => {
                                                 setPublicProfileId(followerId);
@@ -678,8 +703,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                             className="min-w-[80px] w-[80px] shrink-0 flex flex-col items-center gap-2 cursor-pointer group"
                                         >
                                             <div className="w-16 h-16 rounded-full border-2 border-amber-500/30 p-0.5 group-hover:border-amber-500/60 transition-colors">
-                                                <img 
-                                                    src={follower.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(followerName)}&background=random&color=fff`} 
+                                                <img
+                                                    src={follower.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(followerName)}&background=random&color=fff`}
                                                     className="w-full h-full rounded-full object-cover"
                                                     alt={followerName}
                                                 />
@@ -706,21 +731,32 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     <div className="px-8 mb-12">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-black tracking-tight">Mis Eventos</h3>
-                            {planCreditsLimit === Infinity ? (
-                                <div className="px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center gap-2">
-                                    <Zap className="w-4 h-4 text-emerald-400" />
-                                    <span className="text-xs font-black uppercase tracking-widest text-emerald-400">Créditos Ilimitados</span>
-                                </div>
-                            ) : (
-                                <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 ${availableCredits <= 1 ? 'bg-rose-500/20 border border-rose-500/30' : 'bg-orange-500/20 border border-orange-500/30'}`}>
-                                    <Zap className={`w-4 h-4 ${availableCredits <= 1 ? 'text-rose-400' : 'text-orange-400'}`} />
-                                    <span className={`text-xs font-black uppercase tracking-widest ${availableCredits <= 1 ? 'text-rose-400' : 'text-orange-400'}`}>
-                                        {availableCredits}/{planCreditsLimit} Créditos Restantes
-                                    </span>
-                                </div>
-                            )}
+                            <div className="flex items-center gap-3">
+                                {planCreditsLimit === Infinity ? (
+                                    <div className="px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center gap-2">
+                                        <Zap className="w-4 h-4 text-emerald-400" />
+                                        <span className="text-xs font-black uppercase tracking-widest text-emerald-400">Créditos Ilimitados</span>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <button
+                                            onClick={() => onNavigate('plans')}
+                                            className="px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-[10px] font-black text-amber-400 uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-all flex items-center gap-2"
+                                        >
+                                            <Award className="w-3.5 h-3.5" />
+                                            Mejorar
+                                        </button>
+                                        <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 ${availableCredits <= 1 ? 'bg-rose-500/20 border border-rose-500/30' : 'bg-orange-500/20 border border-orange-500/30'}`}>
+                                            <Zap className={`w-4 h-4 ${availableCredits <= 1 ? 'text-rose-400' : 'text-orange-400'}`} />
+                                            <span className={`text-xs font-black uppercase tracking-widest ${availableCredits <= 1 ? 'text-rose-400' : 'text-orange-400'}`}>
+                                                {availableCredits}/{planCreditsLimit} Créditos Restantes
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
-                        
+
                         {businessEvents.length > 0 ? (
                             <>
                                 <div className="flex justify-end mb-4">
@@ -736,8 +772,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                 <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4">
                                     {businessEvents.slice(0, 5).map((event) => (
                                         <div key={event.id} className="min-w-[260px] w-[260px] shrink-0">
-                                            <EventCard 
-                                                event={event} 
+                                            <EventCard
+                                                event={event}
                                                 onClick={(e) => setSelectedEvent(e)}
                                             />
                                         </div>
@@ -769,7 +805,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             <h3 className="text-xl font-black tracking-tighter text-white">Menú Passport</h3>
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Configuración y Seguridad</p>
                         </div>
-                        
+
                         <div className="grid grid-cols-1 gap-3">
                             {[
                                 { label: 'Editar Perfil', icon: User, color: 'text-orange-400', action: onEditProfile, desc: 'Nombre, avatar y detalles' },
@@ -799,6 +835,17 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                 </button>
                             ))}
                         </div>
+                    </div>
+                </div>
+
+                {/* Documentation Section */}
+                <div className="px-6 mb-12">
+                    <div className="flex flex-col gap-4">
+                        <div className="flex flex-col">
+                            <h3 className="text-xl font-black tracking-tighter text-white">Documentación</h3>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Manuales de usuario y funciones</p>
+                        </div>
+                        <DownloadManuals isAdmin={isAdmin || isSuperUser} />
                     </div>
                 </div>
 
@@ -844,7 +891,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                     <p className="text-[10px] font-bold text-sky-400 uppercase tracking-widest mt-0.5">Control Total</p>
                                 </div>
                             </div>
-                            
+
                             <div className="grid grid-cols-1 gap-3">
                                 <button
                                     onClick={() => navigate('/admin-users')}
@@ -889,11 +936,10 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
                                 <button
                                     onClick={toggleSuperUser}
-                                    className={`w-full py-4 rounded-2xl border transition-all uppercase tracking-widest text-[10px] font-black flex items-center justify-center gap-3 ${
-                                        isSuperUser 
-                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                                    className={`w-full py-4 rounded-2xl border transition-all uppercase tracking-widest text-[10px] font-black flex items-center justify-center gap-3 ${isSuperUser
+                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                                         : 'bg-[#111111] text-slate-500 border-white/5 hover:bg-white/5'
-                                    }`}
+                                        }`}
                                 >
                                     <Zap className={`w-4 h-4 ${isSuperUser ? 'animate-pulse text-emerald-400' : 'text-slate-600'}`} />
                                     <span>{isSuperUser ? 'SuperUsuario: ACTIVO' : 'Activar Modo SuperUsuario'}</span>
@@ -916,7 +962,9 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             <span className="font-black text-rose-500 text-sm uppercase tracking-[0.4em] mb-[-2px]">Cerrar Sesión</span>
                         </div>
                     </button>
-                    <p className="text-center mt-8 text-[9px] font-black text-slate-700 uppercase tracking-[0.5em] opacity-50">Pulse v4.0.0 PREMIUM</p>
+                    <p className="text-center mt-8 text-[9px] font-black text-slate-700 uppercase tracking-[0.5em] opacity-50">
+                        Pulse v4.0.0 {isAdmin ? 'ADMINISTRADOR' : (planNames[user?.plan || SubscriptionPlan.FREE]?.toUpperCase() || 'VISITANTE')}
+                    </p>
                 </div>
             </div>
 
@@ -1173,7 +1221,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             <h3 className="text-xl font-black text-white">Ayuda y Soporte</h3>
                             <div className="flex gap-2">
                                 {isAdmin && (
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             if (isEditingHelp) {
                                                 handleUpdateHelpSupport(tempHelpItems);
@@ -1198,13 +1246,13 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                         <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                             {(isEditingHelp ? tempHelpItems : helpSupport).map((item, idx) => {
                                 const IconComponent = HELP_ICON_MAP[item.icon] || Info;
-                                
+
                                 if (isEditingHelp) {
                                     return (
                                         <div key={item.id} className="p-4 bg-white/5 rounded-2xl border border-white/10 space-y-3 relative group">
                                             <div className="flex gap-3">
                                                 <div className="flex-1 space-y-2">
-                                                    <input 
+                                                    <input
                                                         value={item.label}
                                                         onChange={e => {
                                                             const newItems = [...tempHelpItems];
@@ -1215,7 +1263,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                         placeholder="Label"
                                                     />
                                                     <div className="flex gap-2">
-                                                        <select 
+                                                        <select
                                                             value={item.type}
                                                             onChange={e => {
                                                                 const newItems = [...tempHelpItems];
@@ -1229,7 +1277,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                             <option value="link">Link</option>
                                                             <option value="toast">Toast</option>
                                                         </select>
-                                                        <select 
+                                                        <select
                                                             value={item.icon}
                                                             onChange={e => {
                                                                 const newItems = [...tempHelpItems];
@@ -1243,7 +1291,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                             ))}
                                                         </select>
                                                     </div>
-                                                    <input 
+                                                    <input
                                                         value={item.value}
                                                         onChange={e => {
                                                             const newItems = [...tempHelpItems];
@@ -1254,7 +1302,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                         placeholder="Value (URL, email, etc)"
                                                     />
                                                 </div>
-                                                <button 
+                                                <button
                                                     onClick={() => setTempHelpItems(tempHelpItems.filter((_, i) => i !== idx))}
                                                     className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-xl self-start"
                                                 >
@@ -1295,9 +1343,9 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                     );
                                 }
                                 return (
-                                    <button 
+                                    <button
                                         key={item.id}
-                                        onClick={() => showToast(item.value, 'info')} 
+                                        onClick={() => showToast(item.value, 'info')}
                                         className="w-full text-left block p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors"
                                     >
                                         {content}
@@ -1306,7 +1354,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             })}
 
                             {isEditingHelp && (
-                                <button 
+                                <button
                                     onClick={() => setTempHelpItems([...tempHelpItems, { id: Date.now().toString(), label: 'Nuevo Item', type: 'toast', value: 'Info...', icon: 'Info' }])}
                                     className="w-full p-4 border-2 border-dashed border-white/10 rounded-2xl text-slate-500 hover:text-white hover:border-white/20 transition-all flex items-center justify-center gap-2"
                                 >
@@ -1318,7 +1366,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     </div>
                 </div>
             )}
- 
+
             {/* Pulse Pass Modal */}
             {showPulsePass && (
                 <div className="fixed inset-0 z-[2100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setShowPulsePass(false)}>
@@ -1378,7 +1426,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                 </div>
                             </div>
                         </div>
-                        <button 
+                        <button
                             onClick={() => {
                                 showToast('Próximamente disponible', 'info');
                             }}

@@ -181,10 +181,10 @@ export const CalendarModal: React.FC = () => {
                     <div className="mt-8 space-y-4">
                         <div className="flex items-center justify-between">
                             <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                Pulses for {format(calendarBaseDate, "d 'de' MMMM", { locale: es })}
+                                Pulsos para el {format(calendarBaseDate, "d 'de' MMMM", { locale: es })}
                             </h4>
                             <span className="text-[10px] font-black text-sky-500 uppercase">
-                                {getEventsForDay(calendarBaseDate).length} Pulses
+                                {getEventsForDay(calendarBaseDate).length} Pulsos
                             </span>
                         </div>
 
@@ -218,7 +218,7 @@ export const CalendarModal: React.FC = () => {
                                 })
                             ) : (
                                 <div className="py-8 text-center border-2 border-dashed border-white/5 rounded-[2rem]">
-                                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">No events for this day</p>
+                                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">No hay eventos para este día</p>
                                 </div>
                             )}
                         </div>
@@ -234,7 +234,7 @@ export const CalendarModal: React.FC = () => {
                         }}
                         className="w-full py-4 bg-sky-500 hover:bg-sky-600 active:scale-[0.98] transition-all text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-lg shadow-sky-500/20"
                     >
-                        Explore This Day
+                        Explorar este día
                     </button>
                 </div>
             </div>

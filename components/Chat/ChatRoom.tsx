@@ -34,8 +34,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
 
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
     const userPlan = user?.plan || SubscriptionPlan.FREE;
-    // Premium corresponds to PRO or EXPERT plans
-    const isPremiumPlan = userPlan === SubscriptionPlan.BASIC || userPlan === SubscriptionPlan.PREMIUM || userPlan === SubscriptionPlan.EXPERT;
+    // Paid plans: PRO, ELITE, EXPERT
+    const isPremiumPlan = userPlan === SubscriptionPlan.PRO || userPlan === SubscriptionPlan.ELITE || userPlan === SubscriptionPlan.EXPERT;
     const canSendAsBusiness = !!(userBusiness && isPremiumPlan);
     const canUsePremiumFeatures = isPremiumPlan;
 

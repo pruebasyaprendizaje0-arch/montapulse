@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import L from 'leaflet';
-import { Search, SlidersHorizontal, Navigation, Layers, Plus, Minus, X, Clock, CheckCircle, Edit3, Settings, Trash2, MapPin, Zap, Palmtree, Music, Leaf, Waves, Mountain, Hotel, UtensilsCrossed, Church, Bus, ShoppingBag, TreePine, Coffee, Camera, Wine, Beer, IceCream, Dumbbell, Sparkles, Tent, Anchor, Ship, Sunrise, Sun, Moon, PartyPopper, Flame, Heart, Star, Smile, Banknote, Car, Store } from 'lucide-react';
-import { Business, Sector, Vibe, SubscriptionPlan, BusinessCategory } from '../types.ts';
-import { SECTOR_INFO, LOCALITIES, MAP_ICONS } from '../constants.ts';
+import { Search, SlidersHorizontal, Navigation, Layers, Plus, Minus, X, Clock, CheckCircle, Edit3, Settings, Trash2, MapPin, Zap, Palmtree, Music, Leaf, Waves, Mountain, Hotel, UtensilsCrossed, Church, Bus, ShoppingBag, TreePine, Coffee, Camera, Wine, Beer, IceCream, Dumbbell, Sparkles, Tent, Anchor, Ship, Sunrise, Sun, Moon, PartyPopper, Flame, Heart, Star, Smile, Banknote, Car, Store, Crosshair } from 'lucide-react';
+import { Business, Sector, Vibe, SubscriptionPlan, BusinessCategory } from '../types';
+import { SECTOR_INFO, LOCALITIES, MAP_ICONS } from '../constants';
 import { useToast } from '../context/ToastContext';
+import { getEcuadorDate } from '../utils/timeUtils';
 
 const getIconForBusiness = (business: Business): { icon: React.ReactNode; color: string } => {
   const iconId = business.icon || '';
@@ -55,6 +56,10 @@ interface MapViewProps {
   activeFilter: string;
   onFilterChange: (filter: string) => void;
   isAdmin?: boolean;
+  isEliteUser?: boolean;
+  isSuperAdmin?: boolean;
+  isSuperUser?: boolean;
+  isPremiumUser?: boolean;
   onAddBusiness?: (lat: number, lng: number, isReference: boolean) => void;
   onDeleteBusiness?: (id: string) => void;
   onUpdateBusiness?: (id: string, lat: number, lng: number) => void;
@@ -74,7 +79,6 @@ interface MapViewProps {
   localityName?: string;
   onLocalityChange?: (name: string) => void;
   onResetFilters?: () => void;
-  isSuperUser?: boolean;
   isMovingBusiness?: boolean;
   movingBusinessId?: string;
   onMoveBusinessComplete?: () => void;
@@ -92,6 +96,7 @@ export const MapView: React.FC<MapViewProps> = ({
   activeFilter,
   onFilterChange,
   isAdmin,
+  isEliteUser,
   onAddBusiness,
   onDeleteBusiness,
   onUpdateBusiness,
@@ -118,13 +123,14 @@ export const MapView: React.FC<MapViewProps> = ({
   onAddLocality,
   activeTab,
   events = []
-}: MapViewProps) => {
+}) => {
   const { showToast, showConfirm, showPrompt } = useToast();
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const polygonsLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const userLocationMarkerRef = useRef<L.Marker | null>(null);
 
   const [mapMode, setMapMode] = useState<'dark' | 'satellite'>('satellite');
   const [editingSector, setEditingSector] = useState<Sector | null>(null);
@@ -167,7 +173,13 @@ export const MapView: React.FC<MapViewProps> = ({
     let alive = true;
     const timers = [50, 150, 400, 800, 1500].map(delay =>
       setTimeout(() => {
-        if (alive && mapRef.current) mapRef.current.invalidateSize({ animate: false });
+        if (alive && mapRef.current) {
+          try {
+            mapRef.current.invalidateSize({ animate: false });
+          } catch (e) {
+            // Map might be unmounted
+          }
+        }
       }, delay)
     );
 
@@ -175,12 +187,22 @@ export const MapView: React.FC<MapViewProps> = ({
     let resizeObserver: ResizeObserver | null = null;
     if (containerRef.current && typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => {
-        if (mapRef.current) mapRef.current.invalidateSize({ animate: false });
+        if (mapRef.current) {
+          try {
+            mapRef.current.invalidateSize({ animate: false });
+          } catch (e) { }
+        }
       });
       resizeObserver.observe(containerRef.current);
     }
 
-    const onResize = () => { if (mapRef.current) mapRef.current.invalidateSize({ animate: false }); };
+    const onResize = () => { 
+      if (mapRef.current) {
+        try {
+          mapRef.current.invalidateSize({ animate: false });
+        } catch (e) { }
+      }
+    };
     window.addEventListener('resize', onResize);
 
     return () => {
@@ -301,7 +323,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
         const isEventLive = (startTime: string, endTime?: string) => {
           if (!startTime) return false;
-          const now = new Date();
+          const now = getEcuadorDate();
           const start = new Date(startTime);
           const end = endTime ? new Date(endTime) : new Date(start.getTime() + 4 * 3600000);
           return now >= start && now <= end;
@@ -384,7 +406,7 @@ export const MapView: React.FC<MapViewProps> = ({
       const { lat, lng } = e.latlng;
       if (editingSector) {
         setTempCoords(prev => [...prev, [lat, lng]]);
-      } else if (isAdmin && isAddingPoint && onAddBusiness) {
+      } else if ((isAdmin || isEliteUser) && isAddingPoint && onAddBusiness) {
         onAddBusiness(lat, lng, addingPointType === 'reference');
         setIsAddingPoint(false);
       } else if (isMovingBusiness && movingBusinessId && onUpdateBusiness) {
@@ -411,7 +433,7 @@ export const MapView: React.FC<MapViewProps> = ({
       map.off('mousemove', onMouseMove);
       map.off('contextmenu', (e) => e.preventDefault());
     };
-  }, [isAdmin, editingSector, isAddingPoint, addingPointType, onAddBusiness]);
+  }, [isAdmin, isEliteUser, editingSector, isAddingPoint, addingPointType, onAddBusiness]);
 
   // 5. Handle Resize and Keyboard
   useEffect(() => {
@@ -471,6 +493,36 @@ export const MapView: React.FC<MapViewProps> = ({
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
+
+  const handleLocate = () => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    showToast('Buscando tu ubicación...', 'info');
+    
+    map.locate({ setView: true, maxZoom: 18 });
+    
+    map.once('locationfound', (e: L.LocationEvent) => {
+      // Remove previous marker if any
+      if (userLocationMarkerRef.current) {
+        map.removeLayer(userLocationMarkerRef.current);
+      }
+      
+      const userIcon = L.divIcon({
+        className: 'user-location-marker',
+        html: `<div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg animate-pulse ring-4 ring-blue-500/30"></div>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+      });
+      
+      userLocationMarkerRef.current = L.marker(e.latlng, { icon: userIcon }).addTo(map);
+      showToast('Ubicación encontrada', 'success');
+    });
+
+    map.once('locationerror', () => {
+      showToast('No se pudo obtener tu ubicación. Asegúrate de dar permisos de GPS.', 'error');
+    });
+  };
 
   return (
     <div
@@ -541,8 +593,8 @@ export const MapView: React.FC<MapViewProps> = ({
         </div>
       </div>
 
-      {/* Admin Controls */}
-      {isAdmin && !hideUI && (
+      {/* Admin/Elite Controls */}
+      {(isAdmin || isEliteUser) && !hideUI && (
         <div className="absolute right-4 top-24 z-[1000] flex flex-col gap-3">
           {/* Add Point Toggle */}
           <button
@@ -562,7 +614,7 @@ export const MapView: React.FC<MapViewProps> = ({
             <Plus className="w-7 h-7" />
           </button>
 
-          {/* Type Selector: Negocio vs. Punto de Referencia */}
+          {/* Type Selector: Negocio vs. Punto de Referencia (Only Admin for reference) */}
           <div className="flex flex-col gap-1.5">
             <button
               onClick={() => {
@@ -577,19 +629,21 @@ export const MapView: React.FC<MapViewProps> = ({
             >
               🏪
             </button>
-            <button
-              onClick={() => {
-                setAddingPointType('reference');
-                if (!isAddingPoint) { setIsAddingPoint(true); setEditingSector(null); }
-              }}
-              title="Añadir Punto de Referencia"
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-200 text-lg shadow-xl ${addingPointType === 'reference' && isAddingPoint
-                ? 'bg-sky-500 border-sky-400 text-white shadow-sky-500/40'
-                : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-sky-400 hover:border-sky-400/40'
-                }`}
-            >
-              📍
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  setAddingPointType('reference');
+                  if (!isAddingPoint) { setIsAddingPoint(true); setEditingSector(null); }
+                }}
+                title="Añadir Punto de Referencia"
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-200 text-lg shadow-xl ${addingPointType === 'reference' && isAddingPoint
+                  ? 'bg-sky-500 border-sky-400 text-white shadow-sky-500/40'
+                  : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-sky-400 hover:border-sky-400/40'
+                  }`}
+              >
+                📍
+              </button>
+            )}
           </div>
 
           {/* Sector Overlay Toggle */}
@@ -717,6 +771,14 @@ export const MapView: React.FC<MapViewProps> = ({
           className="w-12 h-12 rounded-2xl bg-slate-900/80 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl shadow-2xl hover:bg-sky-500 transition-all mt-4 pointer-events-auto"
         >
           {mapMode === 'dark' ? <Navigation className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
+        </button>
+        <button
+          onClick={handleLocate}
+          data-testid="locate-me-button"
+          className="w-12 h-12 rounded-2xl bg-slate-900/80 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl shadow-2xl hover:bg-blue-600 transition-all mt-2 pointer-events-auto"
+          title="Mi Ubicación"
+        >
+          <Crosshair className="w-6 h-6" />
         </button>
       </div>
     </div>

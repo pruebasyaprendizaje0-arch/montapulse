@@ -4,16 +4,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    if (window.location.hostname === 'ubicame.info') {
+      window.location.replace('https://www.ubicame.info' + window.location.pathname + window.location.search);
+    }
+  </script>
 
   <!-- SEO & Social -->
   <title>ubicame.info PULSE — Vive la energía de Montañita</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <link rel="manifest" href="/manifest.json">
   <meta name="description"
     content="Descubre eventos, negocios y la mejor vibra de Montañita y la costa del Pacífico ecuatoriano. Tu guía local en tiempo real.">
   <meta name="theme-color" content="#0f172a">
   <meta property="og:title" content="ubicame.info PULSE — Vive la energía de Montañita">
   <meta property="og:description" content="Descubre eventos, negocios y la mejor vibra de Montañita.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://montapulse-app.web.app/">
+  <meta property="og:url" content="https://www.ubicame.info/">
+  <link rel="canonical" href="https://www.ubicame.info/">
 
   <!-- Preconnect para recursos externos (reduce latencia de primera carga) -->
   <link rel="preconnect" href="https://unpkg.com">
@@ -73,6 +81,22 @@
       display: none;
     }
   </style>
+
+  <!-- Schema.org Básico -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "MontaPulse",
+    "url": "https://www.ubicame.info/",
+    "description": "Plataforma de descubrimiento de eventos y negocios en Montañita y la Ruta del Spondylus.",
+    "publisher": {
+      "@type": "Organization",
+      "name": "ubicame.info",
+      "logo": "https://www.ubicame.info/favicon.ico"
+    }
+  }
+  </script>
 </head>
 
 <body>

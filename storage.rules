@@ -6,8 +6,15 @@ service firebase.storage {
       return request.auth != null;
     }
     
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true || 
+        request.auth.token.expert == true
+      );
+    }
+    
     function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
+      return isAuthenticated() && request.auth.uid == userId;
     }
     
     function isValidImage() {
@@ -19,46 +26,49 @@ service firebase.storage {
       return request.resource.contentType.matches('video/(mp4|webm)') 
         && request.resource.size <= 100 * 1024 * 1024;
     }
+
+    function isValidMedia() {
+      return isValidImage() || isValidVideo();
+    }
     
-    // Events - anyone can read, only auth can upload
-    match /events/{eventId}/{fileName} {
+    // Eventos - Acceso público lectura, Admin o Auth escritura
+    match /events/{eventId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isAuthenticated() && (isValidImage() || isValidVideo());
+      allow write: if isAdmin() || (isAuthenticated() && isValidMedia());
     }
     
-    // Businesses - anyone can read, only auth can upload
-    match /businesses/{businessId}/{fileName} {
+    // Negocios
+    match /businesses/{businessId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isAuthenticated() && (isValidImage() || isValidVideo());
+      allow write: if isAdmin() || (isAuthenticated() && isValidMedia());
     }
     
-    // User avatars - only owner can read/write
-    match /users/{userId}/{fileName} {
+    // Usuarios (Avatares)
+    match /users/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isOwner(userId) && isValidImage();
+      allow write: if isAdmin() || (isOwner(userId) && isValidImage());
     }
     
-    // Chat - only participants can access
-    match /chat/{roomId}/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (isValidImage() || isValidVideo());
+    // Chat y Carpeta General de Uploads
+    match /chat/{roomId}/{allPaths=**} {
+      allow read: if isAuthenticated() || isAdmin();
+      allow write: if isAuthenticated() && isValidMedia();
     }
     
-    // Uploads folder - authenticated users can upload (including subfolders)
     match /uploads/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isAuthenticated() && (isValidImage() || isValidVideo());
+      allow write: if isAdmin() || (isOwner(userId) && isValidMedia());
     }
     
-    // Announcements - anyone can read, authenticated users can upload
-    match /announcements/{fileName} {
+    // Anuncios
+    match /announcements/{allPaths=**} {
       allow read: if true;
-      allow write: if isAuthenticated() && isValidImage();
+      allow write: if isAdmin() || (isAuthenticated() && isValidImage());
     }
 
-    // Default - deny everything
+    // Default - Solo Admin puede manejar archivos fuera de las rutas anteriores
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if isAdmin();
     }
   }
 }

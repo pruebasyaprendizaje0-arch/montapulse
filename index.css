@@ -5,9 +5,11 @@
     --bg-light: #f0f2f5;
     --bg-dark: #0f172a;
     --bg-darker: #020617;
-    --brand-primary: #f97316; /* Orange 500 */
-    --brand-secondary: #f59e0b; /* Amber 500 */
-    --brand-accent: #25d366; 
+    --brand-primary: #f97316;
+    /* Orange 500 */
+    --brand-secondary: #f59e0b;
+    /* Amber 500 */
+    --brand-accent: #25d366;
     --text-primary: #111b21;
     --text-secondary: #667781;
     --message-out: #004d40;
@@ -82,22 +84,40 @@ body {
 }
 
 @keyframes like-pop {
-  0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-  50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+    0% {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0;
+    }
+
+    50% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0;
+    }
 }
 
 @keyframes like-particle {
-  0% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0); opacity: 1; }
-  100% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(var(--velocity) * -100px)); opacity: 0; }
+    0% {
+        transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(var(--velocity) * -100px));
+        opacity: 0;
+    }
 }
 
 .animate-like-pop {
-  animation: like-pop 0.6s cubic-bezier(0.17, 0.89, 0.32, 1.49) forwards;
+    animation: like-pop 0.6s cubic-bezier(0.17, 0.89, 0.32, 1.49) forwards;
 }
 
 .animate-like-particle {
-  animation: like-particle 0.8s ease-out forwards;
+    animation: like-particle 0.8s ease-out forwards;
 }
 
 .text-gradient {
@@ -165,6 +185,7 @@ body {
     from {
         transform: rotate(0deg);
     }
+
     to {
         transform: rotate(360deg);
     }
@@ -271,8 +292,13 @@ body {
 
 /* Premium Pulsar Design Tokens */
 @keyframes pulsar-shimmer {
-    0% { background-position: -200% center; }
-    100% { background-position: 200% center; }
+    0% {
+        background-position: -200% center;
+    }
+
+    100% {
+        background-position: 200% center;
+    }
 }
 
 .text-pulsar-premium {
@@ -302,8 +328,15 @@ body {
 }
 
 @keyframes float-gentle {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
 }
 
 .animate-float-premium {

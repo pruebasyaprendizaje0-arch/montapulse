@@ -118,7 +118,7 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false })
                 type: 'post',
                 user: post.authorName,
                 action: isPremiumBusiness ? '★ publicó' : 'publicó en el muro',
-                timestamp: post.timestamp ? new Date(post.timestamp) : new Date(),
+                timestamp: post.timestamp?.toDate ? post.timestamp.toDate() : (post.timestamp ? new Date(post.timestamp) : new Date()),
                 avatar: post.authorAvatar,
                 isPremium: isPremiumBusiness,
                 isFeatured: post.isFeatured,
@@ -267,7 +267,7 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false })
                     >
                         <Heart 
                             className={`w-3.5 h-3.5 ${
-                                (current.type === 'post' && current.likes?.includes(user?.uid || user?.id || '')) || 
+                                (current.type === 'post' && current.likes?.includes(user?.id || '')) || 
                                 (current.type === 'rsvp' && favorites.includes(current.realId))
                                 ? 'fill-rose-500 text-rose-500' 
                                 : 'text-slate-400 group-hover:text-rose-400'

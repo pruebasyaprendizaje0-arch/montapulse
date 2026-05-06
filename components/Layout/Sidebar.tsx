@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Calendar, User, Bell, Home, Heart, History, Star, Users, Layout, Info, Building2, Clock, Sun, Moon, LogOut } from 'lucide-react';
+import { Compass, Calendar, User, Bell, Home, Heart, History, Star, Users, Layout, Info, Building2, Clock, Sun, Moon, LogOut, Sparkles } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,8 @@ export const Sidebar: React.FC = () => {
         { id: 'favorites', icon: Heart, label: 'PASSPORT', path: '/passport', action: 'favorites' },
         { id: 'notifications', icon: Bell, label: 'NOTIFICACIONES', path: '/community', action: null },
         { id: 'history', icon: History, label: 'HISTORIAL', path: '/history', action: null },
-        { id: 'plans', icon: Star, label: 'PLANES', path: '/plans', action: null },
+        { id: 'plans', icon: Star, label: 'SUSCRIPCIONES', path: '/plans', action: null },
+        { id: 'info', icon: Info, label: 'AYUDA / INFO', path: '/info', action: null },
     ] as const;
 
     const isActive = (path: string | null) => {
@@ -98,14 +99,26 @@ export const Sidebar: React.FC = () => {
 
             <div className="mt-auto pt-6 border-t border-white/5 flex flex-col gap-4">
                 <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/10 rounded-2xl p-4 border border-orange-500/20">
-                    <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-1">Pulse Pass</p>
-                    <p className="text-[10px] text-slate-400 leading-tight mb-3">Accede a beneficios exclusivos en toda la ruta.</p>
-                    <button 
-                         onClick={() => navigate('/plans')}
-                         className="w-full py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-500/20"
-                    >
-                        Activar Ahora
-                    </button>
+                    <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Plan Actual</p>
+                        <span className="text-[9px] font-black text-white bg-orange-500/20 px-2 py-0.5 rounded-full border border-orange-500/30">
+                            {user?.plan || 'Free'}
+                        </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight mb-3">
+                        {user?.plan === 'Expert' 
+                            ? '¡Tienes el plan máximo! Disfruta de todos los beneficios.' 
+                            : 'Accede a beneficios exclusivos y funciones avanzadas.'}
+                    </p>
+                    {user?.plan !== 'Expert' && (
+                        <button 
+                             onClick={() => navigate('/plans')}
+                             className="w-full py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 group"
+                        >
+                            <Sparkles className="w-3 h-3 group-hover:animate-spin" />
+                            Mejorar Plan
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-4">

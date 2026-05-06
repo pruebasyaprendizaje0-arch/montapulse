@@ -14,11 +14,11 @@ interface PulsePassModalProps {
 
 export const PulsePassModal: React.FC<PulsePassModalProps> = ({ isOpen, onClose, onSelectEvent }) => {
     const { user } = useAuthContext();
-    const { events, businesses } = useData();
+    const { events, businesses, setActiveView } = useData();
     const [filter, setFilter] = useState<'all' | 'today' | 'upcoming'>('all');
 
     const premiumBusinesses = useMemo(() => {
-        return businesses.filter(b => b.plan === SubscriptionPlan.BASIC || b.plan === SubscriptionPlan.EXPERT);
+        return businesses.filter(b => b.plan === SubscriptionPlan.PRO || b.plan === SubscriptionPlan.ELITE);
     }, [businesses]);
 
     const exclusiveOffers = useMemo(() => {
@@ -76,18 +76,30 @@ export const PulsePassModal: React.FC<PulsePassModalProps> = ({ isOpen, onClose,
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <Zap className="w-5 h-5 text-orange-500" />
-                            <span className="text-sm font-bold text-white">
-                                {user?.pulsePassActive ? (
-                                    <span className="text-emerald-400">✓ Miembro Activo</span>
-                                ) : (
-                                    <span className="text-slate-500">Activa tu Pulse Pass</span>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-white">
+                                    {user?.pulsePassActive ? (
+                                        <span className="text-emerald-400">✓ Miembro Activo</span>
+                                    ) : (
+                                        <span className="text-slate-500">Pulse Pass</span>
+                                    )}
+                                </span>
+                                {!user?.pulsePassActive && (
+                                    <span className="text-[10px] text-slate-500 font-medium">Actívalo para ofertas exclusivas</span>
                                 )}
-                            </span>
+                            </div>
                         </div>
-                        {user?.pulsePassActive && (
+                        {user?.pulsePassActive ? (
                             <div className="px-3 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full">
                                 <span className="text-[10px] font-black text-white uppercase">Activo</span>
                             </div>
+                        ) : (
+                            <button 
+                                onClick={() => { setActiveView('plans'); onClose(); }}
+                                className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 rounded-xl text-[10px] font-black text-white uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+                            >
+                                Mejorar Plan
+                            </button>
                         )}
                     </div>
                 </div>
@@ -118,7 +130,7 @@ export const PulsePassModal: React.FC<PulsePassModalProps> = ({ isOpen, onClose,
                     {exclusiveOffers.length > 0 ? (
                         exclusiveOffers.map(offer => {
                             const business = businesses.find(b => b.id === offer.businessId);
-                            const isPremium = business?.plan === SubscriptionPlan.BASIC || business?.plan === SubscriptionPlan.EXPERT;
+                            const isPremium = business?.plan === SubscriptionPlan.PRO || business?.plan === SubscriptionPlan.ELITE;
                             
                             return (
                                 <div 

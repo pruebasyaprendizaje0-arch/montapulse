@@ -13,7 +13,7 @@ interface BusinessEditModalProps {
 }
 
 export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, isRegistration = false }) => {
-    const { user, isSuperAdmin } = useAuthContext();
+    const { user, isSuperAdmin, isAdmin } = useAuthContext();
     const {
         businesses, setBusinesses, editingBusinessId, setShowBusinessEdit,
         setEditingBusinessId, handleUpdateBusinessProfile,
@@ -31,8 +31,8 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
 
     const userBusiness = businesses.find(b => b.ownerId === user?.id && !b.isReference);
     const userReference = businesses.find(b => b.ownerId === user?.id && b.isReference);
-    const canAddBusiness = isSuperAdmin || !userBusiness;
-    const canAddReference = isSuperAdmin || !userReference;
+    const canAddBusiness = isSuperAdmin || isAdmin || !userBusiness;
+    const canAddReference = isSuperAdmin || isAdmin || !userReference;
 
     const handleClose = () => {
         if (onClose) {
@@ -349,7 +349,8 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                 {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => {
                                     const dayKey = day.toLowerCase();
                                     const schedule = (data as any).openingHours?.[dayKey] || null;
-                                    const isClosed = schedule?.closed;
+                                    // If schedule is missing, we treat it as closed by default to avoid UI confusion
+                                    const isClosed = schedule ? schedule.closed : true;
                                     const openTime = schedule?.open || '08:00';
                                     const closeTime = schedule?.close || '22:00';
 

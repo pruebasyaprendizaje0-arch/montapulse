@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings } from '../types';
 import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition } from '../constants';
 import {
-    subscribeToEvents, subscribeToBusinesses, subscribeToAppSettings,
+    subscribeToEvents, subscribeToBusinesses, subscribeToAllSettings,
     incrementViewCount, updateAppSettings, subscribeToUsers,
     getUserByEmail, getBusinessById, createUser, createBusiness, updateBusiness, deleteBusiness, updateUser,
     toggleRSVP, deleteEvent, updateEvent, createEvent, subscribeToRSVPCounts,
@@ -13,7 +13,7 @@ import {
     addFavorite, removeFavorite, subscribeToUserFavorites,
     purgeAllReferencePoints,
     restoreBusiness,
-    getCustomLocalities, subscribeToCustomLocalities, createCustomLocality, deleteCustomLocality,
+    getCustomLocalities, subscribeToCustomLocalities, createCustomLocality, deleteCustomLocality, updateCustomLocality,
     subscribeToNotifications, createNotification, markNotificationRead,
     incrementEventViewCount, incrementEventClickCount as serviceIncrementClick,
     subscribeToChatRooms, markRoomAsRead
@@ -26,6 +26,7 @@ import { useAuthContext } from './AuthContext';
 import { useToast } from './ToastContext';
 import { resetFirestoreCache } from '../firebase.config';
 import { compressImage } from '../utils/imageUtils';
+import { getDefaultOpeningHours, getEcuadorDate } from '../utils/timeUtils';
 
 interface DataContextType {
     events: MontanitaEvent[];
@@ -135,10 +136,11 @@ interface DataContextType {
     isAdmin: boolean;
     isSuperUser: boolean;
     isSuperAdmin: boolean;
-    customLocalities: { name: string; coords: [number, number]; zoom: number }[];
+    customLocalities: { id?: string; name: string; coords: [number, number]; zoom: number }[];
     customLocalitySectors: Record<string, Sector[]>;
     handleAddCustomLocality: (name: string, coords: [number, number], hasBeach: boolean) => Promise<void>;
-    handleDeleteCustomLocality: (name: string) => Promise<void>;
+    handleUpdateCustomLocality: (id: string, name: string, coords: [number, number], hasBeach: boolean) => Promise<void>;
+    handleDeleteCustomLocality: (id: string, name: string) => Promise<void>;
     filteredEvents: MontanitaEvent[];
     filteredBusinesses: Business[];
     pastEvents: MontanitaEvent[];
@@ -156,6 +158,8 @@ interface DataContextType {
     setEditingBusinessId: (id: string | null) => void;
     showPaymentEdit: boolean;
     setShowPaymentEdit: (show: boolean) => void;
+    showLocalityManager: boolean;
+    setShowLocalityManager: (show: boolean) => void;
     planPrices: Record<SubscriptionPlan, number>;
     handleUpdatePlanPrices: (prices: Record<SubscriptionPlan, number>) => Promise<void>;
     planFeatures: Record<SubscriptionPlan, PlanFeatureDefinition[]>;
@@ -242,7 +246,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { authUser, user, setUser, isAdmin, isSuperAdmin, isSuperUser } = useAuthContext();
+    const { authUser, user, setUser, isAdmin, isSuperAdmin, isSuperUser, loading: authLoading } = useAuthContext();
     const { showToast, showConfirm, showPrompt } = useToast();
     const navigate = useNavigate();
     const [events, setEvents] = useState<MontanitaEvent[]>([]);
@@ -256,20 +260,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [planFeatures, setPlanFeatures] = useState<Record<SubscriptionPlan, PlanFeatureDefinition[]>>(PLAN_FEATURES);
     const [planLimits, setPlanLimits] = useState<Record<SubscriptionPlan, number>>(PLAN_LIMITS);
     const [planNames, setPlanNames] = useState<Record<SubscriptionPlan, string>>({
-        [SubscriptionPlan.FREE]: 'Free',
-        [SubscriptionPlan.BASIC]: 'Pulse Pro',
-        [SubscriptionPlan.PREMIUM]: 'Pulse Elite',
-        [SubscriptionPlan.PRO]: 'Pulse Pro',
-        [SubscriptionPlan.ELITE]: 'Pulse Elite',
-        [SubscriptionPlan.EXPERT]: 'Pulse Expert'
+        [SubscriptionPlan.FREE]: 'Free (Visitante)',
+        [SubscriptionPlan.PRO]: 'Pro (Básico)',
+        [SubscriptionPlan.ELITE]: 'Elite (Premium)',
+        [SubscriptionPlan.EXPERT]: 'Expert (Admin)'
     });
     const [planSubtitles, setPlanSubtitles] = useState<Record<SubscriptionPlan, string>>({
-        [SubscriptionPlan.FREE]: 'Tu inicio en la comunidad.',
-        [SubscriptionPlan.BASIC]: 'Visibilidad potenciada.',
-        [SubscriptionPlan.PREMIUM]: 'Máximo alcance y control.',
-        [SubscriptionPlan.PRO]: 'Crea hasta 4 pulsos/mes.',
-        [SubscriptionPlan.ELITE]: 'Crea hasta 10 pulsos/mes.',
-        [SubscriptionPlan.EXPERT]: 'Solución total para tu negocio.'
+        [SubscriptionPlan.FREE]: 'Descubrimiento total',
+        [SubscriptionPlan.PRO]: '5 Pulsos activos/mes',
+        [SubscriptionPlan.ELITE]: '10 Pulsos activos/mes',
+        [SubscriptionPlan.EXPERT]: 'Soporte VIP 24/7'
     });
     const [selectedEvent, setSelectedEvent] = useState<MontanitaEvent | null>(null);
     const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -300,6 +300,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [showProfileEdit, setShowProfileEdit] = useState(false);
     const [editingBusinessId, setEditingBusinessId] = useState<string | null>(null);
     const [showPaymentEdit, setShowPaymentEdit] = useState(false);
+    const [showLocalityManager, setShowLocalityManager] = useState(false);
     const [showMigrationPanel, setShowMigrationPanel] = useState(false);
     const [showBusinessReg, setShowBusinessReg] = useState(false);
     const [showPublicProfile, setShowPublicProfile] = useState(false);
@@ -325,6 +326,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isPublished: true,
         isVerified: false,
         email: '',
+        openingHours: getDefaultOpeningHours(),
         ownerId: 'admin'
     };
 
@@ -357,7 +359,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMood, setSelectedMood] = useState<Vibe | null>(null);
     
-    const [customLocalities, setCustomLocalities] = useState<{ name: string; coords: [number, number]; zoom: number }[]>([]);
+    const [customLocalities, setCustomLocalities] = useState<{ id?: string; name: string; coords: [number, number]; zoom: number }[]>([]);
     const [customLocalitySectors, setCustomLocalitySectors] = useState<Record<string, Sector[]>>({});
 
     // Handle Firestore Internal Assertion Failures
@@ -429,7 +431,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (happensToday && hasNotEnded) {
                 const business = businesses.find(b => b.id === event.businessId);
-                const isPremium = event.isPremium || business?.plan === SubscriptionPlan.EXPERT || business?.plan === SubscriptionPlan.PREMIUM;
+                const isPremium = event.isPremium || business?.plan === SubscriptionPlan.EXPERT || business?.plan === SubscriptionPlan.ELITE;
                 const isAdminEvent = event.isFeatured || business?.isReference || event.ownerId === user.id;
                 const isLiked = favorites.includes(event.id);
 
@@ -546,43 +548,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('montapulse_journey_cards_v3', JSON.stringify(journeyCards));
     }, [journeyCards]);
 
-    // Firestore Sync for Global Settings
-    useEffect(() => {
-        const unsubscribe = subscribeToAppSettings('journey_cards', (data) => {
-            if (data && data.cards) {
-                setJourneyCards(data.cards);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
-
-    useEffect(() => {
-        const unsubscribe = subscribeToAppSettings('polygons', (data) => {
-            if (data && data.data) {
-                setSectorPolygons(data.data);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
-
-    useEffect(() => {
-        const unsubscribe = subscribeToAppSettings('sector_labels', (data) => {
-            if (data && data.labels) {
-                setSectorLabels(data.labels);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
-
-    useEffect(() => {
-        const unsubscribe = subscribeToAppSettings('payment_info', (data) => {
-            if (data) {
-                setPaymentDetails(prev => ({ ...prev, ...data }));
-            }
-        });
-        return () => unsubscribe();
-    }, []);
-
     useEffect(() => {
         const targetId = editingBusinessId || user?.businessId;
         if (editingBusinessId && targetId) {
@@ -605,53 +570,44 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     isReference: business.isReference || false,
                     isVerified: business.isVerified || false,
                     plannerCategory: (business as any).plannerCategory || null,
+                    openingHours: business.openingHours || {},
                     ownerId: business.ownerId || 'admin'
                 });
             }
         }
     }, [editingBusinessId, user?.businessId, businesses]);
 
-    useEffect(() => {
-        const unsubscribe = subscribeToAppSettings('plan_prices', (data) => {
-            if (data && data.prices) {
-                setPlanPrices(data.prices);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
+    // plan_prices listener moved to staggered block below
 
-    useEffect(() => {
-        const unsubscribe = subscribeToAppSettings('services_guide', (data) => {
-            if (data && data.categories) {
-                setServices(data.categories);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
 
+    // Listeners are consolidated and staggered below to prevent SDK race conditions (Assertion b815)
     useEffect(() => {
-        const unsubscribe = subscribeToAppSettings('help_support', (data) => {
-            if (data && data.items) {
-                setHelpSupport(data.items);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
+        if (authLoading) return;
 
-    useEffect(() => {
-        const unsubscribe = subscribeToAppSettings('policies', (data) => {
-            if (data) {
-                setPolicyData(data as PolicyData);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
+        let active = true;
+        const unsubs: (() => void)[] = [];
 
-    useEffect(() => {
-        const unsubEvents = subscribeToEvents((data) => {
-            setEvents(data);
-        });
-        const unsubBusinesses = subscribeToBusinesses((data) => {
+        // Staggered subscription utility
+        const addStaggeredUnsub = (delay: number, subscribeFn: () => (() => void)) => {
+            const timeoutId = setTimeout(() => {
+                if (active) {
+                    try {
+                        unsubs.push(subscribeFn());
+                    } catch (err) {
+                        console.error('Failed to subscribe after stagger:', err);
+                    }
+                }
+            }, delay);
+            return timeoutId;
+        };
+
+        // 1. Core Data (Priority 1) - Staggered minimally
+        const tEvents = addStaggeredUnsub(50, () => subscribeToEvents((data) => {
+            if (active) setEvents(data);
+        }));
+
+        const tBiz = addStaggeredUnsub(250, () => subscribeToBusinesses((data) => {
+            if (!active) return;
             rawBusinessesRef.current = data;
             const unique: Business[] = [];
             const seen = new Set<string>();
@@ -675,61 +631,148 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (data.length > unique.length && isSuperUser) {
                 console.log(`[Data] Found ${data.length - unique.length} hidden clones in businesses collection.`);
             }
-        });
-        const unsubRSVPs = subscribeToRSVPCounts((counts) => {
-            setRsvpCounts(counts);
-        });
+        }));
 
-        const unsubPosts = subscribeToPosts((data) => {
-            setPosts(data);
-        });
-        const unsubMessages = subscribeToMessages(50, (data) => {
-            setMessages(data);
-        });
 
+        // 2. Consolidated Config/Settings Listener (Replaces 8 individual listeners)
+        const t2 = addStaggeredUnsub(1000, () => subscribeToAllSettings((allSettings) => {
+            if (!active) return;
+            
+            // services_guide
+            if (allSettings.services_guide?.categories) setServices(allSettings.services_guide.categories);
+            
+            // help_support
+            if (allSettings.help_support?.items) setHelpSupport(allSettings.help_support.items);
+            
+            // policies
+            if (allSettings.policies) setPolicyData(allSettings.policies as PolicyData);
+            
+            // journey_cards
+            if (allSettings.journey_cards?.cards) setJourneyCards(allSettings.journey_cards.cards);
+            
+            // polygons
+            if (allSettings.polygons?.data) setSectorPolygons(allSettings.polygons.data);
+            
+            // sector_labels
+            if (allSettings.sector_labels?.labels) setSectorLabels(allSettings.sector_labels.labels);
+            
+            // payment_info
+            if (allSettings.payment_info) setPaymentDetails(prev => ({ ...prev, ...allSettings.payment_info }));
+            
+            // plan_prices (with complex validation logic)
+            if (allSettings.plan_prices?.prices) {
+                const validatedPrices = { ...PLAN_PRICES };
+                const dbPrices = allSettings.plan_prices.prices as Record<string, number>;
+                Object.values(SubscriptionPlan).forEach(plan => {
+                    const dbKey = plan.toUpperCase();
+                    const dbValue = dbPrices[plan] !== undefined ? dbPrices[plan] : dbPrices[dbKey];
+                    if (dbValue !== undefined && dbValue > 0) validatedPrices[plan] = dbValue;
+                });
+                setPlanPrices(validatedPrices);
+            }
+
+            // plan_features
+            if (allSettings.plan_features?.features) {
+                setPlanFeatures(allSettings.plan_features.features as Record<SubscriptionPlan, PlanFeatureDefinition[]>);
+            }
+            
+            // plan_limits
+            if (allSettings.plan_limits?.limits) {
+                setPlanLimits(allSettings.plan_limits.limits as Record<SubscriptionPlan, number>);
+            }
+            
+            // plan_names
+            if (allSettings.plan_names?.names) {
+                setPlanNames(allSettings.plan_names.names as Record<SubscriptionPlan, string>);
+            }
+            
+            // plan_subtitles
+            if (allSettings.plan_subtitles?.subtitles) {
+                setPlanSubtitles(allSettings.plan_subtitles.subtitles as Record<SubscriptionPlan, string>);
+            }
+        }));
+
+        // 3. Social & Community (Lower Priority, longer stagger)
+        const t5 = addStaggeredUnsub(3500, () => subscribeToPosts((data) => {
+            if (active) setPosts(data);
+        }));
+
+        const t6 = addStaggeredUnsub(4000, () => subscribeToMessages(50, (data) => {
+            if (active) setMessages(data);
+        }));
+
+        // 4. User Data (Staggered - moved to separate effect for stability)
+
+        // 5. One-off Loads
         const loadCustomLocalities = async () => {
             try {
                 const customs = await getCustomLocalities();
-                setCustomLocalities(customs.map(c => ({ name: c.name, coords: c.coords, zoom: c.zoom })));
+                if (!active) return;
+                setCustomLocalities(customs.map(c => ({ id: c.id, name: c.name, coords: c.coords, zoom: c.zoom })));
                 const sectorsMap: Record<string, Sector[]> = {};
                 customs.forEach(c => {
                     sectorsMap[c.name] = (c.sectors || [Sector.CENTRO, Sector.PLAYA, Sector.MONTANA]) as Sector[];
                 });
                 setCustomLocalitySectors(sectorsMap);
             } catch (error) {
-                console.error('Error loading custom localities:', error);
+                // Silently handled by firestoreService
             }
         };
         loadCustomLocalities();
 
         return () => {
-            unsubEvents();
-            unsubBusinesses();
-            unsubRSVPs();
-            unsubPosts();
-            unsubMessages();
+            active = false;
+            clearTimeout(tEvents);
+            clearTimeout(tBiz);
+            clearTimeout(t2);
+            clearTimeout(t5);
+            clearTimeout(t6);
+            unsubs.forEach(unsub => {
+                try {
+                    unsub();
+                } catch (e) {
+                    // Ignore unsub errors during cleanup
+                }
+            });
         };
-    }, []);
+    }, [authLoading, isAdmin, isSuperUser, user?.businessId]);
+    
+    // 6. User Data Subscription (Separate for stability & plan-reactivity)
+    useEffect(() => {
+        if (authLoading || !user) return;
+        
+        const hostPlan = user.businessId ? businesses.find(b => b.id === user.businessId)?.plan : null;
+        const isPremiumHost = hostPlan === SubscriptionPlan.ELITE;
+        
+        let unsub: (() => void) | undefined;
+        let t: NodeJS.Timeout | undefined;
+
+        if (isAdmin || isPremiumHost) {
+            // Give it a small delay to avoid congestion during boot
+            t = setTimeout(() => {
+                unsub = subscribeToUsers(setAllUsers);
+            }, 5000);
+        } else {
+            setAllUsers([]);
+        }
+
+        return () => {
+            if (t) clearTimeout(t);
+            if (unsub) unsub();
+        };
+    }, [authLoading, isAdmin, user?.businessId, businesses.find(b => b.id === user?.businessId)?.plan]);
+
+
 
     // Only subscribe to ALL users if admin OR premium business owner 
     // This allows premium hosts to see who follows them (follower details)
-    useEffect(() => {
-        const isPremiumHost = user?.businessId && businesses.find(b => b.id === user.businessId)?.plan === SubscriptionPlan.PREMIUM;
-        
-        if (!isAdmin && !isPremiumHost) {
-            setAllUsers([]);
-            return;
-        }
-        const unsubUsers = subscribeToUsers((data) => {
-            setAllUsers(data);
-        });
-        return () => unsubUsers();
-    }, [isAdmin, user?.businessId, businesses]);
+    // subscribeToUsers moved to staggered block above
+
 
 
     useEffect(() => {
         if (selectedEvent) {
-            incrementViewCount(selectedEvent.id);
+            incrementEventViewCount(selectedEvent.id);
         }
     }, [selectedEvent?.id]);
 
@@ -1292,10 +1335,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             coordinates: [lat, lng],
             imageUrl: 'https://images.unsplash.com/photo-1574672280600-4accfa5b6f98?auto=format&fit=crop&q=80&w=400',
             category: BusinessCategory.OTRO,
-            plan: SubscriptionPlan.BASIC,
+            plan: SubscriptionPlan.PRO,
             monthlyEventCount: 0,
             lastResetDate: new Date().toISOString(),
-            plannerCategory: null
+            plannerCategory: null,
+            openingHours: getDefaultOpeningHours()
         };
         const id = await createBusiness(newBiz);
         setEditingBusinessId(id);
@@ -1490,14 +1534,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const hasReferenceByOwner = businesses.some(b => b.ownerId === authUser.uid && b.isReference);
                 
                 if (!isReferenceItem) {
-                    // Limitar a 1 negocio por usuario
-                    if ((hasBusinessByOwner || hasBusinessByEmail) && !isSuperUser && !isSuperAdmin) {
+                    // Limitar a 1 negocio por usuario (excepto admins)
+                    if ((hasBusinessByOwner || hasBusinessByEmail) && !isSuperUser && !isSuperAdmin && !isAdmin) {
                         showToast("Solo puedes tener un negocio asociado a tu cuenta.", "error");
                         return;
                     }
                 } else {
-                    // Limitar a 1 punto de referencia por usuario premium
-                    if (hasReferenceByOwner && !isSuperUser && !isSuperAdmin) {
+                    // Limitar a 1 punto de referencia por usuario premium (excepto admins)
+                    if (hasReferenceByOwner && !isSuperUser && !isSuperAdmin && !isAdmin) {
                         showToast("Solo puedes tener un punto de referencia en el mapa.", "error");
                         return;
                     }
@@ -1512,7 +1556,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     isVerified: isSuperAdmin,
                     isPublished: isSuperAdmin,
                     coordinates: bizForm.coordinates || locObj.coords,
-                    plan: SubscriptionPlan.BASIC,
+                    plan: SubscriptionPlan.PRO,
                     monthlyEventCount: 0,
                     lastResetDate: new Date().toISOString(),
                     plannerCategory: bizForm.plannerCategory || null,
@@ -1531,7 +1575,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         role: 'host',
                         avatarUrl: user?.avatarUrl || authUser.photoURL || undefined,
                         businessId: newBusinessId,
-                        plan: SubscriptionPlan.BASIC
+                        plan: SubscriptionPlan.PRO
                     };
                     await updateUser(authUser.uid, { businessId: newBusinessId, role: 'host' });
                     setUser(newUserProfile);
@@ -1595,12 +1639,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (!user) return;
                 
                 const userBusiness = user.businessId ? businesses.find(b => b.id === user.businessId) : null;
-                const isPremium = userBusiness?.plan === SubscriptionPlan.PREMIUM;
+                const isPremium = userBusiness?.plan === SubscriptionPlan.ELITE || userBusiness?.plan === SubscriptionPlan.EXPERT || isAdmin;
                 const eventLimit = isPremium ? Infinity : 7;
                 
                 if (!editingEventId && eventLimit !== Infinity) {
                     const businessEvents = events.filter(e => e.businessId === userBusiness?.id);
-                    if (businessEvents.length >= eventLimit) {
+                    if (businessEvents.length >= eventLimit && !isAdmin) {
                         showToast("Has alcanzado el límite de eventos de tu plan. ¡Actualiza a Premium!", "error");
                         return;
                     }
@@ -1618,7 +1662,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     vibe: newEvent.vibe,
                     sector: newEvent.sector,
                     imageUrl: newEvent.imageUrl || 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&q=80&w=600',
-                    isPremium: user?.plan === SubscriptionPlan.PREMIUM,
+                    isPremium: user?.plan === SubscriptionPlan.ELITE || user?.plan === SubscriptionPlan.EXPERT,
                     businessId: bizId,
                     interestedCount: 0,
                     viewCount: 0
@@ -1640,10 +1684,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     setGeneratedDesc('');
                     showToast("Evento guardado correctamente", "success");
                 } catch (error: any) {
-                    // Handle upgrade required error - show upgrade modal
+                    // Handle upgrade required error - redirect to plans
                     if (error?.message === 'UPGRADE_REQUIRED' || error?.code === 'UPGRADE_REQUIRED') {
-                        showToast("Necesitas un plan Pro o superior para crear eventos.", "info");
-                        // TODO: Trigger upgrade modal here
+                        showToast("Has alcanzado tu límite. Mejora tu plan para continuar.", "info");
+                        navigate('/plans?upgrade=true');
                         return;
                     }
                     console.error("Error saving event:", error);
@@ -1921,7 +1965,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 let senderName = user ? `${user.name} ${user.surname}` : (authUser.displayName || 'User');
                 let senderAvatar = user?.avatarUrl || authUser.photoURL || undefined;
 
-                if (asBusiness && user?.businessId && userPlan === SubscriptionPlan.PREMIUM) {
+                if (asBusiness && user?.businessId && (userPlan === SubscriptionPlan.ELITE || userPlan === SubscriptionPlan.EXPERT)) {
                     const business = businesses.find(b => b.id === user.businessId);
                     if (business) {
                         senderId = business.id;
@@ -2001,6 +2045,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             deletedBusinesses,
             showPulsePassModal,
             setShowPulsePassModal,
+            showLocalityManager,
+            setShowLocalityManager,
             customLocalities,
             customLocalitySectors,
             handleAddCustomLocality: async (name: string, coords: [number, number], hasBeach: boolean) => {
@@ -2008,7 +2054,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const sectors = [Sector.CENTRO, Sector.NORTE, Sector.SUR];
                     if (hasBeach) sectors.push(Sector.PLAYA);
 
-                    await createCustomLocality({
+                    const newId = await createCustomLocality({
                         name,
                         coords,
                         zoom: 15,
@@ -2016,21 +2062,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         createdBy: authUser?.uid || 'admin',
                         hasBeach
                     });
-                    setCustomLocalities(prev => [...prev, { name, coords, zoom: 15 }]);
+                    setCustomLocalities(prev => [...prev, { id: newId, name, coords, zoom: 15 }]);
                     setCustomLocalitySectors(prev => ({ ...prev, [name]: sectors }));
                     showToast(`Localidad "${name}" creada exitosamente`, 'success');
                 } catch (error) {
                     showToast('Error al crear localidad', 'error');
                 }
             },
-            handleDeleteCustomLocality: async (name: string) => {
+            handleUpdateCustomLocality: async (id: string, name: string, coords: [number, number], hasBeach: boolean) => {
                 try {
-                    const customs = await getCustomLocalities();
-                    const toDelete = customs.find(c => c.name === name);
-                    if (toDelete?.id) {
-                        await deleteCustomLocality(toDelete.id);
-                    }
-                    setCustomLocalities(prev => prev.filter(l => l.name !== name));
+                    const sectors = [Sector.CENTRO, Sector.NORTE, Sector.SUR];
+                    if (hasBeach) sectors.push(Sector.PLAYA);
+
+                    await updateCustomLocality(id, {
+                        name,
+                        coords,
+                        sectors,
+                        hasBeach
+                    });
+                    
+                    setCustomLocalities(prev => prev.map(c => c.id === id ? { ...c, name, coords } : c));
+                    setCustomLocalitySectors(prev => ({ ...prev, [name]: sectors }));
+                    showToast(`Localidad "${name}" actualizada exitosamente`, 'success');
+                } catch (error) {
+                    showToast('Error al actualizar localidad', 'error');
+                }
+            },
+            handleDeleteCustomLocality: async (id: string, name: string) => {
+                try {
+                    await deleteCustomLocality(id);
+                    setCustomLocalities(prev => prev.filter(l => l.id !== id));
                     setCustomLocalitySectors(prev => {
                         const newSectors = { ...prev };
                         delete newSectors[name];

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Navigation, Layers, Plus, Minus, X, CheckCircle, MapPin, Zap, Flame, Info } from 'lucide-react';
+import { Navigation, Layers, Plus, Minus, X, CheckCircle, MapPin, Zap, Flame, Info, Crosshair } from 'lucide-react';
 import { Business, Sector, MontanitaEvent, SubscriptionPlan, BusinessCategory, CommunityPost } from '../../types.ts';
 import { SECTOR_INFO, LOCALITIES, MAP_ICONS } from '../../constants.ts';
 import { useToast } from '../../context/ToastContext';
@@ -17,6 +17,7 @@ interface MapViewProps {
   isSuperAdmin?: boolean;
   isSuperUser?: boolean;
   isPremiumUser?: boolean;
+  isEliteUser?: boolean;
   userBusinessId?: string;
   userId?: string;
   onAddBusiness?: (lat: number, lng: number, isReference?: boolean) => void;
@@ -110,6 +111,7 @@ export const MapView: React.FC<MapViewProps> = ({
   isSuperAdmin,
   isSuperUser,
   isPremiumUser,
+  isEliteUser,
   userBusinessId,
   userId,
   onAddBusiness,
@@ -147,6 +149,7 @@ export const MapView: React.FC<MapViewProps> = ({
   const polygonsLayerRef = useRef<L.LayerGroup | null>(null);
   const heatmapLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const userLocationMarkerRef = useRef<L.Marker | null>(null);
 
   const [mapMode, setMapMode] = useState<'dark' | 'satellite'>('satellite');
   const [editingSector, setEditingSector] = useState<Sector | null>(null);
@@ -157,7 +160,8 @@ export const MapView: React.FC<MapViewProps> = ({
   const [addingPointType, setAddingPointType] = useState<'business' | 'reference'>('business');
   const previewPolylineRef = useRef<L.Polyline | null>(null);
 
-  const currentTileModeRef = useRef<'dark' | 'satellite' | null>(null);
+const currentTileModeRef = useRef<'dark' | 'satellite' | 'google' | null>(null);
+  const currentZoomRef = useRef<number>(15);
   // Stable refs for callbacks so they never trigger the big effect
   const onBusinessSelectRef = useRef(onBusinessSelect);
   const onUpdateBusinessRef = useRef(onUpdateBusiness);
@@ -165,7 +169,9 @@ export const MapView: React.FC<MapViewProps> = ({
   useEffect(() => { onBusinessSelectRef.current = onBusinessSelect; });
   useEffect(() => { onUpdateBusinessRef.current = onUpdateBusiness; });
 
-  const updateTiles = (map: L.Map, mode: 'dark' | 'satellite') => {
+  const updateTiles = (map: L.Map, mode: 'dark' | 'satellite' | 'google', zoom?: number) => {
+    const currentZoom = zoom ?? currentZoomRef.current;
+    
     // Check if the current layer is actually on the map
     const layerExists = tileLayerRef.current && map.hasLayer(tileLayerRef.current);
     
@@ -175,9 +181,14 @@ export const MapView: React.FC<MapViewProps> = ({
       return;
     }
 
-    const url = mode === 'dark'
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+    let url: string;
+    if (mode === 'dark') {
+      url = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    } else if (mode === 'google') {
+      url = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+    } else {
+      url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+    }
 
     if (tileLayerRef.current) {
       map.removeLayer(tileLayerRef.current);
@@ -186,7 +197,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
     tileLayerRef.current = L.tileLayer(url, { 
       maxZoom: 20,
-      attribution: mode === 'dark' ? '&copy; CartoDB' : '&copy; Esri',
+      attribution: mode === 'dark' ? '&copy; CartoDB' : mode === 'google' ? '&copy; Google' : '&copy; Esri',
       noWrap: false,
       keepBuffer: 8,
       crossOrigin: 'anonymous'
@@ -198,8 +209,26 @@ export const MapView: React.FC<MapViewProps> = ({
     
     currentTileModeRef.current = mode;
     
+    // Update background color based on map mode
+    const bgColor = mode === 'google' ? '#ffffff' : '#020617';
+    const styleEl = document.getElementById('map-bg-style');
+    if (styleEl) {
+      styleEl.innerHTML = `.leaflet-container { background: ${bgColor} !important; outline: none !important; }`;
+    }
+    
     // Staggered invalidation to ensure layout is captured
     [50, 200].forEach(delay => setTimeout(() => map.invalidateSize(), delay));
+  };
+
+  const handleZoomChange = (map: L.Map) => {
+    const zoom = map.getZoom();
+    currentZoomRef.current = zoom;
+    
+    if (zoom >= 18 && currentTileModeRef.current !== 'google') {
+      updateTiles(map, 'google', zoom);
+    } else if (zoom < 18 && zoom >= 15 && currentTileModeRef.current === 'google') {
+      updateTiles(map, mapMode, zoom);
+    }
   };
 
   const handleSuperAdminAction = async (business: Business) => {
@@ -223,19 +252,20 @@ export const MapView: React.FC<MapViewProps> = ({
     onEditBusiness?.(business.id);
   };
 
-  useEffect(() => {
+useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const center: L.LatLngExpression = [-1.825, -80.753];
     const map = L.map(containerRef.current, {
       zoomControl: false,
       attributionControl: false,
-      // CRITICAL: Disable fadeAnimation to prevent tiles getting stuck at 0 opacity
       fadeAnimation: false, 
       zoomAnimation: true,
       markerZoomAnimation: true,
       scrollWheelZoom: true,
       tap: true,
-      preferCanvas: true
+      preferCanvas: true,
+      minZoom: 12,
+      maxZoom: 20
     }).setView(center, 15);
 
     mapRef.current = map;
@@ -245,8 +275,12 @@ export const MapView: React.FC<MapViewProps> = ({
 
     updateTiles(map, mapMode);
     
-    // Inject global fixes for Leaflet rendering glitches
+    // Listen for zoom changes to switch to Google Maps at high zoom
+    map.on('zoomend', () => handleZoomChange(map));
+    
+// Inject global fixes for Leaflet rendering glitches
     const style = document.createElement('style');
+    style.id = 'map-bg-style';
     style.innerHTML = `
       .leaflet-tile-pane { opacity: 1 !important; }
       .leaflet-layer { opacity: 1 !important; }
@@ -510,7 +544,7 @@ export const MapView: React.FC<MapViewProps> = ({
         setTempCoords(prev => [...prev, [lat, lng]]);
       } else if (isAddingPoint && onAddBusiness) {
         const isRef = addingPointType === 'reference';
-        if (isSuperUser || (!isRef && isPremiumUser)) {
+        if (isSuperUser || (isRef && isEliteUser) || (!isRef && isPremiumUser)) {
           onAddBusiness(lat, lng, isRef);
           setIsAddingPoint(false);
           [100, 300, 600, 1000, 2000].forEach(delay =>
@@ -531,7 +565,7 @@ export const MapView: React.FC<MapViewProps> = ({
       map.off('click', onClick);
       map.off('mousemove', onMouseMove);
     };
-  }, [isSuperAdmin, isSuperUser, isPremiumUser, isAddingPoint, addingPointType, editingSector, isMovingBusiness, movingBusinessId, onAddBusiness, onUpdateBusiness, onMoveBusinessComplete]);
+  }, [isSuperAdmin, isSuperUser, isPremiumUser, isEliteUser, isAddingPoint, addingPointType, editingSector, isMovingBusiness, movingBusinessId, onAddBusiness, onUpdateBusiness, onMoveBusinessComplete]);
 
   // Invalidate map whenever UI interaction states change
   useEffect(() => {
@@ -590,6 +624,45 @@ export const MapView: React.FC<MapViewProps> = ({
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
+
+  const handleLocate = () => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    map.locate({ setView: true, maxZoom: 16 });
+    
+    const onLocationFound = (e: L.LocationEvent) => {
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.remove();
+      }
+
+      const pulseIcon = L.divIcon({
+        className: 'user-location-pulse',
+        html: `
+          <div class="relative flex items-center justify-center">
+            <div class="absolute w-8 h-8 bg-blue-500 rounded-full animate-ping opacity-40"></div>
+            <div class="relative w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>
+          </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      });
+
+      userLocationMarkerRef.current = L.marker(e.latlng, { icon: pulseIcon }).addTo(map);
+      
+      map.off('locationfound', onLocationFound);
+      map.off('locationerror', onLocationError);
+    };
+
+    const onLocationError = (e: L.ErrorEvent) => {
+      console.error(e.message);
+      map.off('locationfound', onLocationFound);
+      map.off('locationerror', onLocationError);
+    };
+
+    map.on('locationfound', onLocationFound);
+    map.on('locationerror', onLocationError);
+  };
 
   return (
     <div className={`w-full h-full relative bg-[#020617] overflow-hidden ${isAddingPoint || isMovingBusiness ? 'cursor-crosshair' : ''}`}>
@@ -694,6 +767,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
         {/* Action Buttons */}
         <div className="absolute right-4 bottom-24 z-[1000] flex flex-col gap-2 pointer-events-auto">
+          {/* EXPERT/SuperUser: full add menu (business + reference) */}
           {isSuperUser && (
             <>
               <button
@@ -702,15 +776,13 @@ export const MapView: React.FC<MapViewProps> = ({
                   setIsAddingPoint(newState);
                   if (!newState) setEditingSector(null);
                   else setAddingPointType('business');
-                  
-                  // Defensive invalidations when toggling mode
                   if (mapRef.current) {
                     const m = mapRef.current;
                     [50, 200, 600].forEach(d => setTimeout(() => m.invalidateSize(), d));
                   }
                 }}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint 
-                  ? 'bg-rose-500 border-white text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]' 
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint
+                  ? 'bg-rose-500 border-white text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]'
                   : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-white hover:border-white/30'}`}
                 title={isAddingPoint ? 'Cancelar' : 'Añadir Punto'}
               >
@@ -720,8 +792,8 @@ export const MapView: React.FC<MapViewProps> = ({
                 <div className="flex flex-col gap-2 animate-in slide-in-from-right duration-200">
                   <button
                     onClick={() => setAddingPointType('business')}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all text-sm ${addingPointType === 'business' 
-                      ? 'bg-amber-500 border-amber-400 text-white' 
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all text-sm ${addingPointType === 'business'
+                      ? 'bg-amber-500 border-amber-400 text-white'
                       : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-amber-400'}`}
                     title="Añadir Negocio"
                   >
@@ -729,8 +801,8 @@ export const MapView: React.FC<MapViewProps> = ({
                   </button>
                   <button
                     onClick={() => setAddingPointType('reference')}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all text-sm ${addingPointType === 'reference' 
-                      ? 'bg-sky-500 border-sky-400 text-white' 
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all text-sm ${addingPointType === 'reference'
+                      ? 'bg-sky-500 border-sky-400 text-white'
                       : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-sky-400'}`}
                     title="Añadir Punto de Referencia"
                   >
@@ -741,21 +813,66 @@ export const MapView: React.FC<MapViewProps> = ({
             </>
           )}
 
-          {isPremiumUser && !isSuperUser && userBusinessId && (
+          {/* ELITE (premium): add menu with both business and reference, but no sector editor */}
+          {isEliteUser && !isSuperUser && (
+            <>
+              <button
+                onClick={() => {
+                  const newState = !isAddingPoint;
+                  setIsAddingPoint(newState);
+                  if (!newState) setAddingPointType('business');
+                  else setAddingPointType('business');
+                  if (mapRef.current) {
+                    const m = mapRef.current;
+                    [50, 200, 600].forEach(d => setTimeout(() => m.invalidateSize(), d));
+                  }
+                }}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint
+                  ? 'bg-rose-500 border-white text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]'
+                  : 'bg-gradient-to-br from-violet-500/80 to-purple-600/80 border-violet-400/50 text-white hover:from-violet-500 hover:to-purple-600'}`}
+                title={isAddingPoint ? 'Cancelar' : 'Añadir al Mapa'}
+              >
+                <Plus className={`w-5 h-5 ${isAddingPoint ? 'rotate-45' : ''}`} />
+              </button>
+              {isAddingPoint && (
+                <div className="flex flex-col gap-2 animate-in slide-in-from-right duration-200">
+                  <button
+                    onClick={() => setAddingPointType('business')}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all text-sm ${addingPointType === 'business'
+                      ? 'bg-amber-500 border-amber-400 text-white'
+                      : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-amber-400'}`}
+                    title="Añadir Negocio"
+                  >
+                    🏪
+                  </button>
+                  <button
+                    onClick={() => setAddingPointType('reference')}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all text-sm ${addingPointType === 'reference'
+                      ? 'bg-sky-500 border-sky-400 text-white'
+                      : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-sky-400'}`}
+                    title="Añadir Punto de Referencia"
+                  >
+                    📍
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* PRO (básico): add business only */}
+          {isPremiumUser && !isEliteUser && !isSuperUser && (
             <button
               onClick={() => {
                 const newState = !isAddingPoint;
                 setIsAddingPoint(newState);
                 setAddingPointType('business');
-                
-                // Defensive invalidations when toggling mode
                 if (mapRef.current) {
                   const m = mapRef.current;
                   [50, 200, 600].forEach(d => setTimeout(() => m.invalidateSize(), d));
                 }
               }}
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint 
-                ? 'bg-amber-500 border-white text-white shadow-[0_0_20px_rgba(245,158,11,0.4)]' 
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint
+                ? 'bg-amber-500 border-white text-white shadow-[0_0_20px_rgba(245,158,11,0.4)]'
                 : 'bg-gradient-to-br from-amber-500/80 to-orange-500/80 border-amber-400/50 text-white hover:from-amber-500 hover:to-orange-500'}`}
               title={isAddingPoint ? 'Cancelar' : 'Añadir Mi Negocio'}
             >
@@ -792,6 +909,14 @@ export const MapView: React.FC<MapViewProps> = ({
               <MapPin className={`w-5 h-5 ${isMovingBusiness ? 'animate-bounce' : ''}`} />
             </button>
           )}
+          <button
+            onClick={handleLocate}
+            data-testid="locate-me-button"
+            className="w-12 h-12 rounded-2xl bg-slate-900/80 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl shadow-2xl hover:bg-blue-600 transition-all mt-2 pointer-events-auto"
+            title="Mi Ubicación"
+          >
+            <Crosshair className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </div>

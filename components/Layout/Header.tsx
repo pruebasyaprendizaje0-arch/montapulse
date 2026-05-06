@@ -4,7 +4,8 @@ import { UserProfile, MontanitaEvent } from '../../types';
 import { useAuthContext } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
-import { WifiOff, Bell } from 'lucide-react';
+import { WifiOff, Bell, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { NotificationCenter } from './NotificationCenter';
 
@@ -12,6 +13,7 @@ export const Header: React.FC = () => {
     const { user } = useAuthContext();
     const { events, unreadNotificationsCount } = useData();
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const isOnline = useNetworkStatus();
     const [isNotifOpen, setIsNotifOpen] = React.useState(false);
     const eventsCount = events.length;
@@ -51,13 +53,24 @@ export const Header: React.FC = () => {
                 </div>
 
                 {user && (
-                    <div className="flex items-center gap-3 pr-2 border-r border-white/10">
+                    <div className="flex items-center gap-3 pr-4 border-r border-white/10">
                         <div className="flex flex-col items-end hidden sm:flex">
-                            <span className="text-[10px] font-black text-white uppercase tracking-tight leading-none">{user.name}</span>
-                            <span className="text-[8px] font-bold text-orange-500 uppercase tracking-widest leading-none mt-1">{user.plan}</span>
+                            <span className="text-[10px] font-black text-white uppercase tracking-tight leading-none mb-1">{user.name}</span>
+                            <div className="flex items-center gap-2">
+                                {user.plan !== 'Expert' && (
+                                    <button 
+                                        onClick={() => navigate('/plans')}
+                                        className="text-[8px] font-black text-orange-500 hover:text-white bg-orange-500/10 hover:bg-orange-500 border border-orange-500/20 px-2 py-0.5 rounded transition-all flex items-center gap-1 group"
+                                    >
+                                        <Sparkles className="w-2.5 h-2.5 group-hover:animate-pulse" />
+                                        MEJORAR
+                                    </button>
+                                )}
+                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">{user.plan}</span>
+                            </div>
                         </div>
-                        <div className="w-8 h-8 rounded-xl border border-orange-500 overflow-hidden ring-2 ring-orange-500/20 shadow-lg">
-                            <img src={user.avatarUrl} className="w-full h-full object-cover" />
+                        <div className="w-8 h-8 rounded-xl border border-orange-500 overflow-hidden ring-2 ring-orange-500/20 shadow-lg cursor-pointer" onClick={() => navigate('/passport')}>
+                            <img src={user.avatarUrl} className="w-full h-full object-cover" alt="User avatar" />
                         </div>
                     </div>
                 )}

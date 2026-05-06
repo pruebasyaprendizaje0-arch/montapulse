@@ -1,5 +1,5 @@
 
-import { MontanitaEvent, Sector, Business, UserProfile } from "../types.ts";
+import { MontanitaEvent, Sector, Business, UserProfile, SubscriptionPlan } from "../types";
 
 export interface PlannerSection {
   category: string;
@@ -82,8 +82,8 @@ export async function getPlannerRecommendations(user: UserProfile | null, busine
   const localBusinesses = businesses.filter(b => b.locality === locality);
   const otherBusinesses = businesses.filter(b => b.locality !== locality);
   
-  const bizList = localBusinesses.map(b => `ID:${b.id}|${b.name} (${b.category} in ${b.sector} sector, ${b.plan === 'Expert' || b.plan === 'Premium' ? 'Premium' : ''} ${b.isReference ? 'Landmark' : ''})`).join(", ");
-  const otherBizList = otherBusinesses.filter(b => b.plan === 'Expert' || b.plan === 'Premium').slice(0, 10).map(b => `ID:${b.id}|${b.name} in ${b.locality}`).join(", ");
+  const bizList = localBusinesses.map(b => `ID:${b.id}|${b.name} (${b.category} in ${b.sector} sector, ${b.plan === SubscriptionPlan.EXPERT || b.plan === SubscriptionPlan.ELITE ? 'Premium' : ''} ${b.isReference ? 'Landmark' : ''})`).join(", ");
+  const otherBizList = otherBusinesses.filter(b => b.plan === SubscriptionPlan.EXPERT || b.plan === SubscriptionPlan.ELITE).slice(0, 10).map(b => `ID:${b.id}|${b.name} in ${b.locality}`).join(", ");
   
   const userVibe = user?.preferredVibe || "General";
 
@@ -119,8 +119,8 @@ export async function getRecommendationForUser(events: MontanitaEvent[], busines
   const eventList = events.map(e => `${e.title} (${e.vibe} vibe in ${e.sector} sector)`).join(", ");
   
   const relevantBusinesses = businesses.filter(b => 
-    b.plan === 'Expert' || b.plan === 'Premium' || b.isReference
-  ).map(b => `ID:${b.id}|${b.name} (${b.category} in ${b.sector} sector, ${b.plan === 'Expert' || b.plan === 'Premium' ? 'Premium' : ''} ${b.isReference ? 'Landmark/Reference' : ''})`).join(", ");
+    b.plan === SubscriptionPlan.EXPERT || b.plan === SubscriptionPlan.ELITE || b.isReference
+  ).map(b => `ID:${b.id}|${b.name} (${b.category} in ${b.sector} sector, ${b.plan === SubscriptionPlan.EXPERT || b.plan === SubscriptionPlan.ELITE ? 'Premium' : ''} ${b.isReference ? 'Landmark/Reference' : ''})`).join(", ");
 
   try {
     const text = await callOpenRouter([

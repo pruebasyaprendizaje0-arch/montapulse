@@ -41,11 +41,11 @@ export const MassBroadcastHistory: React.FC<MassBroadcastHistoryProps> = ({ anno
             </div>
 
             {announcements.sort((a, b) => {
-                const timeA = a.timestamp?.seconds ? a.timestamp.seconds * 1000 : new Date(a.timestamp).getTime();
-                const timeB = b.timestamp?.seconds ? b.timestamp.seconds * 1000 : new Date(b.timestamp).getTime();
+                const timeA = a.timestamp?.seconds ? a.timestamp.seconds * 1000 : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+                const timeB = b.timestamp?.seconds ? b.timestamp.seconds * 1000 : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
                 return timeB - timeA;
             }).map((ann) => {
-                const date = ann.timestamp?.seconds ? new Date(ann.timestamp.seconds * 1000) : new Date(ann.timestamp);
+                const date = ann.timestamp?.seconds ? new Date(ann.timestamp.seconds * 1000) : (ann.timestamp ? new Date(ann.timestamp) : new Date());
                 const isExpanded = expandedId === ann.id;
                 const isScheduled = !!ann.scheduledAt;
 
@@ -145,7 +145,7 @@ export const MassBroadcastHistory: React.FC<MassBroadcastHistoryProps> = ({ anno
                                             <div>
                                                 <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/70">Fecha Programada</p>
                                                 <p className="text-xs font-bold text-amber-200">
-                                                    {format(new Date(ann.scheduledAt.seconds ? ann.scheduledAt.seconds * 1000 : ann.scheduledAt), "EEEE d 'de' MMMM, HH:mm", { locale: es })}
+                                                    {ann.scheduledAt && format(new Date(ann.scheduledAt.seconds ? ann.scheduledAt.seconds * 1000 : ann.scheduledAt), "EEEE d 'de' MMMM, HH:mm", { locale: es })}
                                                 </p>
                                             </div>
                                         </div>

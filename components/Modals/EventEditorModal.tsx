@@ -26,7 +26,7 @@ export const EventEditorModal: React.FC = () => {
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
     const userBusinessEvents = userBusiness ? events.filter(e => e.businessId === userBusiness.id) : [];
     const isSpecialUser = user?.email === 'ubicameinformacion@gmail.com' || user?.role === 'admin';
-    const isPremium = userBusiness?.plan === SubscriptionPlan.BASIC || userBusiness?.plan === SubscriptionPlan.PREMIUM || userBusiness?.plan === SubscriptionPlan.EXPERT || isSpecialUser;
+    const isPremium = userBusiness?.plan === SubscriptionPlan.PRO || userBusiness?.plan === SubscriptionPlan.ELITE || userBusiness?.plan === SubscriptionPlan.EXPERT || isSpecialUser;
     const planCreditsLimit = isPremium ? Infinity : (PLAN_LIMITS[userBusiness?.plan || SubscriptionPlan.FREE] || 0);
     const availableCredits = userBusiness?.eventCredits ?? 0;
     const isAtLimit = !isPremium && availableCredits <= 0;
@@ -78,7 +78,7 @@ export const EventEditorModal: React.FC = () => {
                             )}
                             <div>
                                 <p className="text-xs font-black text-white uppercase tracking-wider">
-                                    {isSpecialUser ? 'Plan Admin' : userBusiness?.plan === SubscriptionPlan.EXPERT ? 'Plan Expert' : userBusiness?.plan === SubscriptionPlan.PREMIUM ? 'Plan Premium' : userBusiness?.plan === SubscriptionPlan.BASIC ? 'Plan Basic' : 'Plan Gratis'}
+                                    {isSpecialUser ? 'Plan Admin' : userBusiness?.plan === SubscriptionPlan.EXPERT ? 'Plan Expert' : userBusiness?.plan === SubscriptionPlan.ELITE ? 'Plan Elite' : userBusiness?.plan === SubscriptionPlan.PRO ? 'Plan Pro' : 'Plan Gratis'}
                                 </p>
                                 {isSpecialUser ? (
                                     <p className="text-[10px] text-amber-400 font-medium">Pulses ilimitados</p>

@@ -20,6 +20,8 @@ import {
     arrayRemove
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
+import { getEcuadorDate } from './dateUtils';
+import { generateSlug } from '../utils/stringUtils';
 import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, ProfileReview, PulseNotification, Announcement, SubscriptionPlan } from '../types';
 
 // Helper to sanitize data for Firestore
@@ -40,16 +42,69 @@ const sanitizeData = (data: any): any => {
 
 // Error handling for Firestore SDK bugs
 export const handleFirestoreError = (error: any, context: string) => {
-    console.error(`Firestore Error [${context}]:`, error);
-    const errorStr = String(error);
-    if (errorStr.includes('INTERNAL ASSERTION FAILED') || errorStr.includes('ID: ca9') || errorStr.includes('ID: b815')) {
-        console.warn('Critical Firestore Assertion Failure detected. The SDK internal state may be corrupted.');
+    const rawErrorStr = String(error);
+    const errorStr = rawErrorStr.toLowerCase();
+    
+    // Extract standard codes if available
+    const errorCode = error?.code || 'unknown';
+    
+    const isPermissionDenied = 
+        errorCode === 'permission-denied' || 
+        errorCode === '403' ||
+        errorStr.includes('permission') || 
+        errorStr.includes('insufficient');
+    
+    // Suppress console error if it's just a permission denied while unauthenticated (expected for some listeners)
+    if (isPermissionDenied) {
+        console.warn(`Firestore Access restricted [${context}]: User might be unauthenticated or lacking specific role.`);
+    } else {
+        console.error(`Firestore Error [${context}] (${errorCode}):`, error);
+    }
+    
+    // Check for critical SDK assertions
+    const isAssertion = rawErrorStr.includes('INTERNAL ASSERTION FAILED') || 
+                       rawErrorStr.includes('ID: ca9') || 
+                       rawErrorStr.includes('ID: b815') ||
+                       rawErrorStr.includes('Unexpected state');
+
+    if (isAssertion) {
+        console.warn('CRITICAL: Firestore SDK Assertion Failure. The SDK internal state may be corrupted.');
         if (typeof window !== 'undefined') {
-            // Dispatch a custom event so the UI can react
-            window.dispatchEvent(new CustomEvent('firestore-assertion-failure', { detail: { error, context } }));
+            // Dispatch a custom event so the UI can react and offer a reset
+            window.dispatchEvent(new CustomEvent('firestore-assertion-failure', { 
+                detail: { error: rawErrorStr, context, timestamp: new Date().toISOString() } 
+            }));
         }
     }
     return error;
+};
+
+/**
+ * A safe wrapper for onSnapshot that ensures we don't crash the whole app 
+ * on internal SDK assertions and provides better logging.
+ */
+export const safeOnSnapshot = (
+    query: any, 
+    onNext: (snapshot: any) => void, 
+    context: string
+) => {
+    try {
+        return onSnapshot(query, 
+            (snapshot) => {
+                try {
+                    onNext(snapshot);
+                } catch (err) {
+                    console.error(`Error in onSnapshot callback [${context}]:`, err);
+                }
+            },
+            (error) => handleFirestoreError(error, context)
+        );
+    } catch (criticalErr) {
+        console.error(`CRITICAL: Failed to initialize onSnapshot [${context}]:`, criticalErr);
+        handleFirestoreError(criticalErr, `init:${context}`);
+        // Return a dummy unsubscribe
+        return () => {};
+    }
 };
 
 // ==================== REVIEWS ====================
@@ -60,17 +115,17 @@ export const subscribeToProfileReviews = (targetId: string, callback: (reviews: 
     // Como Firestore no permite un OR simple sin configurar índices compuestos complejos si hay orderBy,
     // usaremos targetId principalmente. Para negocios legacy seguiremos usando businessId si targetId no existe.
     const q = query(reviewsRef, where('targetId', '==', targetId), orderBy('timestamp', 'desc'));
-    
+
     // Si queremos soportar legacy businessId sin migración, tendríamos que hacer dos queries o un or() si el SDK lo permite.
     // Asumiremos que a partir de ahora se usa targetId.
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const reviews = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            timestamp: doc.data().timestamp?.toDate() || new Date()
+            timestamp: doc.data().timestamp?.toDate() || getEcuadorDate()
         })) as ProfileReview[];
         callback(reviews);
-    }, (error) => handleFirestoreError(error, 'subscribeToProfileReviews'));
+    }, 'subscribeToProfileReviews');
 };
 
 export const addProfileReview = async (review: ProfileReview) => {
@@ -87,15 +142,15 @@ export const addProfileReview = async (review: ProfileReview) => {
         const collectionName = review.targetType === 'business' ? 'businesses' : 'users_v2';
         const targetRef = doc(db, collectionName, review.targetId);
         const targetSnap = await getDoc(targetRef);
-        
+
         if (targetSnap.exists()) {
             const data = targetSnap.data();
             const currentReviewCount = data.reviewCount || 0;
             const currentRating = data.rating || 0;
-            
+
             const newReviewCount = (currentReviewCount || 0) + 1;
             const newRating = (((currentRating || 0) * (currentReviewCount || 0)) + review.rating) / newReviewCount;
-            
+
             await updateDoc(targetRef, {
                 reviewCount: newReviewCount,
                 rating: Math.round(newRating * 10) / 10
@@ -113,15 +168,19 @@ export const createEvent = async (event: Omit<MontanitaEvent, 'id'>, userPlan?: 
     try {
         // Validate plan for event creation (client-side + server-side via rules)
         if (!hasBusiness) {
-            const validPlans = [SubscriptionPlan.PREMIUM, SubscriptionPlan.PRO, SubscriptionPlan.ELITE, SubscriptionPlan.EXPERT];
+            const validPlans = [SubscriptionPlan.PRO, SubscriptionPlan.ELITE, SubscriptionPlan.EXPERT];
             if (userPlan === SubscriptionPlan.FREE || !validPlans.includes(userPlan as SubscriptionPlan)) {
                 throw new Error('UPGRADE_REQUIRED');
             }
         }
 
         const eventsRef = collection(db, 'events');
+        
+        const slug = generateSlug(event.title) + '-' + Date.now().toString().slice(-4);
+        
         const docRef = await addDoc(eventsRef, {
             ...sanitizeData(event),
+            slug,
             startAt: Timestamp.fromDate(event.startAt),
             endAt: Timestamp.fromDate(event.endAt),
             createdAt: serverTimestamp()
@@ -175,8 +234,8 @@ export const getEvents = async (): Promise<MontanitaEvent[]> => {
         return snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            startAt: doc.data().startAt?.toDate() || new Date(),
-            endAt: doc.data().endAt?.toDate() || new Date()
+            startAt: doc.data().startAt?.toDate() || getEcuadorDate(),
+            endAt: doc.data().endAt?.toDate() || getEcuadorDate()
         })) as MontanitaEvent[];
     } catch (error) {
         console.error('Error getting events:', error);
@@ -192,7 +251,7 @@ export const incrementEventClickCount = async (eventId: string) => {
             weeklyClicks: increment(1)
         });
     } catch (error) {
-        // Silently fail
+        handleFirestoreError(error, 'incrementEventClickCount');
     }
 };
 
@@ -204,7 +263,7 @@ export const incrementEventViewCount = async (eventId: string) => {
             weeklyViews: increment(1)
         });
     } catch (error) {
-        // Silently fail
+        handleFirestoreError(error, 'incrementEventViewCount');
     }
 };
 
@@ -212,7 +271,7 @@ export const subscribeToEvents = (callback: (events: MontanitaEvent[]) => void) 
     // ─ OPTIMIZACIÓN: Filtramos en el SERVIDOR solo eventos del mes pasado hacia adelante.
     // Antes: descargaba TODA la colección events sin importar la fecha.
     // Ahorro estimado: ~70% de lecturas cuando la colección supera los 50 docs.
-    const now = new Date();
+    const now = getEcuadorDate();
     const firstDayOfPastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const cutoffTimestamp = Timestamp.fromDate(firstDayOfPastMonth);
 
@@ -223,15 +282,15 @@ export const subscribeToEvents = (callback: (events: MontanitaEvent[]) => void) 
         orderBy('endAt', 'asc'),
         limit(150) // Tope de seguridad: máx 150 eventos activos
     );
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const events = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            startAt: doc.data().startAt?.toDate() || new Date(),
-            endAt: doc.data().endAt?.toDate() || new Date()
+            startAt: doc.data().startAt?.toDate() || getEcuadorDate(),
+            endAt: doc.data().endAt?.toDate() || getEcuadorDate()
         })) as MontanitaEvent[];
         callback(events);
-    }, (error) => handleFirestoreError(error, 'subscribeToEvents'));
+    }, 'subscribeToEvents');
 };
 
 // ==================== BUSINESSES ====================
@@ -252,19 +311,24 @@ export const createBusiness = async (business: Omit<Business, 'id'>) => {
         const businessesRef = collection(db, 'businesses');
         const sanitized = sanitizeData(business);
         console.log('Creating business with sanitized data:', JSON.stringify(sanitized, null, 2));
-        
+
+        // Generar slug
+        const slug = generateSlug(business.name) + '-' + Date.now().toString().slice(-4);
+
         // Reference points need a custom ID with the ref- prefix for map styling
         if ((business as any).isReference) {
             const refId = `ref-${Date.now()}`;
             const docRef = doc(businessesRef, refId);
             await setDoc(docRef, {
                 ...sanitized,
+                slug,
                 createdAt: serverTimestamp()
             });
             return refId;
         }
         const docRef = await addDoc(businessesRef, {
             ...sanitized,
+            slug,
             createdAt: serverTimestamp()
         });
         return docRef.id;
@@ -283,7 +347,7 @@ export const updateBusiness = async (id: string, data: Partial<Business>): Promi
 
         await updateDoc(businessRef, {
             ...sanitized,
-            updatedAt: new Date().toISOString()
+            updatedAt: getEcuadorDate().toISOString()
         });
     } catch (error: any) {
         console.error('Error updating business:', error);
@@ -297,9 +361,9 @@ export const deleteBusiness = async (id: string, permanent: boolean = false) => 
         if (permanent) {
             await deleteDoc(businessRef);
         } else {
-            await updateDoc(businessRef, { 
-                isDeleted: true, 
-                deletedAt: serverTimestamp() 
+            await updateDoc(businessRef, {
+                isDeleted: true,
+                deletedAt: serverTimestamp()
             });
         }
     } catch (error) {
@@ -311,7 +375,7 @@ export const deleteBusiness = async (id: string, permanent: boolean = false) => 
 export const restoreBusiness = async (id: string) => {
     try {
         const businessRef = doc(db, 'businesses', id);
-        await updateDoc(businessRef, { 
+        await updateDoc(businessRef, {
             isDeleted: false,
             deletedAt: null,
             updatedAt: serverTimestamp()
@@ -331,22 +395,22 @@ export const purgeAllReferencePoints = async () => {
             const id = doc.id.toLowerCase();
             const name = (data.name || '').toLowerCase();
             const category = (data.category as string || '').toLowerCase();
-            
-            return data.isReference || 
-                   id.startsWith('ref-') || 
-                   category.includes('referencia') ||
-                   category.includes('reference') ||
-                   name.includes('ref-') ||
-                   name.includes('referencia') ||
-                   name.includes('reference') ||
-                   name.includes('punto de');
+
+            return data.isReference ||
+                id.startsWith('ref-') ||
+                category.includes('referencia') ||
+                category.includes('reference') ||
+                name.includes('ref-') ||
+                name.includes('referencia') ||
+                name.includes('reference') ||
+                name.includes('punto de');
         });
 
         console.log(`Purger: Found ${toDelete.length} points to delete.`);
-        
+
         const deletePromises = toDelete.map(d => deleteDoc(d.ref));
         await Promise.all(deletePromises);
-        
+
         return toDelete.length;
     } catch (error) {
         console.error('Error purging reference points:', error);
@@ -400,13 +464,13 @@ export const getBusinesses = async (): Promise<Business[]> => {
 
 export const subscribeToBusinesses = (callback: (businesses: Business[]) => void) => {
     const businessesRef = collection(db, 'businesses');
-    return onSnapshot(businessesRef, (snapshot) => {
+    return safeOnSnapshot(businessesRef, (snapshot) => {
         const businesses = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         })) as Business[];
         callback(businesses);
-    }, (error) => handleFirestoreError(error, 'subscribeToBusinesses'));
+    }, 'subscribeToBusinesses');
 };
 
 export const incrementBusinessViewCount = async (businessId: string) => {
@@ -419,7 +483,7 @@ export const incrementBusinessViewCount = async (businessId: string) => {
             weeklyViews: increment(1)
         });
     } catch (error) {
-        console.error('Error incrementing business view count:', error);
+        handleFirestoreError(error, 'incrementBusinessViewCount');
     }
 };
 
@@ -448,7 +512,7 @@ export const updateUser = async (userId: string, data: Partial<UserProfile>) => 
 
         // Clean data for Firestore
         const cleanData = sanitizeData(data);
-        
+
         // NEVER include 'id' in the update payload as it's the document ID
         if (cleanData.id) {
             delete cleanData.id;
@@ -477,7 +541,7 @@ export const getUser = async (userId: string): Promise<UserProfile | null> => {
         }
         return null;
     } catch (error) {
-        console.error('Error getting user:', error);
+        handleFirestoreError(error, 'getUser');
         throw error;
     }
 };
@@ -504,13 +568,13 @@ export const subscribeToUsers = (callback: (users: UserProfile[]) => void) => {
     // una escucha sin tope sobre usuarios_v2 completos.
     const usersRef = collection(db, 'users_v2');
     const q = query(usersRef, orderBy('createdAt', 'desc'), limit(500));
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const users = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         })) as UserProfile[];
         callback(users);
-    }, (error) => handleFirestoreError(error, 'subscribeToUsers'));
+    }, 'subscribeToUsers');
 };
 
 // ==================== POINTS & PASS ====================
@@ -576,9 +640,9 @@ export const getFollowedBusinessIds = async (userId: string): Promise<string[]> 
 export const subscribeToUserFollows = (userId: string, callback: (businessIds: string[]) => void) => {
     const followsRef = collection(db, 'follows');
     const q = query(followsRef, where('userId', '==', userId));
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         callback(snapshot.docs.map(doc => doc.data().businessId));
-    }, (error) => handleFirestoreError(error, 'subscribeToUserFollows'));
+    }, 'subscribeToUserFollows');
 };
 
 export const getBusinessFollowers = async (businessId: string): Promise<string[]> => {
@@ -591,9 +655,9 @@ export const getBusinessFollowers = async (businessId: string): Promise<string[]
 export const subscribeToBusinessFollowers = (businessId: string, callback: (userIds: string[]) => void) => {
     const followsRef = collection(db, 'follows');
     const q = query(followsRef, where('businessId', '==', businessId));
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         callback(snapshot.docs.map(doc => doc.data().userId));
-    }, (error) => handleFirestoreError(error, 'subscribeToBusinessFollowers'));
+    }, 'subscribeToBusinessFollowers');
 };
 
 // ==================== FAVORITES ====================
@@ -631,10 +695,10 @@ export const subscribeToUserFavorites = (userId: string, callback: (eventIds: st
     const favoritesRef = collection(db, 'favorites');
     const q = query(favoritesRef, where('userId', '==', userId));
 
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const eventIds = snapshot.docs.map(doc => doc.data().eventId);
         callback(eventIds);
-    }, (error) => handleFirestoreError(error, 'subscribeToUserFavorites'));
+    }, 'subscribeToUserFavorites');
 };
 
 // ==================== RSVPS ====================
@@ -674,10 +738,10 @@ export const subscribeToUserRSVPs = (userId: string, callback: (eventIds: string
     const rsvpsRef = collection(db, 'rsvps');
     const q = query(rsvpsRef, where('userId', '==', userId));
 
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const eventIds = snapshot.docs.map(doc => doc.data().eventId);
         callback(eventIds);
-    }, (error) => handleFirestoreError(error, 'subscribeToUserRSVPs'));
+    }, 'subscribeToUserRSVPs');
 };
 
 export const subscribeToRSVPCounts = (callback: (counts: Record<string, number>) => void) => {
@@ -689,14 +753,14 @@ export const subscribeToRSVPCounts = (callback: (counts: Record<string, number>)
     // escenario, este listener puede eliminarse completamente.
     const rsvpsRef = collection(db, 'rsvps');
     const q = query(rsvpsRef, orderBy('createdAt', 'desc'), limit(500));
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const counts: Record<string, number> = {};
         snapshot.docs.forEach(doc => {
             const eventId = doc.data().eventId;
             counts[eventId] = (counts[eventId] || 0) + 1;
         });
         callback(counts);
-    }, (error) => handleFirestoreError(error, 'subscribeToRSVPCounts'));
+    }, 'subscribeToRSVPCounts');
 };
 
 // ==================== SETTINGS ====================
@@ -727,11 +791,26 @@ export const updateAppSettings = async (settingId: string, data: any) => {
 
 export const subscribeToAppSettings = (settingId: string, callback: (data: any) => void) => {
     const settingRef = doc(db, 'settings', settingId);
-    return onSnapshot(settingRef, (doc) => {
+    return safeOnSnapshot(settingRef, (doc) => {
         if (doc.exists()) {
             callback(doc.data());
         }
-    }, (error) => handleFirestoreError(error, 'subscribeToAppSettings'));
+    }, `subscribeToAppSettings:${settingId}`);
+};
+
+/**
+ * Consolidates all configuration listeners into one to reduce SDK target count.
+ * This is a major optimization to prevent "Unexpected state" assertions.
+ */
+export const subscribeToAllSettings = (onUpdate: (settings: Record<string, any>) => void) => {
+    const settingsRef = collection(db, 'settings');
+    return safeOnSnapshot(settingsRef, (snapshot: any) => {
+        const settings: Record<string, any> = {};
+        snapshot.docs.forEach((doc: any) => {
+            settings[doc.id] = doc.data();
+        });
+        onUpdate(settings);
+    }, 'subscribeToAllSettings');
 };
 
 // ==================== COMMUNITY ====================
@@ -740,14 +819,14 @@ export const subscribeToPosts = (callback: (posts: any[]) => void) => {
     // AUMENTADO: De 30 a 500 posts para el muro de la comunidad
     const postsRef = collection(db, 'posts');
     const q = query(postsRef, orderBy('timestamp', 'desc'), limit(500));
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const posts = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            timestamp: doc.data().timestamp?.toDate() || new Date()
+            timestamp: doc.data().timestamp?.toDate() || getEcuadorDate()
         }));
         callback(posts);
-    }, (error) => handleFirestoreError(error, 'subscribeToPosts'));
+    }, 'subscribeToPosts');
 };
 
 export const createPost = async (post: any, isAuthenticated: boolean = false) => {
@@ -755,7 +834,7 @@ export const createPost = async (post: any, isAuthenticated: boolean = false) =>
     if (!isAuthenticated) {
         throw new Error('AUTH_REQUIRED');
     }
-    
+
     try {
         const postsRef = collection(db, 'posts');
         await addDoc(postsRef, {
@@ -806,7 +885,7 @@ export const addCommentToPost = async (postId: string, comment: any) => {
             comments: arrayUnion({
                 ...comment,
                 id: Math.random().toString(36).substr(2, 9),
-                timestamp: new Date().toISOString() // Using string for nested timestamp to avoid Firestore nesting issues sometimes
+                timestamp: getEcuadorDate().toISOString() // Using string for nested timestamp to avoid Firestore nesting issues sometimes
             }),
             commentsCount: increment(1)
         });
@@ -825,14 +904,14 @@ export const addCommentToPost = async (postId: string, comment: any) => {
 export const subscribeToMessages = (limitNum: number, callback: (messages: any[]) => void) => {
     const messagesRef = collection(db, 'pulso_global');
     const q = query(messagesRef, orderBy('timestamp', 'desc'), limit(limitNum));
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const messages = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            timestamp: doc.data().timestamp?.toDate() || new Date()
+            timestamp: doc.data().timestamp?.toDate() || getEcuadorDate()
         }));
         callback(messages.reverse());
-    }, (error) => handleFirestoreError(error, 'subscribeToMessages'));
+    }, 'subscribeToMessages');
 };
 
 export const sendMessage = async (message: any) => {
@@ -875,14 +954,14 @@ export const toggleLikeGlobalMessage = async (messageId: string, userId: string,
 export const subscribeToChatRooms = (userId: string, callback: (rooms: ChatRoom[]) => void) => {
     const roomsRef = collection(db, 'chatRooms');
     const q = query(roomsRef, where('participants', 'array-contains', userId));
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const rooms = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            lastMessageTime: doc.data().lastMessageTime?.toDate() || new Date()
+            lastMessageTime: doc.data().lastMessageTime?.toDate() || getEcuadorDate()
         })) as ChatRoom[];
         callback(rooms);
-    }, (error) => handleFirestoreError(error, 'subscribeToChatRooms'));
+    }, 'subscribeToChatRooms');
 };
 
 export const sendRoomMessage = async (roomId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>): Promise<string> => {
@@ -897,11 +976,11 @@ export const sendRoomMessage = async (roomId: string, message: Omit<ChatMessage,
 
         const roomRef = doc(db, 'chatRooms', roomId);
         const prefix = message.isBusinessMessage ? '🏪 ' : '👤 ';
-        
+
         // Fetch room to get participants and update unread counts
         const roomSnap = await getDoc(roomRef);
         const unreadUpdates: Record<string, any> = {};
-        
+
         if (roomSnap.exists()) {
             const data = roomSnap.data();
             const participants = data.participants || [];
@@ -911,13 +990,13 @@ export const sendRoomMessage = async (roomId: string, message: Omit<ChatMessage,
                 }
             });
         }
-        
+
         await updateDoc(roomRef, {
             lastMessage: `${prefix}${message.senderName}: ${message.text}`,
             lastMessageTime: serverTimestamp(),
             ...unreadUpdates
         });
-        
+
         return docRef.id;
     } catch (error) {
         console.error('Error sending room message:', error);
@@ -939,14 +1018,14 @@ export const markRoomAsRead = async (roomId: string, userId: string): Promise<vo
 export const subscribeToRoomMessages = (roomId: string, callback: (messages: ChatMessage[]) => void) => {
     const messagesRef = collection(db, `chatRooms/${roomId}/messages`);
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const messages = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            timestamp: doc.data().timestamp?.toDate() || new Date()
+            timestamp: doc.data().timestamp?.toDate() || getEcuadorDate()
         })) as ChatMessage[];
         callback(messages);
-    }, (error) => handleFirestoreError(error, 'subscribeToRoomMessages'));
+    }, 'subscribeToRoomMessages');
 };
 
 /**
@@ -958,7 +1037,7 @@ export const deleteOldRoomMessages = async (roomId: string): Promise<void> => {
         const messagesRef = collection(db, `chatRooms/${roomId}/messages`);
         const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(300));
         const snapshot = await getDocs(q);
-        
+
         if (snapshot.size > 120) {
             const messagesToDelete = snapshot.size - 120;
             const docsToDelete = snapshot.docs.slice(0, messagesToDelete);
@@ -980,11 +1059,11 @@ export const clearRoomMessages = async (roomId: string): Promise<void> => {
     try {
         const messagesRef = collection(db, `chatRooms/${roomId}/messages`);
         const snapshot = await getDocs(messagesRef);
-        
+
         // Use batches if there are many messages, but for mobile usually not many
         const deletes = snapshot.docs.map(d => deleteDoc(d.ref));
         await Promise.all(deletes);
-        
+
         // Reset last message in room doc
         const roomRef = doc(db, 'chatRooms', roomId);
         await updateDoc(roomRef, {
@@ -1050,11 +1129,11 @@ export const saveFCMToken = async (userId: string, token: string) => {
     try {
         const userRef = doc(db, 'users_v2', userId);
         const userSnap = await getDoc(userRef);
-        
+
         if (userSnap.exists()) {
             const data = userSnap.data();
             const tokens = data.fcmTokens || [];
-            
+
             if (!tokens.includes(token)) {
                 await updateDoc(userRef, {
                     fcmTokens: [...tokens, token],
@@ -1101,24 +1180,24 @@ export const getCustomLocalities = async (): Promise<CustomLocality[]> => {
         return snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date()
+            createdAt: doc.data().createdAt?.toDate() || getEcuadorDate()
         })) as CustomLocality[];
     } catch (error) {
-        console.error('Error getting custom localities:', error);
+        handleFirestoreError(error, 'getCustomLocalities');
         return [];
     }
 };
 
 export const subscribeToCustomLocalities = (callback: (localities: CustomLocality[]) => void) => {
     const localitiesRef = collection(db, 'customLocalities');
-    return onSnapshot(localitiesRef, (snapshot) => {
+    return safeOnSnapshot(localitiesRef, (snapshot) => {
         const localities = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date()
+            createdAt: doc.data().createdAt?.toDate() || getEcuadorDate()
         })) as CustomLocality[];
         callback(localities);
-    }, (error) => handleFirestoreError(error, 'subscribeToCustomLocalities'));
+    }, 'subscribeToCustomLocalities');
 };
 
 export const createCustomLocality = async (locality: Omit<CustomLocality, 'id' | 'createdAt'>): Promise<string> => {
@@ -1141,6 +1220,21 @@ export const deleteCustomLocality = async (id: string): Promise<void> => {
         await deleteDoc(localityRef);
     } catch (error) {
         console.error('Error deleting custom locality:', error);
+        throw error;
+    }
+};
+
+export const updateCustomLocality = async (id: string, locality: Partial<CustomLocality>): Promise<void> => {
+    try {
+        const localityRef = doc(db, 'customLocalities', id);
+        const cleanData = sanitizeData(locality);
+        if (cleanData.id) delete cleanData.id;
+        await updateDoc(localityRef, {
+            ...cleanData,
+            updatedAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Error updating custom locality:', error);
         throw error;
     }
 };
@@ -1178,18 +1272,18 @@ export const subscribeToNotifications = (userId: string, callback: (notification
     const notificationRef = collection(db, 'notifications');
     // AUMENTADO: De 100 a 500 notificaciones
     const q = query(
-        notificationRef, 
-        where('userId', '==', userId), 
+        notificationRef,
+        where('userId', '==', userId),
         limit(500)
     );
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const notifications = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date()
-        })).sort((a, b) => b.createdAt - a.createdAt) as PulseNotification[];
+            createdAt: doc.data().createdAt?.toDate() || getEcuadorDate()
+        })).sort((a, b) => (b.createdAt as any) - (a.createdAt as any)) as PulseNotification[];
         callback(notifications);
-    }, (error) => handleFirestoreError(error, 'subscribeToNotifications'));
+    }, 'subscribeToNotifications');
 };
 
 export const markNotificationRead = async (notificationId: string) => {
@@ -1206,9 +1300,9 @@ export const markNotificationRead = async (notificationId: string) => {
 export const createAnnouncement = async (announcement: Omit<Announcement, 'id' | 'timestamp'>) => {
     try {
         const announcementsRef = collection(db, 'announcements');
-        
+
         // Calculate expiration
-        const expiresAt = new Date();
+        const expiresAt = getEcuadorDate();
         if (announcement.type === 'ventas' || announcement.type === 'offer') {
             // Oferta: 7 days
             expiresAt.setDate(expiresAt.getDate() + 7);
@@ -1239,23 +1333,23 @@ export const subscribeToAnnouncements = (senderId: string, callback: (announceme
     // Show all announcements - own + ones sent to "all" (mass broadcasts)
     // We get all and filter client-side for "all" target OR own senderId
     const q = query(announcementsRef, orderBy('timestamp', 'desc'));
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const announcements = snapshot.docs.map(doc => {
             const data = doc.data();
             const expiresAt = data.expiresAt?.toDate();
             return {
                 id: doc.id,
                 ...data,
-                timestamp: data.timestamp?.toDate() || new Date(),
+                timestamp: data.timestamp?.toDate() || getEcuadorDate(),
                 expiresAt
             };
-        }).filter(a => {
+        }).filter((a: any) => {
             const isVisible = a.target === 'all' || a.senderId === senderId;
-            const isNotExpired = !a.expiresAt || a.expiresAt > new Date();
+            const isNotExpired = !a.expiresAt || a.expiresAt > getEcuadorDate();
             return isVisible && isNotExpired;
         }) as Announcement[];
         callback(announcements);
-    }, (error) => handleFirestoreError(error, 'subscribeToAnnouncements'));
+    }, 'subscribeToAnnouncements');
 };
 
 export const deleteAnnouncement = async (announcementId: string, roomMessages?: { roomId: string, messageId: string }[]) => {
@@ -1266,7 +1360,7 @@ export const deleteAnnouncement = async (announcementId: string, roomMessages?: 
 
         // 2. If it has tracked messages, delete them from chat rooms
         if (roomMessages && roomMessages.length > 0) {
-            const promises = roomMessages.map(item => 
+            const promises = roomMessages.map(item =>
                 deleteDoc(doc(db, `chatRooms/${item.roomId}/messages`, item.messageId))
             );
             // Non-blocking but we wait for them to finish for the overall operation
@@ -1290,7 +1384,7 @@ export const purchaseBoost = async (businessId: string, userId: string, points: 
 
         // 2. Create boost document
         const boostsRef = collection(db, 'boosts');
-        const expiresAt = new Date();
+        const expiresAt = getEcuadorDate();
         expiresAt.setHours(expiresAt.getHours() + durationHours);
 
         await addDoc(boostsRef, {
@@ -1310,7 +1404,7 @@ export const purchaseBoost = async (businessId: string, userId: string, points: 
 };
 
 export const subscribeToActiveBoosts = (businessId: string, callback: (boosts: any[]) => void) => {
-    const now = new Date();
+    const now = getEcuadorDate();
     const boostsRef = collection(db, 'boosts');
     const q = query(
         boostsRef,
@@ -1323,7 +1417,7 @@ export const subscribeToActiveBoosts = (businessId: string, callback: (boosts: a
         const boosts = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            expiresAt: doc.data().expiresAt?.toDate() || new Date()
+            expiresAt: doc.data().expiresAt?.toDate() || getEcuadorDate()
         }));
         callback(boosts);
     });

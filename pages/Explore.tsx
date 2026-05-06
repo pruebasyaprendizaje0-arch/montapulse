@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, ShieldCheck, Flame, Star, Search, Filter, Layers, ChevronDown, ChevronUp, TrendingUp, Clock, Trash2, ArrowRight, Radio, Navigation, Route } from 'lucide-react';
+import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, ShieldCheck, Flame, Star, Search, Filter, Layers, ChevronDown, ChevronUp, TrendingUp, Clock, Trash2, ArrowRight, Radio, Navigation, Route, Compass } from 'lucide-react';
 import { MapView } from '../components/Map/MapView';
 import { EventCard } from '../components/EventCard';
 import { Sector, MontanitaEvent, Business, BusinessCategory, Vibe, SubscriptionPlan } from '../types';
-import { LOCALITIES, LOCALITY_SECTORS, SECTOR_INFO, LOCALITY_POLYGONS } from '../constants';
+import { LOCALITIES, LOCALITY_SECTORS, SECTOR_INFO, LOCALITY_POLYGONS, BASE_URL } from '../constants';
 import { getPlannerRecommendations, PlannerSection, getRecommendationForUser } from '../services/geminiService';
 import { deleteBusiness, createBusiness, updateBusiness, incrementBusinessViewCount } from '../services/firestoreService';
 import { useAuthContext } from '../context/AuthContext';
@@ -14,6 +14,9 @@ import { useToast } from '../context/ToastContext';
 import { ItineraryModal } from '../components/Modals/ItineraryModal';
 import { AIRecommendationModal } from '../components/Modals/AIRecommendationModal';
 import { PlannerChatModal } from '../components/Modals/PlannerChatModal';
+import { isBusinessOpen } from '../utils/timeUtils';
+import { LocalityManagerModal } from '../components/Modals/LocalityManagerModal';
+import { useSEO } from '../hooks/useSEO';
 
 interface ExploreProps {
     onEditBusiness?: (id: string) => void;
@@ -32,7 +35,16 @@ export const Explore: React.FC<ExploreProps> = ({
     const [activeTab, setActiveTab] = useState<'events' | 'directory' | 'landmarks' | null>('events');
     const [isGridView, setIsGridView] = useState(false);
     const isSpecialUser = user?.email === 'ubicameinformacion@gmail.com' || user?.role === 'admin';
-    const isPremiumUser = user?.plan === SubscriptionPlan.BASIC || user?.plan === SubscriptionPlan.PREMIUM || user?.plan === SubscriptionPlan.EXPERT || isSpecialUser;
+    const isPremiumUser = user?.plan && [
+        SubscriptionPlan.PRO,
+        SubscriptionPlan.ELITE,
+        SubscriptionPlan.EXPERT
+    ].includes(user.plan as SubscriptionPlan) || isSpecialUser;
+
+    const isEliteUser = user?.plan && [
+        SubscriptionPlan.ELITE,
+        SubscriptionPlan.EXPERT
+    ].includes(user.plan as SubscriptionPlan) || isSpecialUser;
     const {
         events,
         businesses,
@@ -71,7 +83,9 @@ export const Explore: React.FC<ExploreProps> = ({
         eventsWithLiveCounts, // Assuming this comes from useData now
         handlePurgeAllReferences,
         customLocalities,
-        handleAddCustomLocality
+        handleAddCustomLocality,
+        showLocalityManager,
+        setShowLocalityManager
     } = useData();
     const userBusinessIdResolved = userBusinessId || businesses.find(b => b.ownerId === authUser?.uid)?.id;
     const { t } = useTranslation();
@@ -93,6 +107,12 @@ export const Explore: React.FC<ExploreProps> = ({
     const [showingDirections, setShowingDirections] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const mapRef = useRef<any>(null);
+
+    useSEO({
+        title: activeTab === 'events' ? 'Explora Eventos' : activeTab === 'landmarks' ? 'Puntos de Interés' : 'Directorio Local',
+        description: `Encuentra los mejores lugares y eventos en ${currentLocality.name} con ubicame.info PULSE.`,
+        url: BASE_URL + window.location.pathname
+    });
 
     useEffect(() => {
         const state = location.state as { focusBusiness?: string } | null;
@@ -266,7 +286,7 @@ export const Explore: React.FC<ExploreProps> = ({
         }
         
         return result.sort((a, b) => {
-            const planOrder = { [SubscriptionPlan.EXPERT]: 0, [SubscriptionPlan.PREMIUM]: 1, [SubscriptionPlan.BASIC]: 2, [SubscriptionPlan.FREE]: 3 };
+            const planOrder = { [SubscriptionPlan.EXPERT]: 0, [SubscriptionPlan.ELITE]: 1, [SubscriptionPlan.PRO]: 2, [SubscriptionPlan.FREE]: 3 };
             return (planOrder[a.plan] ?? 4) - (planOrder[b.plan] ?? 4);
         });
     }, [businesses, activeFilter, searchQuery, selectedMood, selectedSector, activeTab]);
@@ -323,6 +343,21 @@ export const Explore: React.FC<ExploreProps> = ({
                                                 </button>
                                             ))}
                                         </div>
+
+                                        {(isAdmin || isSuperUser) && (
+                                            <div className="mt-2 pt-2 border-t border-white/5 px-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setShowLocalityManager(true);
+                                                        setShowLocalityMenu(false);
+                                                    }}
+                                                    className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-black text-sky-400 hover:bg-sky-400/10 rounded-xl transition-all uppercase tracking-widest"
+                                                >
+                                                    <Compass className="w-3.5 h-3.5" />
+                                                    Gestionar Pueblos
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -546,6 +581,7 @@ export const Explore: React.FC<ExploreProps> = ({
                         isSuperAdmin={isSuperAdmin}
                         isSuperUser={isSuperUser}
                         isPremiumUser={isPremiumUser}
+                        isEliteUser={isEliteUser}
                         userBusinessId={userBusinessIdResolved}
                         userId={authUser?.uid}
                         onAddBusiness={handleAddBusinessOnMap}
@@ -974,55 +1010,76 @@ export const Explore: React.FC<ExploreProps> = ({
                                 ))
                             ) : (
                                 <div className={`${isGridView ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' : 'flex flex-col gap-6'} pb-10`}>
-                                    {filteredBusinesses.map(business => (
-                                        <div
-                                            key={business.id}
-                                            onClick={() => {
-                                                incrementBusinessViewCount(business.id);
-                                                setPublicProfileId(business.id);
-                                                setPublicProfileType('business');
-                                                setShowPublicProfile(true);
-                                            }}
-                                            className={`relative group cursor-pointer transition-all duration-700 hover:-translate-y-2 ${isGridView ? 'h-[300px]' : ''}`}
-                                        >
-                                            <div className={`absolute inset-0 bg-gradient-to-br transition-all duration-700 opacity-10 blur-3xl group-hover:opacity-40 rounded-[3rem] ${
-                                                business.plan === SubscriptionPlan.EXPERT ? 'from-amber-400 via-orange-500 to-rose-600' :
-                                                business.plan === SubscriptionPlan.PREMIUM ? 'from-sky-400 via-indigo-500 to-purple-600' :
-                                                'from-slate-400 to-slate-600'
-                                            }`} />
-                                            
-                                            <div className={`h-full relative overflow-hidden rounded-[2.5rem] border backdrop-blur-3xl transition-all duration-500 flex flex-col ${
-                                                business.plan === SubscriptionPlan.EXPERT ? 'glass-expert expert-glow' :
-                                                business.plan === SubscriptionPlan.PREMIUM ? 'glass-premium premium-glow' :
-                                                'bg-[#0f172a]/40 border-white/5'
-                                            }`}>
-                                                <div className={`${isGridView ? 'h-32' : 'h-40'} relative overflow-hidden group-hover:h-32 transition-all duration-700`}>
-                                                    <img src={business.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" alt={business.name} />
-                                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent opacity-80" />
-                                                    {business.plan !== SubscriptionPlan.FREE && (
-                                                        <div className="absolute top-4 right-4 animate-in zoom-in duration-500">
-                                                            <div className={`px-4 py-1.5 rounded-full border backdrop-blur-2xl flex items-center gap-2.5 ${
-                                                                business.plan === SubscriptionPlan.EXPERT ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' : 'bg-sky-500/20 border-sky-500/30 text-sky-400'
-                                                            }`}>
-                                                                <Star className={`w-3.5 h-3.5 ${business.plan === SubscriptionPlan.EXPERT ? 'fill-amber-400' : 'fill-sky-400'}`} />
-                                                                <span className="text-[10px] font-black uppercase tracking-widest italic">{business.plan}</span>
+                                    {filteredBusinesses.map(business => {
+                                        const status = business.openingHours ? isBusinessOpen(business.openingHours) : null;
+                                        return (
+                                            <div
+                                                key={business.id}
+                                                onClick={() => {
+                                                    incrementBusinessViewCount(business.id);
+                                                    setPublicProfileId(business.id);
+                                                    setPublicProfileType('business');
+                                                    setShowPublicProfile(true);
+                                                }}
+                                                className={`relative group cursor-pointer transition-all duration-700 hover:-translate-y-2 ${isGridView ? 'h-[300px]' : ''}`}
+                                            >
+                                                <div className={`absolute inset-0 bg-gradient-to-br transition-all duration-700 opacity-10 blur-3xl group-hover:opacity-40 rounded-[3rem] ${
+                                                    business.plan === SubscriptionPlan.EXPERT ? 'from-amber-400 via-orange-500 to-rose-600' :
+                                                    business.plan === SubscriptionPlan.ELITE ? 'from-sky-400 via-indigo-500 to-purple-600' :
+                                                    business.plan === SubscriptionPlan.PRO ? 'from-emerald-400 via-teal-500 to-cyan-600' :
+                                                    'from-slate-400 to-slate-600'
+                                                }`} />
+                                                
+                                                <div className={`h-full relative overflow-hidden rounded-[2.5rem] border backdrop-blur-3xl transition-all duration-500 flex flex-col ${
+                                                    business.plan === SubscriptionPlan.EXPERT ? 'glass-expert expert-glow' :
+                                                    business.plan === SubscriptionPlan.ELITE ? 'glass-premium premium-glow' :
+                                                    business.plan === SubscriptionPlan.PRO ? 'glass-pro pro-glow' :
+                                                    'bg-[#0f172a]/40 border-white/5'
+                                                }`}>
+                                                    <div className={`${isGridView ? 'h-32' : 'h-40'} relative overflow-hidden group-hover:h-32 transition-all duration-700`}>
+                                                        <img src={business.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" alt={business.name} />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent opacity-80" />
+                                                        {business.plan !== SubscriptionPlan.FREE && (
+                                                            <div className="absolute top-4 right-4 animate-in zoom-in duration-500">
+                                                                <div className={`px-4 py-1.5 rounded-full border backdrop-blur-2xl flex items-center gap-2.5 ${
+                                                                    business.plan === SubscriptionPlan.EXPERT ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' : 
+                                                                    business.plan === SubscriptionPlan.ELITE ? 'bg-sky-500/20 border-sky-500/30 text-sky-400' :
+                                                                    'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                                                                }`}>
+                                                                    <Star className={`w-3.5 h-3.5 ${
+                                                                        business.plan === SubscriptionPlan.EXPERT ? 'fill-amber-400' : 
+                                                                        business.plan === SubscriptionPlan.ELITE ? 'fill-sky-400' :
+                                                                        'fill-emerald-400'
+                                                                    }`} />
+                                                                    <span className="text-[10px] font-black uppercase tracking-widest italic">{business.plan}</span>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                        )}
+                                                    </div>
 
-                                                <div className="p-6 flex flex-col flex-1 justify-between gap-4">
-                                                    <div>
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <span className="text-[10px] font-black text-sky-400 uppercase tracking-[0.3em]">{business.category}</span>
-                                                            <div className="flex items-center gap-1">
-                                                                <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                                    <div className="p-6 flex flex-col flex-1 justify-between gap-4">
+                                                        <div>
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[10px] font-black text-sky-400 uppercase tracking-[0.3em]">{business.category}</span>
+                                                                    {status && (
+                                                                        <div className="flex items-center gap-1.5 mt-1">
+                                                                            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${status.isOpen ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]'}`} />
+                                                                            <span className={`text-[9px] font-bold uppercase tracking-wider ${status.isOpen ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                                {status.message}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex items-center gap-1">
+                                                                    <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+
                                                                 <span className="text-[10px] font-black text-white italic">{(business as any).rating || '5.0'}</span>
                                                             </div>
                                                         </div>
                                                         <h3 className={`text-xl font-black uppercase tracking-tight transition-colors mb-2 ${
                                                             business.plan === SubscriptionPlan.EXPERT ? 'text-pulsar-expert' :
-                                                            business.plan === SubscriptionPlan.PREMIUM ? 'text-pulsar-premium' :
+                                                            business.plan === SubscriptionPlan.ELITE ? 'text-pulsar-premium' :
                                                             'text-white grow-hover:text-sky-400'
                                                         }`}>
                                                             {business.name}
@@ -1070,13 +1127,14 @@ export const Explore: React.FC<ExploreProps> = ({
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
-                )}
-            </div >
+                </div>
+            )}
+        </div>
 
             {/* Quick Sector Nav - Only show in Explore */}
             {
@@ -1107,6 +1165,7 @@ export const Explore: React.FC<ExploreProps> = ({
                 isOpen={showPlannerChat}
                 onClose={() => setShowPlannerChat(false)}
             />
+            <LocalityManagerModal />
         </>
     );
 };

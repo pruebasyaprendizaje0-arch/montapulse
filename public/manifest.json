@@ -1,0 +1,18 @@
+{
+  "short_name": "MontaPulse",
+  "name": "ubicame.info PULSE - Montañita",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230f172a'/><text y='.75em' x='50%' text-anchor='middle' font-size='80'>⚡</text></svg>",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/explore",
+  "background_color": "#0f172a",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#0f172a",
+  "description": "Tu guía en tiempo real para eventos y negocios en Montañita y la costa ecuatoriana."
+}

@@ -10,6 +10,7 @@ import {
   getCountFromServer
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
+import { getEcuadorDate } from './dateUtils';
 import { SubscriptionPlan, UserProfile } from '../types';
 
 // PLAN LIMITS CONFIGURATION
@@ -18,28 +19,10 @@ export const PLAN_LIMITS = {
     maxEvents: 0,
     maxAnnouncements: 0,
     hasPremiumIcon: false,
-    canCreateBusiness: true,
+    canCreateBusiness: false,
     canFollow: true,
     canReview: true,
     canReceiveNotifications: false,
-  },
-  [SubscriptionPlan.BASIC]: {
-    maxEvents: 0,
-    maxAnnouncements: 0,
-    hasPremiumIcon: false,
-    canCreateBusiness: true,
-    canFollow: true,
-    canReview: true,
-    canReceiveNotifications: true,
-  },
-  [SubscriptionPlan.PREMIUM]: {
-    maxEvents: 5,
-    maxAnnouncements: 5,
-    hasPremiumIcon: true,
-    canCreateBusiness: true,
-    canFollow: true,
-    canReview: true,
-    canReceiveNotifications: true,
   },
   [SubscriptionPlan.PRO]: {
     maxEvents: 5,
@@ -73,8 +56,6 @@ export const PLAN_LIMITS = {
 // ANNIVERSARY PRICES (monthly)
 export const PLAN_PRICES: Record<SubscriptionPlan, number> = {
   [SubscriptionPlan.FREE]: 0,
-  [SubscriptionPlan.BASIC]: 0,
-  [SubscriptionPlan.PREMIUM]: 5, // Legacy - treat as equivalent to Pro
   [SubscriptionPlan.PRO]: 5,
   [SubscriptionPlan.ELITE]: 10,
   [SubscriptionPlan.EXPERT]: 0, // Internal use
@@ -99,7 +80,7 @@ export const canUserCreateEvent = async (userId: string): Promise<{
   
   // Check subscription expiration for paid plans
   if (plan === SubscriptionPlan.PRO || plan === SubscriptionPlan.ELITE) {
-    if (!userData.subscriptionEndDate || userData.subscriptionEndDate < Date.now()) {
+    if (!userData.subscriptionEndDate || userData.subscriptionEndDate < getEcuadorDate().getTime()) {
       return { allowed: false, reason: 'SUBSCRIPTION_EXPIRED' };
     }
   }
@@ -157,7 +138,7 @@ export const canUserCreateAnnouncement = async (userId: string): Promise<{
   const plan = userData.plan as SubscriptionPlan;
   
   if (plan === SubscriptionPlan.PRO || plan === SubscriptionPlan.ELITE) {
-    if (!userData.subscriptionEndDate || userData.subscriptionEndDate < Date.now()) {
+    if (!userData.subscriptionEndDate || userData.subscriptionEndDate < getEcuadorDate().getTime()) {
       return { allowed: false, reason: 'SUBSCRIPTION_EXPIRED' };
     }
   }
@@ -206,7 +187,7 @@ export const incrementUserEventCount = async (userId: string): Promise<void> => 
   }
   
   const userData = userSnap.data() as UserProfile;
-  const now = Date.now();
+  const now = getEcuadorDate().getTime();
   const lastReset = userData.lastEventResetDate || 0;
   
   // Reset if more than 30 days
@@ -232,7 +213,7 @@ export const incrementUserAnnouncementCount = async (userId: string): Promise<vo
   }
   
   const userData = userSnap.data() as UserProfile;
-  const now = Date.now();
+  const now = getEcuadorDate().getTime();
   const lastReset = userData.lastAnnouncementResetDate || 0;
   
   if (now - lastReset > 30 * 24 * 60 * 60 * 1000) {
@@ -267,9 +248,8 @@ export const getUserPlanInfo = async (userId: string) => {
     monthlyAnnouncementCount: userData.monthlyAnnouncementCount || 0,
     subscriptionEndDate: userData.subscriptionEndDate,
     hasPremiumIcon: limits.hasPremiumIcon,
-    canUpgrade: plan === SubscriptionPlan.FREE || plan === SubscriptionPlan.BASIC,
+    canUpgrade: plan === SubscriptionPlan.FREE || plan === SubscriptionPlan.PRO,
     nextPlan: plan === SubscriptionPlan.FREE ? SubscriptionPlan.PRO : 
-           plan === SubscriptionPlan.BASIC ? SubscriptionPlan.PRO :
            plan === SubscriptionPlan.PRO ? SubscriptionPlan.ELITE : null,
   };
 };
@@ -347,7 +327,7 @@ export const processPaymentWebhook = async (
   const userRef = doc(db, 'users_v2', userId);
   
   if (paymentStatus === 'completed') {
-    const subscriptionEndDate = new Date();
+    const subscriptionEndDate = getEcuadorDate();
     subscriptionEndDate.setMonth(subscriptionEndDate.getMonth() + 1);
     
     await updateDoc(userRef, {

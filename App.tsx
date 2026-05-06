@@ -2,55 +2,54 @@ import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from 'rea
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, ChevronRight, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck, Palmtree, Mountain, Activity, Users, Sun, Moon } from 'lucide-react';
 import { getToken } from 'firebase/messaging';
-import { messaging } from './firebase.config.ts';
-import { saveFCMToken } from './services/firestoreService.ts';
+import { messaging } from './firebase.config';
+import { saveFCMToken } from './services/firestoreService';
 
 // Lazy load heavy components
-const MapView = lazy(() => import('./components/MapView.tsx').then(m => ({ default: m.MapView })));
-const EventCard = lazy(() => import('./components/EventCard.tsx').then(m => ({ default: m.EventCard })));
-const EventModal = lazy(() => import('./components/EventModal.tsx').then(m => ({ default: m.EventModal })));
-const MigrationPanel = lazy(() => import('./components/MigrationPanel.tsx').then(m => ({ default: m.MigrationPanel })));
-const LoginScreen = lazy(() => import('./components/LoginScreen.tsx').then(m => ({ default: m.LoginScreen })));
-const PulseModal = lazy(() => import('./components/Modals/PulseModal.tsx').then(m => ({ default: m.PulseModal })));
-const PulsePassModal = lazy(() => import('./components/Modals/PulsePassModal.tsx').then(m => ({ default: m.PulsePassModal })));
-const BusinessEditModal = lazy(() => import('./components/Modals/BusinessEditModal.tsx').then(m => ({ default: m.BusinessEditModal })));
-const EventEditorModal = lazy(() => import('./components/Modals/EventEditorModal.tsx').then(m => ({ default: m.EventEditorModal })));
-const PublicProfileModal = lazy(() => import('./components/PublicProfileModal.tsx').then(m => ({ default: m.PublicProfileModal })));
+const EventCard = lazy(() => import('./components/EventCard').then(m => ({ default: m.EventCard })));
+const EventModal = lazy(() => import('./components/EventModal').then(m => ({ default: m.EventModal })));
+const MigrationPanel = lazy(() => import('./components/MigrationPanel').then(m => ({ default: m.MigrationPanel })));
+const LoginScreen = lazy(() => import('./components/LoginScreen').then(m => ({ default: m.LoginScreen })));
+const PulseModal = lazy(() => import('./components/Modals/PulseModal').then(m => ({ default: m.PulseModal })));
+const PulsePassModal = lazy(() => import('./components/Modals/PulsePassModal').then(m => ({ default: m.PulsePassModal })));
+const BusinessEditModal = lazy(() => import('./components/Modals/BusinessEditModal').then(m => ({ default: m.BusinessEditModal })));
+const EventEditorModal = lazy(() => import('./components/Modals/EventEditorModal').then(m => ({ default: m.EventEditorModal })));
+const PublicProfileModal = lazy(() => import('./components/PublicProfileModal').then(m => ({ default: m.PublicProfileModal })));
 
 // Lazy load pages for better performance
-const Notifications = lazy(() => import('./pages/Notifications.tsx').then(m => ({ default: m.Notifications })));
-const Passport = lazy(() => import('./pages/Passport.tsx').then(m => ({ default: m.Passport })));
-const Explore = lazy(() => import('./pages/Explore.tsx').then(m => ({ default: m.Explore })));
-const InfoPage = lazy(() => import('./pages/InfoPage.tsx').then(m => ({ default: m.InfoPage })));
-const CalendarPage = lazy(() => import('./pages/Calendar.tsx').then(m => ({ default: m.Calendar })));
-const History = lazy(() => import('./pages/History.tsx').then(m => ({ default: m.History })));
-const Plans = lazy(() => import('./pages/Plans.tsx').then(m => ({ default: m.Plans })));
-const AdminUsers = lazy(() => import('./pages/AdminUsers.tsx').then(m => ({ default: m.AdminUsers })));
-const Policies = lazy(() => import('./pages/Policies.tsx').then(m => ({ default: m.Policies })));
+const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
+const Passport = lazy(() => import('./pages/Passport').then(m => ({ default: m.Passport })));
+const Explore = lazy(() => import('./pages/Explore').then(m => ({ default: m.Explore })));
+const InfoPage = lazy(() => import('./pages/InfoPage').then(m => ({ default: m.InfoPage })));
+const CalendarPage = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })));
+const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })));
+const Plans = lazy(() => import('./pages/Plans').then(m => ({ default: m.Plans })));
+const AdminUsers = lazy(() => import('./pages/AdminUsers').then(m => ({ default: m.AdminUsers })));
+const Policies = lazy(() => import('./pages/Policies').then(m => ({ default: m.Policies })));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[50vh]">
     <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
   </div>
 );
-import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan, BusinessCategory } from './types.ts';
-import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS, DEFAULT_NEW_LOCALITY_SECTORS } from './constants.ts';
-import { getSmartRecommendations, generateEventDescription } from './services/geminiService.ts';
-import { useAuthContext } from './context/AuthContext.tsx';
-import { logout, isSuperAdmin as checkSuperAdmin, updateUserProfile } from './services/authService.ts';
+import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan, BusinessCategory } from './types';
+import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS, DEFAULT_NEW_LOCALITY_SECTORS } from './constants';
+import { getSmartRecommendations, generateEventDescription } from './services/geminiService';
+import { useAuthContext } from './context/AuthContext';
+import { logout, isSuperAdmin as checkSuperAdmin, updateUserProfile } from './services/authService';
 import {
   getUser, createUser, updateUser, createBusiness, updateBusiness, deleteBusiness,
   subscribeToEvents, createEvent, updateEvent, deleteEvent,
-  subscribeToBusinesses, subscribeToAppSettings, updateAppSettings,
-  toggleRSVP, subscribeToUserRSVPs, subscribeToUsers
-} from './services/firestoreService.ts';
-import { compressImage } from './utils/imageUtils.ts';
-import { BottomNav } from './components/Layout/BottomNav.tsx';
-import { Sidebar } from './components/Layout/Sidebar.tsx';
-import { useToast } from './context/ToastContext.tsx';
-import { useData } from './context/DataContext.tsx';
+  subscribeToBusinesses, updateAppSettings,
+  toggleRSVP, subscribeToUserRSVPs
+} from './services/firestoreService';
+import { compressImage } from './utils/imageUtils';
+import { BottomNav } from './components/Layout/BottomNav';
+import { Sidebar } from './components/Layout/Sidebar';
+import { useToast } from './context/ToastContext';
+import { useData } from './context/DataContext';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from './hooks/useTheme.ts';
+import { useTheme } from './hooks/useTheme';
 
 export const suggestIconFromDescription = (description: string): string => {
   const desc = (description || '').toLowerCase();
@@ -233,7 +232,7 @@ const Dashboard: React.FC = () => {
 
   React.useEffect(() => {
     const path = location.pathname;
-    if (path === '/' || path === '/explore') setActiveView('explore');
+    if (path === '/' || path === '/explore' || path.startsWith('/evento/') || path.startsWith('/negocio/')) setActiveView('explore');
     else if (path === '/calendar') setActiveView('calendar');
     else if (path === '/community' || path === '/chat') setActiveView('community');
     else if (path === '/passport') setActiveView('favorites');
@@ -245,6 +244,67 @@ const Dashboard: React.FC = () => {
     else if (path === '/services') setActiveView('services');
     else if (path === '/policies') setActiveView('policies');
   }, [location.pathname]);
+
+  // Sincronizar URL hacia el estado (al cargar o navegar directamente)
+  React.useEffect(() => {
+    const path = location.pathname;
+    const searchParams = new URLSearchParams(location.search);
+    
+    // Parsear Slugs de la URL
+    if (path.startsWith('/evento/')) {
+      const slug = path.replace('/evento/', '');
+      if (slug && eventsWithLiveCounts.length > 0 && !selectedEvent) {
+        const event = eventsWithLiveCounts.find(e => e.slug === slug || e.id === slug);
+        if (event) setSelectedEvent(event);
+      }
+    } else if (path.startsWith('/negocio/')) {
+      const slug = path.replace('/negocio/', '');
+      if (slug && businesses.length > 0 && (!showPublicProfile || publicProfileId !== slug)) {
+        const business = businesses.find(b => b.slug === slug || b.id === slug);
+        if (business) {
+          setPublicProfileId(business.id);
+          setPublicProfileType('business');
+          setShowPublicProfile(true);
+        }
+      }
+    }
+    
+    // Compatibilidad hacia atrás (URL Params antiguos)
+    const eventId = searchParams.get('event');
+    if (eventId && eventsWithLiveCounts.length > 0 && !selectedEvent) {
+       const event = eventsWithLiveCounts.find(e => e.id === eventId);
+       if (event) setSelectedEvent(event);
+    }
+    const bizId = searchParams.get('business');
+    if (bizId && businesses.length > 0 && !showPublicProfile) {
+       const biz = businesses.find(b => b.id === bizId);
+       if (biz) {
+         setPublicProfileId(biz.id);
+         setPublicProfileType('business');
+         setShowPublicProfile(true);
+       }
+    }
+  }, [location.pathname, location.search, eventsWithLiveCounts, businesses]);
+
+  // Sincronizar estado hacia la URL (cuando se abren/cierran modales)
+  React.useEffect(() => {
+    if (selectedEvent) {
+      const slug = selectedEvent.slug || selectedEvent.id;
+      if (!location.pathname.includes(`/evento/${slug}`)) {
+         window.history.replaceState(null, '', `/evento/${slug}`);
+      }
+    } else if (showPublicProfile && publicProfileType === 'business' && publicProfileId) {
+       const business = businesses.find(b => b.id === publicProfileId);
+       if (business) {
+         const slug = business.slug || business.id;
+         if (!location.pathname.includes(`/negocio/${slug}`)) {
+            window.history.replaceState(null, '', `/negocio/${slug}`);
+         }
+       }
+    } else if (activeView === 'explore' && (location.pathname.startsWith('/evento/') || location.pathname.startsWith('/negocio/'))) {
+       window.history.replaceState(null, '', '/explore');
+    }
+  }, [selectedEvent, showPublicProfile, publicProfileId, publicProfileType, activeView, businesses]);
 
   const [profileError, setProfileError] = useState<string | null>(null);
   const [managementTab, setManagementTab] = useState<'users' | 'businesses' | 'stats'>('users');
@@ -320,26 +380,49 @@ const Dashboard: React.FC = () => {
     return null;
   }, [user, businesses, authUser]);
 
-  const isPremiumUser = user?.plan === SubscriptionPlan.BASIC || user?.plan === SubscriptionPlan.EXPERT;
+  const isPremiumUser = user?.plan && [
+    SubscriptionPlan.PRO,
+    SubscriptionPlan.ELITE,
+    SubscriptionPlan.EXPERT
+  ].includes(user.plan as SubscriptionPlan);
+
+  const isEliteUser = user?.plan && [
+    SubscriptionPlan.ELITE,
+    SubscriptionPlan.EXPERT
+  ].includes(user.plan as SubscriptionPlan);
+
   const canEditOwnBusiness = isPremiumUser && userBusiness;
   const canEditAllBusiness = isAdmin || isSuperUser;
 
   const handleAddBusinessMap = (lat: number, lng: number) => {
-    if (!userBusiness && !canEditAllBusiness) return;
-    const businessData = userBusiness || { name: '', icon: 'store', description: '', imageUrl: '', whatsapp: '', phone: '', instagram: '', category: BusinessCategory.OTRO, email: '' };
+    // Permisos: Administradores o Usuarios Elite (pueden crear nuevos) o Dueños de negocio Pro (pueden mover el suyo)
+    if (!canEditAllBusiness && !isEliteUser && !userBusiness) return;
+    
+    const businessData = userBusiness || { 
+      name: '', 
+      icon: 'store', 
+      description: '', 
+      imageUrl: '', 
+      whatsapp: '', 
+      phone: '', 
+      instagram: '', 
+      category: BusinessCategory.OTRO, 
+      email: '' 
+    };
+
     setBizForm({
       name: businessData.name || '',
       locality: currentLocality.name,
       sector: Sector.CENTRO,
-      icon: userBusiness.icon || 'store',
-      description: userBusiness.description || '',
-      imageUrl: userBusiness.imageUrl || '',
-      whatsapp: userBusiness.whatsapp || '',
-      phone: userBusiness.phone || '',
-      instagram: userBusiness.instagram || '',
-      category: userBusiness.category || BusinessCategory.OTRO,
+      icon: businessData.icon || 'store',
+      description: businessData.description || '',
+      imageUrl: businessData.imageUrl || '',
+      whatsapp: businessData.whatsapp || '',
+      phone: businessData.phone || '',
+      instagram: businessData.instagram || '',
+      category: businessData.category || BusinessCategory.OTRO,
       coordinates: [lat, lng],
-      email: userBusiness.email || ''
+      email: businessData.email || ''
     });
     setShowBusinessReg(true);
   };
@@ -417,6 +500,15 @@ const Dashboard: React.FC = () => {
 
             {user && (
               <div className="flex items-center gap-2.5 pr-2">
+                {user.plan !== 'Expert' && (
+                  <button 
+                    onClick={() => navigate('/plans')}
+                    className="p-3 bg-orange-500 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+                    title="Mejorar Plan"
+                  >
+                    <Sparkles className="w-5 h-5 animate-pulse" />
+                  </button>
+                )}
                 <div className="flex flex-col items-end">
                   <span className="text-[10px] font-black uppercase tracking-tighter hidden sm:inline">{user.name}</span>
                   <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border leading-none ${
@@ -428,7 +520,7 @@ const Dashboard: React.FC = () => {
                      user.role === 'host' ? 'Host' : 'Visitor'}
                   </span>
                 </div>
-                <div className="w-8 h-8 rounded-xl border border-orange-500/50 overflow-hidden ring-2 ring-orange-500/20 shadow-lg">
+                <div className="w-8 h-8 rounded-xl border border-orange-500/50 overflow-hidden ring-2 ring-orange-500/20 shadow-lg cursor-pointer" onClick={() => navigate('/passport')}>
                   <img src={user.avatarUrl} className="w-full h-full object-cover" alt="User avatar" />
                 </div>
               </div>

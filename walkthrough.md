@@ -59,3 +59,11 @@ We performed a deep scan of the codebase to ensure zero native dialogs remain. T
 
 ---
 **Deployment Note**: The new system is fully integrated and ready for production hosting on Firebase.
+
+## 5. Geolocation Feature ("Locate Me")
+
+We implemented a real-time geolocation feature in the map view:
+- **Responsive Control**: A new "Locate Me" button using the `Crosshair` icon was added to the map's floating action controls.
+- **Visual Feedback**: When activated, the map centers on the user's coordinates and displays a blue pulsing marker (`user-location-pulse`).
+- **Permission Handling**: Uses the browser's Geolocation API with appropriate `locationfound` and `locationerror` handlers.
+- **Logic Consolidation**: The feature was integrated into the primary `components/Map/MapView.tsx` component, and legacy duplicate files were removed from the codebase.

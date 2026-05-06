@@ -12,14 +12,14 @@ import { Business, BusinessCategory, SubscriptionPlan } from '../types';
 
 // ── Plan badge config ──────────────────────────────────
 const PLAN_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode; gradient: string }> = {
-    [SubscriptionPlan.PREMIUM]: {
-        label: 'Premium',
+    [SubscriptionPlan.ELITE]: {
+        label: 'Elite',
         color: 'text-amber-300',
         bg: 'bg-amber-500/15 border border-amber-500/25',
         icon: <Crown className="w-3 h-3" />,
         gradient: 'from-amber-500/10 to-orange-500/5',
     },
-    [SubscriptionPlan.BASIC]: {
+    [SubscriptionPlan.PRO]: {
         label: 'Pro',
         color: 'text-sky-300',
         bg: 'bg-sky-500/15 border border-sky-500/25',
@@ -310,12 +310,12 @@ export const Services: React.FC = () => {
         });
     }, [premiumBusinesses, search, activeCategory, activePlan, onlyMilitary]);
 
-    // Sort: EXPERT → PREMIUM → BASIC
+    // Sort: EXPERT → ELITE → PRO
     const sorted = useMemo(() => {
         const order: Record<string, number> = {
             [SubscriptionPlan.EXPERT]: 0,
-            [SubscriptionPlan.PREMIUM]: 1,
-            [SubscriptionPlan.BASIC]: 2,
+            [SubscriptionPlan.ELITE]: 1,
+            [SubscriptionPlan.PRO]: 2,
         };
         return [...filtered].sort((a, b) => (order[a.plan] ?? 9) - (order[b.plan] ?? 9));
     }, [filtered]);
@@ -341,7 +341,7 @@ export const Services: React.FC = () => {
                             Directorio <span className="text-transparent bg-clip-text bg-gradient-to-br from-amber-400 to-orange-500 uppercase">Premium</span>
                         </h1>
                         <p className="text-slate-400 text-base max-w-xl font-medium leading-relaxed">
-                            Descubre los comercios, emprendimientos y puntos de referencia más importantes de <span className="text-white font-black underline decoration-amber-500/30 decoration-4 underline-offset-4">Montañita</span>. 
+                            Descubre los comercios, emprendimientos y puntos de referencia más importantes de <span className="text-white font-black underline decoration-amber-500/30 decoration-4 underline-offset-4">Montañita</span>.
                             Verificados por Ubicame Pulse.
                         </p>
                     </div>
@@ -396,7 +396,7 @@ export const Services: React.FC = () => {
 
                     {showFilters && (
                         <div className="flex gap-2 mt-3 flex-wrap">
-                            {(['all', SubscriptionPlan.PREMIUM, SubscriptionPlan.BASIC] as const).map(plan => (
+                            {(['all', SubscriptionPlan.ELITE, SubscriptionPlan.PRO] as const).map(plan => (
                                 <button
                                     key={plan}
                                     onClick={() => setActivePlan(plan)}
@@ -416,10 +416,10 @@ export const Services: React.FC = () => {
                 <div className="mb-8">
                     <button
                         onClick={() => setOnlyMilitary(v => !v)}
-                        className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 ${onlyMilitary 
-                            ? 'bg-orange-500/10 border-orange-500/40 shadow-lg shadow-orange-500/5' 
+                        className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 ${onlyMilitary
+                            ? 'bg-orange-500/10 border-orange-500/40 shadow-lg shadow-orange-500/5'
                             : 'bg-white/5 border-white/8 hover:border-white/15'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center gap-3 text-left">
                             <div className={`p-2 rounded-xl transition-colors ${onlyMilitary ? 'bg-orange-500 text-slate-950' : 'bg-white/5 text-slate-400'}`}>

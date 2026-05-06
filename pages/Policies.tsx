@@ -3,6 +3,7 @@ import { Shield, Lock, FileText, ChevronLeft, ArrowRight, Edit3, Save, X, Plus, 
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
+import { BASE_URL } from '../constants';
 import { PolicyData, PolicySection } from '../types';
 
 export const Policies: React.FC = () => {
@@ -25,7 +26,7 @@ export const Policies: React.FC = () => {
         const shareData = {
             title: 'Políticas y Privacidad - ubicame.info Pulse',
             text: 'Consulta los Términos de Servicio y la Política de Privacidad de ubicame.info Pulse.',
-            url: window.location.href
+            url: BASE_URL + window.location.pathname
         };
 
         if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
@@ -42,7 +43,7 @@ export const Policies: React.FC = () => {
     };
 
     const copyToClipboard = () => {
-        navigator.clipboard.writeText(window.location.href);
+        navigator.clipboard.writeText(BASE_URL + window.location.pathname);
         showToast('Enlace copiado al portapapeles', 'info');
     };
 

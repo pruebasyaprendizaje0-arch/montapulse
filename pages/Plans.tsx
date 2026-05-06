@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
     ChevronLeft, ChevronRight, CheckCircle, Calendar, MapPin, Sparkles, Zap,
     MessageCircle, Navigation, CreditCard, Edit3, Banknote, Mail, Star,
     Check, Crown, Info, ShieldCheck, Smartphone, TrendingUp, Copy, CopyCheck, Award
@@ -21,7 +21,7 @@ interface PlanFeatureProps {
 
 const PlanFeature: React.FC<PlanFeatureProps> = ({ icon: Icon, text, description, isIncluded = true, highlight }) => (
     <div className="group relative flex items-start gap-3 py-1">
-        <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-500 ${isIncluded 
+        <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-500 ${isIncluded
             ? (highlight ? 'bg-orange-500/10 border border-orange-500/20 text-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-orange-500/10 text-orange-500')
             : 'bg-white/5 text-white/20'}`}>
             {Icon ? <Icon size={16} /> : (isIncluded ? <Check size={14} strokeWidth={3} /> : <Check size={14} strokeWidth={2} />)}
@@ -157,7 +157,7 @@ export const Plans: React.FC = () => {
         if (confirmed) {
             try {
                 showToast('Conectando con dLocal Go...', 'info');
-                
+
                 const response = await fetch('/api/create-checkout', {
                     method: 'POST',
                     headers: {
@@ -166,7 +166,9 @@ export const Plans: React.FC = () => {
                     body: JSON.stringify({
                         amount: Number(price),
                         currency: 'USD', // Ajustar según moneda local si es necesario
-                        description: `Plan ${tempPlanNames[plan]} - ${user?.email || 'Huésped'}`
+                        description: `Plan ${tempPlanNames[plan]} - ${user?.email || 'Huésped'}`,
+                        userId: user?.id || 'anonymous',
+                        planId: plan
                     })
                 });
 
@@ -193,7 +195,7 @@ export const Plans: React.FC = () => {
                     {value}
                 </span>
                 {copyable && (
-                    <button 
+                    <button
                         onClick={() => handleCopy(value, fieldName || label)}
                         className="p-1.5 rounded-md hover:bg-white/10 text-white/30 hover:text-white transition-all active:scale-95"
                     >
@@ -237,23 +239,47 @@ export const Plans: React.FC = () => {
                                             onClick={() => { setIsEditingPrices(false); setTempPrices(planPrices); }}
                                             className="px-4 py-2 rounded-xl bg-white/5 text-slate-400 text-[10px] font-black uppercase tracking-widest border border-white/5"
                                         >
-                                            Cancelar
+                                            Cancelar Precios
                                         </button>
                                         <button
                                             onClick={savePrices}
+                                            className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20"
+                                        >
+                                            Guardar Precios
+                                        </button>
+                                    </>
+                                ) : isEditingFeatures ? (
+                                    <>
+                                        <button
+                                            onClick={() => { setIsEditingFeatures(false); setTempFeatures(planFeatures); setTempLimits(planLimits); setTempPlanNames(planNames); setTempPlanSubtitles(planSubtitles); }}
+                                            className="px-4 py-2 rounded-xl bg-white/5 text-slate-400 text-[10px] font-black uppercase tracking-widest border border-white/5"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            onClick={saveFeatures}
                                             className="px-4 py-2 rounded-xl bg-orange-500 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-500/20"
                                         >
-                                            Guardar
+                                            Guardar Planes
                                         </button>
                                     </>
                                 ) : (
-                                    <button
-                                        onClick={() => setIsEditingPrices(true)}
-                                        className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all group"
-                                        title="Editar Precios"
-                                    >
-                                        <Edit3 className="w-5 h-5 text-orange-500 group-hover:scale-110 transition-transform" />
-                                    </button>
+                                    <>
+                                        <button
+                                            onClick={() => setIsEditingPrices(true)}
+                                            className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all group flex items-center justify-center"
+                                            title="Editar Precios"
+                                        >
+                                            <Banknote className="w-5 h-5 text-emerald-500 group-hover:scale-110 transition-transform" />
+                                        </button>
+                                        <button
+                                            onClick={() => setIsEditingFeatures(true)}
+                                            className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all group flex items-center justify-center"
+                                            title="Editar Características de Planes"
+                                        >
+                                            <Edit3 className="w-5 h-5 text-orange-500 group-hover:scale-110 transition-transform" />
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         )}
@@ -269,18 +295,20 @@ export const Plans: React.FC = () => {
                     </div>
 
                     {/* Plans Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {[SubscriptionPlan.FREE, SubscriptionPlan.BASIC, SubscriptionPlan.PREMIUM].map((planType) => {
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {[SubscriptionPlan.FREE, SubscriptionPlan.PRO, SubscriptionPlan.ELITE].map((planType) => {
                             const isCurrent = user?.plan === planType;
-                            const isPremium = planType === SubscriptionPlan.PREMIUM;
-                            const isBasic = planType === SubscriptionPlan.BASIC;
+                            const isElite = planType === SubscriptionPlan.ELITE;
+                            const isPro = planType === SubscriptionPlan.PRO;
                             const isFree = planType === SubscriptionPlan.FREE;
 
                             return (
                                 <div key={planType} className={`relative group flex flex-col p-8 rounded-[3rem] border transition-all duration-500 hover:translate-y-[-6px] shadow-2xl overflow-hidden
-                                    ${isPremium ? 'bg-gradient-to-br from-indigo-900/40 to-black border-indigo-500 shadow-indigo-500/20 scale-105 z-20' : 'bg-black/40 border-white/5 hover:bg-black/60 z-10'}`}>
-                                    
-                                    {isPremium && (
+                                    ${isElite ? 'bg-gradient-to-br from-indigo-900/40 to-black border-indigo-500 shadow-indigo-500/20 lg:scale-105 z-20' :
+                                      isPro ? 'bg-gradient-to-br from-emerald-950/40 to-black border-emerald-500/30 hover:border-emerald-500/50 shadow-emerald-500/5 z-10' :
+                                            'bg-black/40 border-white/5 hover:bg-black/60 z-10'}`}>
+
+                                    {isElite && (
                                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest shadow-xl shadow-indigo-500/40 z-30">
                                             RECOMENDADO
                                         </div>
@@ -288,9 +316,9 @@ export const Plans: React.FC = () => {
 
                                     <div className="mb-6">
                                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 
-                                            ${isPremium ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 group-hover:rotate-6' : 
-                                              isBasic ? 'bg-orange-500/10 text-orange-500' : 'bg-white/5 text-white/40'}`}>
-                                            {isPremium ? <Crown size={28} /> : isBasic ? <TrendingUp size={24} /> : <Smartphone size={24} />}
+                                            ${isElite ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 group-hover:rotate-6' :
+                                                    isPro ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-white/5 text-white/40'}`}>
+                                            {isElite ? <Crown size={28} /> : isPro ? <Zap size={24} /> : <Smartphone size={24} />}
                                         </div>
 
                                         {isEditingFeatures ? (
@@ -316,10 +344,10 @@ export const Plans: React.FC = () => {
                                             </div>
                                         ) : (
                                             <>
-                                                <h3 className={`text-xl font-black italic uppercase mb-1 ${isPremium ? 'text-white' : 'text-white/90'}`}>
+                                                <h3 className={`text-xl font-black italic uppercase mb-1 ${isElite ? 'text-white' : 'text-white/90'}`}>
                                                     {planNames[planType]}
                                                 </h3>
-                                                <p className={`text-[10px] mb-4 uppercase tracking-widest font-bold ${isPremium ? 'text-indigo-400/70' : 'text-white/40'}`}>
+                                                <p className={`text-[10px] mb-4 uppercase tracking-widest font-bold ${isElite ? 'text-indigo-400/70' : isPro ? 'text-emerald-400/70' : 'text-white/40'}`}>
                                                     {planSubtitles[planType]}
                                                 </p>
                                             </>
@@ -334,13 +362,13 @@ export const Plans: React.FC = () => {
                                                     value={tempPrices[planType]}
                                                     onChange={(e) => setTempPrices(prev => ({ ...prev, [planType]: parseFloat(e.target.value) || 0 }))}
                                                     className={`bg-white/5 border rounded-xl px-4 py-2 text-white font-black text-2xl w-32 outline-none focus:border-orange-500/50
-                                                        ${isPremium ? 'border-indigo-500/40' : 'border-white/10'}`}
+                                                        ${isElite ? 'border-indigo-500/40' : 'border-white/10'}`}
                                                 />
                                             </div>
                                         ) : (
-                                            <div className={`flex items-baseline gap-1 ${isPremium ? 'text-white' : 'text-white/90'}`}>
+                                            <div className={`flex items-baseline gap-1 ${isElite ? 'text-white' : 'text-white/90'}`}>
                                                 <span className="text-xs font-black text-white/60">$</span>
-                                                <span className={`font-black tracking-tighter ${isPremium ? 'text-5xl' : 'text-4xl'}`}>
+                                                <span className={`font-black tracking-tighter ${isElite ? 'text-5xl' : 'text-4xl'}`}>
                                                     {(planPrices[planType] ?? 0).toFixed(2)}
                                                 </span>
                                                 <span className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">/mes</span>
@@ -394,18 +422,18 @@ export const Plans: React.FC = () => {
                                             </div>
                                         ) : (
                                             <>
-                                                <PlanFeature 
-                                                    text={`${tempLimits[planType]} Pulsos activos/mes`} 
-                                                    description="Tus eventos en tiempo real" 
-                                                    highlight={isCurrent || isPremium} 
+                                                <PlanFeature
+                                                    text={`${tempLimits[planType]} Pulsos activos/mes`}
+                                                    description="Tus eventos en tiempo real"
+                                                    highlight={isCurrent || isElite}
                                                 />
                                                 {tempFeatures[planType].filter(f => !f.text.includes('Pulsos')).map((feat, idx) => (
-                                                    <PlanFeature 
-                                                        key={idx} 
-                                                        text={feat.text} 
-                                                        description={feat.description} 
-                                                        isIncluded={feat.isIncluded} 
-                                                        highlight={feat.highlight || isCurrent || isPremium} 
+                                                    <PlanFeature
+                                                        key={idx}
+                                                        text={feat.text}
+                                                        description={feat.description}
+                                                        isIncluded={feat.isIncluded}
+                                                        highlight={feat.highlight || isCurrent || isElite}
                                                     />
                                                 ))}
                                             </>
@@ -415,16 +443,17 @@ export const Plans: React.FC = () => {
                                     <button
                                         onClick={() => onUpdatePlan(planType)}
                                         className={`w-full py-5 rounded-[2rem] font-black text-[10px] uppercase tracking-[0.2em] transition-all relative overflow-hidden group/btn 
-                                            ${isCurrent ? 'bg-slate-800/50 text-slate-500 border border-white/5 cursor-default' : 
-                                              isPremium ? 'bg-white text-indigo-900 shadow-xl shadow-white/10 hover:scale-[1.02]' : 
-                                              isFree ? 'bg-white/10 text-white border border-white/10 hover:bg-white/20 hover:scale-[1.02]' :
-                                              'bg-orange-500 text-white hover:scale-[1.02] shadow-orange-500/20 active:scale-95'}`}
+                                            ${isCurrent ? 'bg-slate-800/50 text-slate-500 border border-white/5 cursor-default' :
+                                                isElite ? 'bg-white text-indigo-900 shadow-xl shadow-white/10 hover:scale-[1.02]' :
+                                                    isFree ? 'bg-white/10 text-white border border-white/10 hover:bg-white/20 hover:scale-[1.02]' :
+                                                        isPro ? 'bg-emerald-500 text-white hover:scale-[1.02] shadow-emerald-500/20 active:scale-95' :
+                                                        'bg-orange-500 text-white hover:scale-[1.02] shadow-orange-500/20 active:scale-95'}`}
                                     >
-                                        {isPremium && !isCurrent && <div className="absolute inset-0 bg-indigo-500/10 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000" />}
+                                        {isElite && !isCurrent && <div className="absolute inset-0 bg-indigo-500/10 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000" />}
                                         <span className="relative z-10">
-                                            {isCurrent ? 'PLAN ACTUAL' : 
-                                             isPremium ? '¡MEJORAR AHORA!' :
-                                             isFree ? 'SELECCIONAR' : 'ACTUALIZAR'}
+                                            {isCurrent ? 'PLAN ACTUAL' :
+                                                isElite ? '¡MEJORAR AHORA!' :
+                                                    isFree ? 'SELECCIONAR' : 'ACTUALIZAR'}
                                         </span>
                                     </button>
                                 </div>
@@ -433,105 +462,105 @@ export const Plans: React.FC = () => {
                     </div>
                 </div>
 
-                    {/* Activation Section */}
-                    <div className="max-w-4xl mx-auto rounded-[3rem] overflow-hidden border border-white/10 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-1000 mt-12 bg-black/60">
-                        <div className="p-8 bg-gradient-to-r from-orange-500 to-orange-600 flex justify-between items-center relative overflow-hidden">
-                            <div className="absolute inset-0 bg-white/10 opacity-20 pointer-events-none">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 blur-3xl -translate-y-1/2 translate-x-1/2" />
-                            </div>
-                            <div className="flex items-center gap-4 relative z-10">
-                                <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
-                                    <ShieldCheck size={32} className="text-white" />
-                                </div>
-                                <div>
-                                    <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">Método de Activación</h2>
-                                    <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">Seguro • Directo • Verificado</p>
-                                </div>
-                            </div>
-                            {(isSuperAdmin || isAdmin) && (
-                                <button 
-                                    onClick={() => setShowPaymentEdit(true)}
-                                    className="p-3 rounded-2xl bg-white/20 hover:bg-white/30 text-white transition-all active:scale-90 relative z-10 border border-white/10"
-                                    title="Editar datos de pago"
-                                >
-                                    <Edit3 size={20} />
-                                </button>
-                            )}
+                {/* Activation Section */}
+                <div className="max-w-4xl mx-auto rounded-[3rem] overflow-hidden border border-white/10 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-1000 mt-12 bg-black/60">
+                    <div className="p-8 bg-gradient-to-r from-orange-500 to-orange-600 flex justify-between items-center relative overflow-hidden">
+                        <div className="absolute inset-0 bg-white/10 opacity-20 pointer-events-none">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 blur-3xl -translate-y-1/2 translate-x-1/2" />
                         </div>
-                        
-                        <div className="p-8 space-y-8">
-                            <div className="flex items-start gap-4 p-6 rounded-[2rem] bg-orange-500/5 border border-orange-500/10">
-                                <div className="mt-1 w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-500 flex-shrink-0">
-                                    <Info size={20} />
-                                </div>
-                                <div className="text-sm text-slate-300 leading-relaxed font-medium">
-                                    Para activar tu plan empresarial, selecciona tu plan y paga automáticamente con <span className="text-white font-black italic">dLocal Go</span>. Recibirás activación instantánea tras confirmar el pago. También mantenemos los métodos manuales para tu comodidad.
-                                </div>
+                        <div className="flex items-center gap-4 relative z-10">
+                            <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+                                <ShieldCheck size={32} className="text-white" />
                             </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-1">
-                                <PaymentRow label="Banco" value={paymentDetails.bankName} />
-                                <PaymentRow label="Tipo de Cuenta" value={paymentDetails.accountType} />
-                                <PaymentRow 
-                                    label="Número de Cuenta" 
-                                    value={paymentDetails.accountNumber} 
-                                    copyable={true} 
-                                    fieldName="Número de cuenta"
-                                />
-                                <PaymentRow 
-                                    label="Titular" 
-                                    value={paymentDetails.accountOwner} 
-                                    copyable={true} 
-                                    fieldName="Nombre del titular"
-                                />
-                                <PaymentRow 
-                                    label="R.U.C / I.D." 
-                                    value={paymentDetails.idNumber} 
-                                    copyable={true} 
-                                    fieldName="Número de identificación"
-                                />
-                                <PaymentRow label="Región / País" value={paymentDetails.bankRegion} />
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                                <a 
-                                    href={`https://wa.me/${paymentDetails.whatsappNumber}?text=${encodeURIComponent('Hola! Acabo de realizar el pago de mi plan PULSE. Aquí envío mi comprobante.')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex-1 py-5 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-[2rem] flex items-center justify-center gap-3 transition-all shadow-xl shadow-orange-500/20 active:scale-95 group"
-                                >
-                                    <MessageCircle className="w-5 h-5 fill-white" />
-                                    <span className="uppercase tracking-[0.2em] text-xs">Enviar Comprobante</span>
-                                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                </a>
-                                <a
-                                    href="mailto:contacto@montapulse.com?subject=Comprobante de Pago - Plan Pulse"
-                                    className="flex-1 py-5 bg-white/5 hover:bg-white/10 text-white font-black rounded-[2rem] flex items-center justify-center gap-3 transition-all border border-white/10 active:scale-95"
-                                >
-                                    <Mail className="w-5 h-5 text-orange-500" />
-                                    <span className="uppercase tracking-[0.2em] text-xs">Usar E-mail</span>
-                                </a>
-                            </div>
-
-                            <div className="flex items-center justify-center gap-3 py-4 bg-white/[0.02] rounded-2xl border border-white/5 opacity-60">
-                                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                                <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
-                                    Soporte comercial disponible de 09:00 a 22:00
-                                </p>
+                            <div>
+                                <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">Método de Activación</h2>
+                                <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">Seguro • Directo • Verificado</p>
                             </div>
                         </div>
+                        {(isSuperAdmin || isAdmin) && (
+                            <button
+                                onClick={() => setShowPaymentEdit(true)}
+                                className="p-3 rounded-2xl bg-white/20 hover:bg-white/30 text-white transition-all active:scale-90 relative z-10 border border-white/10"
+                                title="Editar datos de pago"
+                            >
+                                <Edit3 size={20} />
+                            </button>
+                        )}
                     </div>
 
-                    {/* Footer Warning */}
-                    <div className="flex justify-center pt-8 pb-12">
-                        <div className="flex items-center gap-3 text-slate-600">
-                            <ShieldCheck size={14} />
-                            <p className="text-[10px] font-bold uppercase tracking-widest">Transacciones seguras mediante sistema verificado</p>
+                    <div className="p-8 space-y-8">
+                        <div className="flex items-start gap-4 p-6 rounded-[2rem] bg-orange-500/5 border border-orange-500/10">
+                            <div className="mt-1 w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-500 flex-shrink-0">
+                                <Info size={20} />
+                            </div>
+                            <div className="text-sm text-slate-300 leading-relaxed font-medium">
+                                Para activar tu plan empresarial, selecciona tu plan y paga automáticamente con <span className="text-white font-black italic">dLocal Go</span>. Recibirás activación instantánea tras confirmar el pago. También mantenemos los métodos manuales para tu comodidad.
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-1">
+                            <PaymentRow label="Banco" value={paymentDetails.bankName} />
+                            <PaymentRow label="Tipo de Cuenta" value={paymentDetails.accountType} />
+                            <PaymentRow
+                                label="Número de Cuenta"
+                                value={paymentDetails.accountNumber}
+                                copyable={true}
+                                fieldName="Número de cuenta"
+                            />
+                            <PaymentRow
+                                label="Titular"
+                                value={paymentDetails.accountOwner}
+                                copyable={true}
+                                fieldName="Nombre del titular"
+                            />
+                            <PaymentRow
+                                label="R.U.C / I.D."
+                                value={paymentDetails.idNumber}
+                                copyable={true}
+                                fieldName="Número de identificación"
+                            />
+                            <PaymentRow label="Región / País" value={paymentDetails.bankRegion} />
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                            <a
+                                href={`https://wa.me/${paymentDetails.whatsappNumber}?text=${encodeURIComponent('Hola! Acabo de realizar el pago de mi plan PULSE. Aquí envío mi comprobante.')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 py-5 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-[2rem] flex items-center justify-center gap-3 transition-all shadow-xl shadow-orange-500/20 active:scale-95 group"
+                            >
+                                <MessageCircle className="w-5 h-5 fill-white" />
+                                <span className="uppercase tracking-[0.2em] text-xs">Enviar Comprobante</span>
+                                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            </a>
+                            <a
+                                href="mailto:contacto@montapulse.com?subject=Comprobante de Pago - Plan Pulse"
+                                className="flex-1 py-5 bg-white/5 hover:bg-white/10 text-white font-black rounded-[2rem] flex items-center justify-center gap-3 transition-all border border-white/10 active:scale-95"
+                            >
+                                <Mail className="w-5 h-5 text-orange-500" />
+                                <span className="uppercase tracking-[0.2em] text-xs">Usar E-mail</span>
+                            </a>
+                        </div>
+
+                        <div className="flex items-center justify-center gap-3 py-4 bg-white/[0.02] rounded-2xl border border-white/5 opacity-60">
+                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
+                                Soporte comercial disponible de 09:00 a 22:00
+                            </p>
                         </div>
                     </div>
                 </div>
+
+                {/* Footer Warning */}
+                <div className="flex justify-center pt-8 pb-12">
+                    <div className="flex items-center gap-3 text-slate-600">
+                        <ShieldCheck size={14} />
+                        <p className="text-[10px] font-bold uppercase tracking-widest">Transacciones seguras mediante sistema verificado</p>
+                    </div>
+                </div>
             </div>
-        );
+        </div>
+    );
 };
 
 export default Plans;

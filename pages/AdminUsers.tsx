@@ -24,10 +24,11 @@ import { useToast } from '../context/ToastContext';
 import { useAuthContext } from '../context/AuthContext';
 
 export const AdminUsers: React.FC = () => {
-    const { 
-        allUsers, setAllUsers, businesses, setBusinesses, 
+    const {
+        allUsers, setAllUsers, businesses, setBusinesses,
         handlePurgeAllReferences, isSuperUser,
-        deletedBusinesses, handleRestoreBusiness
+        deletedBusinesses, handleRestoreBusiness,
+        planNames
     } = useData();
     const navigate = useNavigate();
     const { showToast, showConfirm, showPrompt } = useToast();
@@ -57,9 +58,8 @@ export const AdminUsers: React.FC = () => {
         total: allUsers.length,
         hosts: allUsers.filter(u => u.role === 'host').length,
         admins: allUsers.filter(u => u.role === 'admin').length,
-        basic: allUsers.filter(u => u.plan === SubscriptionPlan.BASIC).length,
-        premium: allUsers.filter(u => u.plan === SubscriptionPlan.PREMIUM).length,
-        expert: allUsers.filter(u => u.plan === SubscriptionPlan.EXPERT).length
+        pro: allUsers.filter(u => u.plan === SubscriptionPlan.PRO).length,
+        elite: allUsers.filter(u => u.plan === SubscriptionPlan.ELITE).length
     }), [allUsers]);
 
     return (
@@ -86,14 +86,14 @@ export const AdminUsers: React.FC = () => {
                     {/* Compact Stats & Filters */}
                     <div className="flex flex-col gap-1.5 mb-1">
                         {/* Stats Row */}
-                        <div className="flex justify-between items-center bg-white/5 border border-white/5 rounded-lg p-1.5">
+                        <div className="flex justify-between items-center bg-white/5 border border-white/5 rounded-lg p-1.5 overflow-x-auto no-scrollbar">
                             {[
                                 { label: 'Tot', value: stats.total, color: 'text-orange-400' },
-                                { label: 'Adm', value: stats.admins, color: 'text-amber-400' },
-                                { label: 'Pre', value: stats.premium, color: 'text-purple-400' },
-                                { label: 'Exp', value: stats.expert, color: 'text-cyan-400' }
+                                { label: 'Pro', value: stats.pro, color: 'text-blue-400' },
+                                { label: 'Elite', value: stats.elite, color: 'text-purple-400' },
+                                { label: 'Adm', value: stats.admins, color: 'text-green-400' }
                             ].map((stat, i) => (
-                                <div key={i} className="flex flex-col items-center flex-1 border-r border-white/5 last:border-0">
+                                <div key={i} className="flex flex-col items-center flex-1 border-r border-white/5 last:border-0 min-w-[50px]">
                                     <p className="text-[8px] font-black uppercase tracking-widest text-white/50 leading-none mb-0.5">{stat.label}</p>
                                     <p className={`text-xs font-black leading-none ${stat.color}`}>{stat.value}</p>
                                 </div>
@@ -118,9 +118,9 @@ export const AdminUsers: React.FC = () => {
                                 className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[9px] font-bold text-white outline-none w-20"
                             >
                                 <option value="all" className="bg-slate-900">Roles</option>
-                                <option value="visitor" className="bg-slate-900">Exp</option>
-                                <option value="host" className="bg-slate-900">Host</option>
-                                <option value="admin" className="bg-slate-900">Admin</option>
+                                <option value="visitor" className="bg-slate-900">Explorador</option>
+                                <option value="host" className="bg-slate-900">Ubicame Socio</option>
+                                <option value="admin" className="bg-slate-900">Master Admin</option>
                             </select>
                             <select
                                 value={planFilter}
@@ -128,10 +128,9 @@ export const AdminUsers: React.FC = () => {
                                 className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[9px] font-bold text-white outline-none w-24"
                             >
                                 <option value="all" className="bg-slate-900">Planes</option>
-                                <option value={SubscriptionPlan.FREE} className="bg-slate-900">Gratis</option>
-                                <option value={SubscriptionPlan.BASIC} className="bg-slate-900">Basic</option>
-                                <option value={SubscriptionPlan.PREMIUM} className="bg-slate-900">Premium</option>
-                                <option value={SubscriptionPlan.EXPERT} className="bg-slate-900">Expert</option>
+                                <option value={SubscriptionPlan.FREE} className="bg-slate-900">{planNames[SubscriptionPlan.FREE]}</option>
+                                <option value={SubscriptionPlan.PRO} className="bg-slate-900">{planNames[SubscriptionPlan.PRO]}</option>
+                                <option value={SubscriptionPlan.ELITE} className="bg-slate-900">{planNames[SubscriptionPlan.ELITE]}</option>
                             </select>
                         </div>
                     </div>
@@ -186,7 +185,7 @@ export const AdminUsers: React.FC = () => {
                                                         alt={u.name || 'User'}
                                                     />
                                                 </div>
-                                                {u.plan === SubscriptionPlan.EXPERT && (
+                                                {u.plan === SubscriptionPlan.ELITE && (
                                                     <div className="absolute -top-1.5 -right-1.5 bg-amber-500 p-1 rounded-md shadow-lg shadow-amber-500/40 border border-amber-300">
                                                         <Crown className="w-2.5 h-2.5 text-black" />
                                                     </div>
@@ -206,14 +205,14 @@ export const AdminUsers: React.FC = () => {
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-1.5 shrink-0 ml-3">
-                                            <div className={`px-2 py-1 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-wider border ${u.plan === SubscriptionPlan.EXPERT
+                                            <div className={`px-2 py-1 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-wider border ${u.plan === SubscriptionPlan.ELITE
                                                 ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 shadow-sm shadow-amber-500/10'
                                                 : 'bg-white/5 border-white/10 text-slate-400'
                                                 }`}>
-                                                {u.plan}
+                                                {planNames[u.plan || SubscriptionPlan.FREE]}
                                             </div>
                                             <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md border ${isTargetSuperuser ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-sm shadow-amber-500/10' : 'bg-white/5 text-white/40 border-white/5'}`}>
-                                                {isTargetSuperuser ? 'MASTER ADMIN' : u.role}
+                                                {isTargetSuperuser ? 'MASTER ADMIN' : (u.role === 'admin' ? 'MASTER ADMIN' : (u.role === 'host' ? 'UBICAME SOCIO' : 'EXPLORADOR'))}
                                             </span>
                                         </div>
                                     </div>
@@ -241,7 +240,7 @@ export const AdminUsers: React.FC = () => {
                                                         showToast('Acción denegada.', 'error'); return;
                                                     }
                                                     const nextRole = u.role === 'admin' ? 'visitor' : 'admin';
-                                                    if (await showConfirm(`¿Cambiar rol a ${nextRole === 'admin' ? 'ADMINISTRADOR' : 'Explorador'}?`, 'Cambiar Rol')) {
+                                                    if (await showConfirm(`¿Cambiar rol a ${nextRole === 'admin' ? 'MASTER ADMIN' : 'EXPLORADOR'}?`, 'Cambiar Rol')) {
                                                         try {
                                                             await updateUser(u.id, { role: nextRole as any });
                                                             setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, role: nextRole } : user));
@@ -252,7 +251,7 @@ export const AdminUsers: React.FC = () => {
                                                 className={`py-2.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 ${u.role === 'admin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-inner shadow-amber-500/20' : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:border-white/20'}`}
                                             >
                                                 <ShieldCheck className="w-3 h-3" />
-                                                {u.role === 'admin' ? 'Es Admin' : 'Hacer Admin'}
+                                                {u.role === 'admin' ? 'Es Master Admin' : 'Hacer Master Admin'}
                                             </button>
 
                                             <button
@@ -260,9 +259,13 @@ export const AdminUsers: React.FC = () => {
                                                     if (!canModify) {
                                                         showToast('Acción denegada.', 'error'); return;
                                                     }
-                                                    const plans = [SubscriptionPlan.FREE, SubscriptionPlan.BASIC, SubscriptionPlan.PREMIUM, SubscriptionPlan.EXPERT];
+                                                    const plans = [
+                                                        SubscriptionPlan.FREE,
+                                                        SubscriptionPlan.PRO,
+                                                        SubscriptionPlan.ELITE
+                                                    ];
                                                     const nextPlan = plans[(plans.indexOf(u.plan || SubscriptionPlan.FREE) + 1) % plans.length];
-                                                    if (await showConfirm(`¿Cambiar plan a ${nextPlan}?`, 'Actualizar Plan')) {
+                                                    if (await showConfirm(`¿Cambiar plan a ${planNames[nextPlan]}?`, 'Actualizar Plan')) {
                                                         try {
                                                             await updateUser(u.id, { plan: nextPlan });
                                                             setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, plan: nextPlan } : user));
@@ -277,7 +280,7 @@ export const AdminUsers: React.FC = () => {
                                                 }}
                                                 className={`py-2.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 ${u.plan === SubscriptionPlan.EXPERT ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-inner shadow-amber-500/20' : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:border-white/20'}`}
                                             >
-                                                <Zap className="w-3 h-3" /> Plan: {u.plan}
+                                                <Zap className="w-3 h-3" /> Plan: {planNames[u.plan || SubscriptionPlan.FREE]}
                                             </button>
                                         </div>
 
@@ -306,7 +309,7 @@ export const AdminUsers: React.FC = () => {
                                                     >
                                                         <Zap className="w-3 h-3" /> Pulse: {u.pulsePassActive ? 'ON' : 'OFF'}
                                                     </button>
-                                                    
+
                                                     {userBusiness && (
                                                         <button
                                                             onClick={async () => {
@@ -385,7 +388,7 @@ export const AdminUsers: React.FC = () => {
                                                                     onClick={async () => {
                                                                         if (!canModify) return;
                                                                         if (await showConfirm('¿Mover a papelera?', 'Papelera')) {
-                                                                            try { await deleteBusiness(userBusiness.id, false); showToast('Movido', 'success'); } catch (e) {}
+                                                                            try { await deleteBusiness(userBusiness.id, false); showToast('Movido', 'success'); } catch (e) { }
                                                                         }
                                                                     }}
                                                                     className="flex-1 py-2 px-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-black uppercase hover:bg-red-500 hover:text-white transition-all text-center shadow-inner shadow-red-500/10"
@@ -402,7 +405,7 @@ export const AdminUsers: React.FC = () => {
                                                                             await updateUser(u.id, { businessId: "" });
                                                                             setAllUsers(prev => prev.map(user => user.id === u.id ? { ...user, businessId: "" } : user));
                                                                             showToast('Eliminado permanentemente', 'success');
-                                                                        } catch (e) {}
+                                                                        } catch (e) { }
                                                                     }
                                                                 }}
                                                                 className="flex-1 py-2 px-2 rounded-lg bg-black text-red-600 border border-red-900/50 text-[9px] font-black uppercase hover:bg-red-900 hover:text-white transition-all text-center"
@@ -448,7 +451,7 @@ export const AdminUsers: React.FC = () => {
                                             </p>
                                         </div>
                                     </div>
-                                    
+
                                     <div className="flex items-center gap-2">
                                         <button
                                             onClick={() => {

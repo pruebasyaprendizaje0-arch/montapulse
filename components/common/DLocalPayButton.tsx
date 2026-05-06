@@ -6,6 +6,8 @@ interface DLocalPayButtonProps {
     amount: number;
     currency: string;
     description: string;
+    userId: string;
+    planId: string;
     className?: string;
     label?: string;
 }
@@ -17,7 +19,9 @@ interface DLocalPayButtonProps {
 const DLocalPayButton: React.FC<DLocalPayButtonProps> = ({ 
     amount, 
     currency, 
-    description, 
+    description,
+    userId,
+    planId,
     className = "", 
     label = "Pagar con dLocal Go" 
 }) => {
@@ -32,7 +36,7 @@ const DLocalPayButton: React.FC<DLocalPayButtonProps> = ({
             const response = await fetch('/api/create-checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount, currency, description })
+                body: JSON.stringify({ amount, currency, description, userId, planId })
             });
 
             const data = await response.json();

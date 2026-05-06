@@ -3,6 +3,8 @@ import { Search, Radar, MoreVertical, Sparkles, Edit3, MessageCircle, MessageSqu
 import { useAuthContext } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
+import { getEcuadorDate, getEcuadorDayKey } from '../utils/timeUtils';
+
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChatRoom as ChatRoomType, UserProfile, SubscriptionPlan, Business, Announcement, Vibe } from '../types';
 import { ChatRoom } from '../components/Chat/ChatRoom';
@@ -47,22 +49,22 @@ const mockRooms: ChatRoomType[] = [
     }
 ];
 
-export const Community: React.FC = () => {
+export function Community() {
     const { user, isAdmin, isSuperAdmin } = useAuthContext();
     const { showToast, showConfirm } = useToast();
     const navigate = useNavigate();
-    const { 
-        messages, 
-        handleSendMessage: sendGlobalMessage, 
-        businesses, 
-        followedBusinessIds, 
-        businessFollowers, 
-        customLocalities = [], 
-        notifications, 
-        sendPushNotification, 
-        markAsRead, 
-        setShowBusinessReg, 
-        setEditingBusinessId, 
+    const {
+        messages,
+        handleSendMessage: sendGlobalMessage,
+        businesses,
+        followedBusinessIds,
+        businessFollowers,
+        customLocalities = [],
+        notifications,
+        sendPushNotification,
+        markAsRead,
+        setShowBusinessReg,
+        setEditingBusinessId,
         setShowBusinessEdit,
         communityTab,
         setCommunityTab
@@ -118,7 +120,7 @@ export const Community: React.FC = () => {
     const [showCreditsModal, setShowCreditsModal] = useState(false);
     const [groupFilter, setGroupFilter] = useState<'suggestions' | 'my-city' | 'near-me'>('suggestions');
     const [userSearchQuery, setUserSearchQuery] = useState('');
-    
+
     // New navigation and section states
     // Navigation state handled by communityTab from useData context
     const location = useLocation();
@@ -144,7 +146,7 @@ export const Community: React.FC = () => {
     const userPlan = user?.plan || SubscriptionPlan.FREE;
 
     // Permissions - simple check for any paid plan
-    const isPremiumUser = (user?.plan === SubscriptionPlan.PREMIUM || user?.plan === SubscriptionPlan.EXPERT || userBusiness?.plan === SubscriptionPlan.PREMIUM || userBusiness?.plan === SubscriptionPlan.EXPERT || isAdmin);
+    const isPremiumUser = (user?.plan === SubscriptionPlan.ELITE || user?.plan === SubscriptionPlan.EXPERT || userBusiness?.plan === SubscriptionPlan.ELITE || userBusiness?.plan === SubscriptionPlan.EXPERT || isAdmin);
     const isExpert = user?.plan === SubscriptionPlan.EXPERT || userBusiness?.plan === SubscriptionPlan.EXPERT || isAdmin;
     const canSendImages = isExpert || isAdmin;
 
@@ -160,7 +162,7 @@ export const Community: React.FC = () => {
     const currentPlan = userBusiness?.plan || user?.plan || SubscriptionPlan.FREE;
     let businessCredits = MASS_MESSAGE_CREDITS[currentPlan] || 0;
     if (userBusiness && currentPlan === SubscriptionPlan.FREE) {
-        businessCredits = MASS_MESSAGE_CREDITS[SubscriptionPlan.BASIC] || 2;
+        businessCredits = MASS_MESSAGE_CREDITS[SubscriptionPlan.PRO] || 2;
     }
 
     const usedThisMonthCount = useMemo(() => {
@@ -471,7 +473,7 @@ export const Community: React.FC = () => {
                         return false;
                     }
                 }
-                return true; 
+                return true;
             });
         }
 
@@ -485,30 +487,30 @@ export const Community: React.FC = () => {
         const sq = (userSearchQuery || searchQuery || '').trim();
         const query = sq.toLowerCase();
         let results = (allUsers || []).filter(u => u.id !== user?.id);
-        
+
         if (selectedLocality) {
             results = results.filter(u => u.locality === selectedLocality);
         }
 
         if (!sq) return results.slice(0, 8);
-        
+
         return results.filter(u => {
             const fullName = `${u.name} ${u.surname || ''}`.toLowerCase();
             return fullName.includes(query) || u.email.toLowerCase().includes(query);
         });
     }, [allUsers, searchQuery, userSearchQuery, user, selectedLocality]);
 
-    const unreadGroupsCount = useMemo(() => 
+    const unreadGroupsCount = useMemo(() =>
         rooms.filter(r => r.type === 'group').reduce((acc, r) => acc + (r.unreadCount || 0), 0)
-    , [rooms]);
+        , [rooms]);
 
-    const unreadDirectsCount = useMemo(() => 
+    const unreadDirectsCount = useMemo(() =>
         rooms.filter(r => r.type === 'direct').reduce((acc, r) => acc + (r.unreadCount || 0), 0)
-    , [rooms]);
+        , [rooms]);
 
-    const unreadNotifsCount = useMemo(() => 
+    const unreadNotifsCount = useMemo(() =>
         notifications?.filter(n => !n.read).length || 0
-    , [notifications]);
+        , [notifications]);
 
 
     const handleStartDM = async (targetUser: UserProfile) => {
@@ -575,7 +577,7 @@ export const Community: React.FC = () => {
             participants: [user.id, business.id],
             avatar: business.imageUrl || 'https://i.pravatar.cc/100',
             lastMessage: `Â¡Hola! Estoy interesado en tus servicios`,
-            status: (business.plan === SubscriptionPlan.BASIC || business.plan === SubscriptionPlan.EXPERT) ? 'green' : 'none'
+            status: (business.plan === SubscriptionPlan.PRO || business.plan === SubscriptionPlan.EXPERT) ? 'green' : 'none'
         };
 
         try {
@@ -768,6 +770,7 @@ export const Community: React.FC = () => {
                             senderName,
                             senderAvatar,
                             text: massMessageText,
+                            roomId,
                             isBusinessMessage: isBusinessMsg
                         };
 
@@ -840,7 +843,7 @@ export const Community: React.FC = () => {
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full bg-slate-900/40 backdrop-blur-3xl border border-white/5 rounded-[2rem] py-4 pl-12 pr-4 text-[10px] font-black uppercase tracking-widest text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-orange-500/30 transition-all shadow-2xl"
                     />
-                    
+
                     {globalSearchResults && (
                         <div className="absolute top-[calc(100%+0.5rem)] left-0 right-0 z-[100] bg-[#111111] border border-white/10 rounded-2xl max-h-[70vh] overflow-y-auto shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                             {globalSearchResults.groups.length > 0 && (
@@ -998,22 +1001,22 @@ export const Community: React.FC = () => {
                     </div>
                 </div>
 
-                        {globalSearchResults && globalSearchResults.businesses.length === 0 &&
-                            globalSearchResults.users.length === 0 &&
-                            globalSearchResults.groups.length === 0 &&
-                            globalSearchResults.locations.length === 0 && (
-                                <div className="p-6 text-center">
-                                    <p className="text-sm font-black text-slate-500 uppercase">Sin resultados</p>
-                                </div>
-                            )}
+                {globalSearchResults && globalSearchResults.businesses.length === 0 &&
+                    globalSearchResults.users.length === 0 &&
+                    globalSearchResults.groups.length === 0 &&
+                    globalSearchResults.locations.length === 0 && (
+                        <div className="p-6 text-center">
+                            <p className="text-sm font-black text-slate-500 uppercase">Sin resultados</p>
+                        </div>
+                    )}
 
-                        {!isPremiumUser && (
-                            <div className="p-3 bg-amber-500/10 border-t border-amber-500/20">
-                                <p className="text-[10px] text-amber-400 text-center">
-                                    🚀 Mejora tu plan para chatear con negocios y personas
-                                </p>
-                            </div>
-                        )}
+                {!isPremiumUser && (
+                    <div className="p-3 bg-amber-500/10 border-t border-amber-500/20">
+                        <p className="text-[10px] text-amber-400 text-center">
+                            🚀 Mejora tu plan para chatear con negocios y personas
+                        </p>
+                    </div>
+                )}
             </div>
 
             {/* Mass Message Modal */}
@@ -1890,8 +1893,8 @@ export const Community: React.FC = () => {
                                     onClick={() => setGroupFilter(f.id as any)}
                                     className={`
                                         flex items-center gap-2 px-4 py-2.5 rounded-2xl whitespace-nowrap transition-all duration-300 border
-                                        ${groupFilter === f.id 
-                                            ? `bg-${f.color}-500/20 border-${f.color}-500/40 text-${f.color}-400 shadow-lg shadow-${f.color}-500/10 scale-105` 
+                                        ${groupFilter === f.id
+                                            ? `bg-${f.color}-500/20 border-${f.color}-500/40 text-${f.color}-400 shadow-lg shadow-${f.color}-500/10 scale-105`
                                             : 'bg-white/[0.03] border-white/5 text-slate-500 hover:bg-white/[0.05] hover:text-slate-300'
                                         }
                                     `}
@@ -2103,24 +2106,24 @@ export const Community: React.FC = () => {
 
             {/* Credits / Comodines Modal */}
             {showCreditsModal && (
-                <div 
+                <div
                     className="fixed inset-0 z-[200] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-6"
                     onClick={() => setShowCreditsModal(false)}
                 >
-                    <div 
+                    <div
                         className="bg-[#111111] border border-white/10 rounded-[2.5rem] p-8 max-w-sm w-full relative overflow-hidden shadow-2xl"
                         onClick={e => e.stopPropagation()}
                     >
                         {/* Decorative background flare */}
                         <div className="absolute -top-24 -right-24 w-48 h-48 bg-orange-500/10 rounded-full blur-[80px]" />
-                        
+
                         <div className="relative z-10">
                             <div className="flex justify-between items-center mb-10">
                                 <div>
                                     <h3 className="text-xl font-black text-white uppercase tracking-tight">Tus Comodines</h3>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Créditos de Negocio</p>
                                 </div>
-                                <button 
+                                <button
                                     onClick={() => setShowCreditsModal(false)}
                                     className="p-2 hover:bg-white/5 rounded-full transition-colors"
                                 >
@@ -2151,16 +2154,16 @@ export const Community: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
-                                
+
                                 <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                                    <div 
+                                    <div
                                         className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 rounded-full transition-all duration-1000 ease-out"
                                         style={{ width: remainingCredits === Infinity ? '100%' : `${Math.min(100, (usedThisMonthCount / businessCredits) * 100)}%` }}
                                     />
                                 </div>
                             </div>
 
-                            <button 
+                            <button
                                 onClick={() => setShowCreditsModal(false)}
                                 className="w-full py-4 bg-white text-black rounded-2xl font-black uppercase text-[11px] tracking-widest hover:bg-slate-200 transition-all active:scale-95 shadow-lg shadow-white/5"
                             >
@@ -2184,14 +2187,14 @@ export const Community: React.FC = () => {
                                 className="relative h-56 rounded-[2.5rem] overflow-hidden cursor-pointer active:scale-[0.98] transition-all group shadow-2xl shadow-black/40 border border-white/5 hover:border-purple-500/50"
                             >
                                 {/* Background Image */}
-                                <img 
-                                    src={business.imageUrl || 'https://images.unsplash.com/photo-1550966871-3ed3c47e2ce2?auto=format&fit=crop&q=80&w=400'} 
-                                    alt={business.name} 
-                                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                                <img
+                                    src={business.imageUrl || 'https://images.unsplash.com/photo-1550966871-3ed3c47e2ce2?auto=format&fit=crop&q=80&w=400'}
+                                    alt={business.name}
+                                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                 />
                                 {/* Dark Overlay */}
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0F] via-[#0A0A0F]/60 to-transparent" />
-                                
+
                                 {/* Top Right: Rating */}
                                 {business.rating && (
                                     <div className="absolute top-4 right-6 flex items-center gap-1.5 px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-full border border-white/10 shadow-lg">
@@ -2210,7 +2213,7 @@ export const Community: React.FC = () => {
                                     <h3 className="text-2xl font-black text-white uppercase tracking-tight group-hover:text-purple-400 transition-colors leading-none mb-4">
                                         {business.name}
                                     </h3>
-                                    
+
                                     <div className="flex items-center justify-between border-t border-white/10 pt-4">
                                         <div className="flex items-center gap-4">
                                             <span className="text-[10px] font-black text-white/50 uppercase tracking-widest flex items-center gap-1.5">
@@ -2238,7 +2241,7 @@ export const Community: React.FC = () => {
                                 <X className="w-6 h-6 text-slate-400" />
                             </button>
                         </div>
-                        
+
                         <div className="flex items-center gap-4 mb-6">
                             <div className="w-20 h-20 rounded-[1.5rem] overflow-hidden border-2 border-amber-500/30">
                                 <img src={selectedBusinessForProfile.imageUrl || 'https://images.unsplash.com/photo-1550966871-3ed3c47e2ce2?auto=format&fit=crop&q=80&w=400'} alt={selectedBusinessForProfile.name} className="w-full h-full object-cover" />
@@ -2257,14 +2260,13 @@ export const Community: React.FC = () => {
 
                         {/* Horario de Atención */}
                         {(() => {
-                            const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-                            const today = dayNames[new Date().getDay()];
+                            const now = getEcuadorDate();
+                            const today = getEcuadorDayKey(now);
                             const todaySchedule = selectedBusinessForProfile.openingHours?.[today];
                             let statusBadge = null;
-                            
+                            const currentTime = now.getHours() * 60 + now.getMinutes();
+
                             if (todaySchedule && !todaySchedule.closed && todaySchedule.open && todaySchedule.close) {
-                                const now = new Date();
-                                const currentTime = now.getHours() * 60 + now.getMinutes();
                                 const [openH, openM] = todaySchedule.open.split(':').map(Number);
                                 const [closeH, closeM] = todaySchedule.close.split(':').map(Number);
                                 const openTime = openH * 60 + openM;
@@ -2276,7 +2278,7 @@ export const Community: React.FC = () => {
                                     </span>
                                 );
                             }
-                            
+
                             return (
                                 <div className="space-y-3 mb-4">
                                     <div className="flex items-center justify-between">
@@ -2312,5 +2314,5 @@ export const Community: React.FC = () => {
             <CommunityBottomNav />
         </div>
     );
-};
+}
 

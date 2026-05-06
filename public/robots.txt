@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Sitemap: https://www.ubicame.info/sitemap.xml
+Sitemap: https://montapulse-app.web.app/sitemap.xml

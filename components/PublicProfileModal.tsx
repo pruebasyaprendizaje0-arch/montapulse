@@ -1,10 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight, Clock, Circle } from 'lucide-react';
 import { Business, UserProfile, MontanitaEvent, ProfileReview } from '../types';
 import { useData } from '../context/DataContext';
+import { BASE_URL } from '../constants';
 import { subscribeToProfileReviews, addProfileReview, getUser, incrementBusinessViewCount } from '../services/firestoreService';
 import { useAuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { getEcuadorDate, isBusinessOpen } from '../utils/timeUtils';
+import { useSEO } from '../hooks/useSEO';
+
+
+const DAYS_ES: Record<string, string> = {
+  monday: 'Lunes',
+  tuesday: 'Martes',
+  wednesday: 'Miércoles',
+  thursday: 'Jueves',
+  friday: 'Viernes',
+  saturday: 'Sábado',
+  sunday: 'Domingo'
+};
+
 
 interface PublicProfileModalProps {
     isOpen: boolean;
@@ -127,6 +142,15 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     // Email to display: for businesses prioritise business.email, fallback to owner's email
     const contactEmail = business?.email || owner?.email || null;
 
+    const businessStatus = useMemo(() => isBusinessOpen(business?.openingHours), [business?.openingHours]);
+
+    useSEO({
+      title: displayName,
+      description: bio,
+      image: avatar,
+      url: BASE_URL + window.location.pathname
+    });
+
     return (
         <div
             className="fixed inset-0 z-[2500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300"
@@ -156,14 +180,24 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                     </div>
 
                     {/* Business / User badge top right */}
-                    <div className="absolute top-6 left-6 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 backdrop-blur-sm">
-                        {business
-                            ? <Store className="w-3.5 h-3.5 text-amber-400" />
-                            : <User className="w-3.5 h-3.5 text-sky-400" />
-                        }
-                        <span className="text-[9px] font-black uppercase tracking-widest text-white/80">
-                            {business ? 'Negocio' : 'Miembro'}
-                        </span>
+                    <div className="absolute top-6 left-6 flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 backdrop-blur-sm">
+                            {business
+                                ? <Store className="w-3.5 h-3.5 text-amber-400" />
+                                : <User className="w-3.5 h-3.5 text-sky-400" />
+                            }
+                            <span className="text-[9px] font-black uppercase tracking-widest text-white/80">
+                                {business ? 'Ubicame Socio' : 'Miembro'}
+                            </span>
+                        </div>
+                        {business && (
+                            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm ${businessStatus.isOpen ? 'bg-emerald-500/30 border border-emerald-500/40' : 'bg-red-500/30 border border-red-500/40'}`}>
+                                <Circle className={`w-2 h-2 ${businessStatus.isOpen ? 'fill-emerald-400 text-emerald-400' : 'fill-red-400 text-red-400'}`} />
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${businessStatus.isOpen ? 'text-emerald-300' : 'text-red-300'}`}>
+                                    {businessStatus.isOpen ? 'Abierto' : 'Cerrado'}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -181,7 +215,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                             {business?.category || "Explorador"}
                             <span>•</span>
                             {business
-                                ? (business.isReference || business.id?.startsWith('ref-') ? 'Punto de Referencia Verificado' : 'Negocio Verificado')
+                                ? (business.isReference || business.id?.startsWith('ref-') ? 'Punto de Referencia Verificado' : 'Ubicame Socio Verificado')
                                 : 'Explorador Pulse'
                             }
                         </div>
@@ -192,6 +226,18 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                                 <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
                                     <Mail className="w-3 h-3 text-indigo-400" />
                                     <span className="text-[10px] font-black text-indigo-300 tracking-wide">{contactEmail}</span>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Horario de atención */}
+                        {business && business.openingHours && (
+                            <div className="flex items-center gap-2 mt-2">
+                                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${businessStatus.isOpen ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-slate-800/60 border border-white/5'}`}>
+                                    <Clock className={`w-3 h-3 ${businessStatus.isOpen ? 'text-emerald-400' : 'text-slate-400'}`} />
+                                    <span className={`text-[10px] font-bold tracking-wide ${businessStatus.isOpen ? 'text-emerald-300' : 'text-slate-400'}`}>
+                                        {businessStatus.message || 'Horario disponible'}
+                                    </span>
                                 </div>
                             </div>
                         )}

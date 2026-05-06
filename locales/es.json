@@ -35,7 +35,7 @@
         "pulsePassDesc": "Tienes acceso a ofertas exclusivas hoy",
         "pulseIn": "Pulso en",
         "forYou": "Para Ti",
-        "featured": "Negocios Destacados",
+        "featured": "Ubicame Socios Destacados",
         "trendingNow": "Tendencia Ahora",
         "trendingLive": "LIVE",
         "popularVibe": "Vibe Popular",
@@ -44,8 +44,8 @@
         "referencePoints": "Puntos de Referencia",
         "searchPlaceholder": "Buscar locales, eventos...",
         "trendingTitle": "Siéntelo",
-        "directory": "Negocios",
-        "town": "Negocio"
+        "directory": "Ubicame Socios",
+        "town": "Ubicame Socio"
     },
     "history": {
         "title": "Historial",
@@ -84,7 +84,7 @@
     },
     "plans": {
         "title": "Membresía ",
-        "hero": "Lleva tu negocio al siguiente nivel. Elige el plan que mejor se adapte al ritmo de tus eventos.",
+        "hero": "Lleva tu Ubicame Socio al siguiente nivel. Elige el plan que mejor se adapte al ritmo de tus eventos.",
         "basic": "Pro",
         "premium": "Expert",
         "free": "Gratis",
@@ -115,20 +115,20 @@
         "active": "Activo",
         "inactive": "Inactivo",
         "activate": "Activar Pulse Pass",
-        "myBusiness": "Mi Negocio",
-        "registerBusiness": "Registrar Negocio",
+        "myBusiness": "Mi Ubicame Socio",
+        "registerBusiness": "Registrar Ubicame Socio",
         "savedEvents": "Eventos Guardados",
         "noSavedEvents": "No tienes eventos guardados",
         "seeAll": "Ver Todo",
         "analytics": {
-            "title": "Estadísticas de Negocio",
+            "title": "Estadísticas de Ubicame Socio",
             "views": "Vistas",
             "followers": "Seguidores",
             "engagement": "Engagement",
             "monthlyGrowth": "Crecimiento Mensual",
             "pulseScore": "Pulse Score"
         },
-        "noBusiness": "Eres un Host pero aún no has vinculado un negocio.",
+        "noBusiness": "Eres un Host pero aún no has vinculado un Ubicame Socio.",
         "noSaved": "Aún no tienes eventos guardados",
         "aboutApp": "Sobre ubicame.info PULSE",
         "bePremiumNow": "Plan Pro/Expert",

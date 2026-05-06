@@ -1,8 +1,9 @@
 import React from 'react';
 import { X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings, Share2 } from 'lucide-react';
 import { MontanitaEvent, Business, Sector } from '../types.ts';
-import { SECTOR_INFO } from '../constants.ts';
+import { SECTOR_INFO, BASE_URL } from '../constants.ts';
 import { useToast } from '../context/ToastContext';
+import { useSEO } from '../hooks/useSEO';
 
 
 interface EventModalProps {
@@ -39,6 +40,13 @@ export const EventModal: React.FC<EventModalProps> = ({
     const sectorStyle = SECTOR_INFO[event.sector] || SECTOR_INFO[Sector.CENTRO];
     const eventDate = new Date(event.startAt);
     const eventEndDate = event.endAt ? new Date(event.endAt) : null;
+
+    useSEO({
+      title: event.title,
+      description: event.description || `Descubre el evento ${event.title} en ubicame.info PULSE.`,
+      image: event.imageUrl,
+      url: BASE_URL + window.location.pathname
+    });
 
     const formatDate = (date: Date) => {
         const day = date.getDate();
@@ -77,7 +85,7 @@ ${business?.whatsapp ? `📱 WhatsApp: ${business.whatsapp}` : ''}
 ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
 
 ¡Descúbrelo en ubicame.info Pulse!`,
-            url: window.location.href
+            url: BASE_URL + window.location.pathname
         };
 
         try {

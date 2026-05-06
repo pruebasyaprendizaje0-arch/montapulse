@@ -1,6 +1,8 @@
 import { Sector, Vibe, Business, MontanitaEvent, SubscriptionPlan, BusinessCategory, PolicyData, PlanFeatureDefinition } from './types';
 export type { PlanFeatureDefinition };
 
+export const BASE_URL = 'https://www.ubicame.info';
+
 
 export const LOCALITIES = [
   { name: 'Montañita', coords: [-1.8253, -80.7523] as [number, number], zoom: 15 },
@@ -125,7 +127,7 @@ export const MOCK_BUSINESSES: Business[] = [
     hasMilitaryBenefit: true,
     isPublished: true,
     isVerified: true,
-    plan: SubscriptionPlan.PREMIUM
+    plan: SubscriptionPlan.ELITE
   },
   {
     id: 'mock-2',
@@ -142,7 +144,7 @@ export const MOCK_BUSINESSES: Business[] = [
     hasMilitaryBenefit: false,
     isPublished: true,
     isVerified: true,
-    plan: SubscriptionPlan.BASIC
+    plan: SubscriptionPlan.PRO
   },
   {
     id: 'mock-3',
@@ -159,7 +161,7 @@ export const MOCK_BUSINESSES: Business[] = [
     hasMilitaryBenefit: true,
     isPublished: true,
     isVerified: true,
-    plan: SubscriptionPlan.PREMIUM
+    plan: SubscriptionPlan.ELITE
   }
 ];
 
@@ -176,71 +178,64 @@ export const MOCK_EVENTS: MontanitaEvent[] = [];
 
 export const PLAN_LIMITS = {
   [SubscriptionPlan.FREE]: 0,
-  [SubscriptionPlan.BASIC]: 4,
-  [SubscriptionPlan.PREMIUM]: 10,
-  [SubscriptionPlan.PRO]: 4,
+  [SubscriptionPlan.PRO]: 5,
   [SubscriptionPlan.ELITE]: 10,
-  [SubscriptionPlan.EXPERT]: 9999
+  [SubscriptionPlan.EXPERT]: Infinity
 };
 
-
+export const EVENT_LIMITS = {
+  [SubscriptionPlan.FREE]: 1,
+  [SubscriptionPlan.PRO]: 10,
+  [SubscriptionPlan.ELITE]: 20,
+  [SubscriptionPlan.EXPERT]: Infinity
+};
 
 export const PLAN_FEATURES: Record<SubscriptionPlan, PlanFeatureDefinition[]> = {
   [SubscriptionPlan.FREE]: [
+    { text: "1 Evento al mes", description: "Publica tu primer evento", isIncluded: true },
     { text: "Descubrimiento total", description: "Encuentra todos los eventos", isIncluded: true },
-    { text: "Unirse a la comunidad", description: "Interactúa en el muro Pulse", isIncluded: true },
-    { text: "Notificaciones Pro", description: "Enterate de lo mejor primero", isIncluded: true }
+    { text: "Unirse a la comunidad", description: "Interactúa en el muro Pulse", isIncluded: true }
   ],
-  [SubscriptionPlan.BASIC]: [
-    { text: "4 Pulsos activos/mes", description: "Tus eventos en tiempo real", isIncluded: true, highlight: true },
+  [SubscriptionPlan.PRO]: [
+    { text: "10 Eventos al mes", description: "Ideal para negocios activos", isIncluded: true, highlight: true },
+    { text: "5 Pulsos activos/mes", description: "Tus eventos en tiempo real", isIncluded: true, highlight: true },
     { text: "Insignia Pro", isIncluded: true, highlight: true },
+    { text: "Añadir negocio al mapa", description: "Tu ubicación visible para todos", isIncluded: true, highlight: true },
+    { text: "Gestión de Ubicame Socio", description: "Edita y guarda cambios", isIncluded: true, highlight: true },
     { text: "Presencia destacada", description: "Aparece antes en las listas", isIncluded: true, highlight: true },
     { text: "Acceso a Dashboard Host", isIncluded: true, highlight: true }
   ],
-  [SubscriptionPlan.PREMIUM]: [
-    { text: "10 Pulsos activos/mes", description: "Ideal para agenda variada", isIncluded: true, highlight: true },
-    { text: "Insignia Premium Gold", isIncluded: true, highlight: true },
-    { text: "Fijado en el Mapa", description: "Icono destacado en la localidad", isIncluded: true, highlight: true },
-    { text: "IA Magic Content", description: "Descripciones optimizadas", isIncluded: true, highlight: true },
-    { text: "Comunidad exclusiva", isIncluded: true, highlight: true }
-  ],
-  [SubscriptionPlan.PRO]: [
-    { text: "10 Pulsos activos/mes", isIncluded: true, highlight: true },
-    { text: "Insignia PRO", isIncluded: true, highlight: true },
-    { text: "Fijado en Mapa", description: "Top en buscadores", isIncluded: true, highlight: true },
-    { text: "Dashboard Host", isIncluded: true, highlight: true },
-    { text: "Anuncios ilimitados", isIncluded: true, highlight: true }
-  ],
   [SubscriptionPlan.ELITE]: [
-    { text: "15 Pulsos activos/mes", isIncluded: true, highlight: true },
-    { text: "Insignia ELITE", isIncluded: true, highlight: true },
+    { text: "20 Eventos al mes", description: "Para los más influyentes", isIncluded: true, highlight: true },
+    { text: "10 Pulsos activos/mes", description: "Ideal para agenda variada", isIncluded: true, highlight: true },
+    { text: "Insignia Elite Gold", isIncluded: true, highlight: true },
+    { text: "Añadir negocio al mapa", description: "Tu ubicación visible para todos", isIncluded: true, highlight: true },
+    { text: "Gestión total de perfil", description: "Edita y guarda cambios 24/7", isIncluded: true, highlight: true },
     { text: "Fijado + destacado", description: "Top 1 en buscador", isIncluded: true, highlight: true },
-    { text: "IA Magic Content", description: "Generación automática", isIncluded: true, highlight: true },
+    { text: "IA Magic Content", description: "Descripciones optimizadas", isIncluded: true, highlight: true },
+    { text: "Comunidad exclusiva", isIncluded: true, highlight: true },
     { text: "Soporte prioritario", isIncluded: true, highlight: true }
   ],
   [SubscriptionPlan.EXPERT]: [
+    { text: "Eventos ILIMITADOS", isIncluded: true, highlight: true },
     { text: "Pulsos ILIMITADOS", isIncluded: true, highlight: true },
     { text: "Soporte VIP 24/7", isIncluded: true, highlight: true },
-    { text: "Panel Business Manager", isIncluded: true, highlight: true },
+    { text: "Panel Administrador", isIncluded: true, highlight: true },
     { text: "Ubicación VIP en Mapa", isIncluded: true, highlight: true }
   ]
 };
 
 export const MASS_MESSAGE_CREDITS = {
   [SubscriptionPlan.FREE]: 0,
-  [SubscriptionPlan.BASIC]: 4,
-  [SubscriptionPlan.PREMIUM]: 10,
-  [SubscriptionPlan.PRO]: 10,
-  [SubscriptionPlan.ELITE]: 20,
+  [SubscriptionPlan.PRO]: 5,
+  [SubscriptionPlan.ELITE]: 10,
   [SubscriptionPlan.EXPERT]: Infinity
 };
 
 export const PLAN_PRICES = {
   [SubscriptionPlan.FREE]: 0,
-  [SubscriptionPlan.BASIC]: 5.00,
-  [SubscriptionPlan.PREMIUM]: 10.00,
-  [SubscriptionPlan.PRO]: 15.00,
-  [SubscriptionPlan.ELITE]: 25.00,
+  [SubscriptionPlan.PRO]: 5.00,
+  [SubscriptionPlan.ELITE]: 10.00,
   [SubscriptionPlan.EXPERT]: 0
 };
 

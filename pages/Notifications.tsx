@@ -33,7 +33,7 @@ export const Notifications: React.FC = () => {
     const [showAnnounce, setShowAnnounce] = useState(false);
     const [massText, setMassText] = useState('');
     const [massTarget, setMassTarget] = useState<'followers' | 'all'>('followers');
-    const [massType, setMassType] = useState<string>('ventas');
+    const [massType, setMassType] = useState<Announcement['type']>('ventas');
     const [massLocalityMode, setMassLocalityMode] = useState<'all' | 'specific'>('all');
     const [massLocality, setMassLocality] = useState<string | null>(null);
     const [massVibeMode, setMassVibeMode] = useState<'all' | 'specific'>('all');
@@ -73,15 +73,15 @@ export const Notifications: React.FC = () => {
     const [notifFilter, setNotifFilter] = useState<string>('all');
 
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
-    const isPremium = (user?.plan === SubscriptionPlan.PREMIUM || user?.plan === SubscriptionPlan.EXPERT ||
-        userBusiness?.plan === SubscriptionPlan.PREMIUM || userBusiness?.plan === SubscriptionPlan.EXPERT || isAdmin);
+    const isPremium = (user?.plan === SubscriptionPlan.ELITE || user?.plan === SubscriptionPlan.EXPERT ||
+        userBusiness?.plan === SubscriptionPlan.ELITE || userBusiness?.plan === SubscriptionPlan.EXPERT || isAdmin);
     const isExpert = user?.plan === SubscriptionPlan.EXPERT || userBusiness?.plan === SubscriptionPlan.EXPERT || isAdmin;
     const canAnnounce = isPremium || !!userBusiness;
 
     const currentPlan = userBusiness?.plan || user?.plan || SubscriptionPlan.FREE;
     let businessCredits = MASS_MESSAGE_CREDITS[currentPlan] || 0;
     if (userBusiness && currentPlan === SubscriptionPlan.FREE) {
-        businessCredits = MASS_MESSAGE_CREDITS[SubscriptionPlan.BASIC] || 2;
+        businessCredits = MASS_MESSAGE_CREDITS[SubscriptionPlan.PRO] || 2;
     }
 
     const usedThisMonth = useMemo(() => {
@@ -99,7 +99,7 @@ export const Notifications: React.FC = () => {
     }, [businessCredits, usedThisMonth, isExpert, isAdmin]);
 
     const estimatedAudience = useMemo(() => {
-        let baseList = massTarget === 'followers' 
+        let baseList = massTarget === 'followers'
             ? allUsers.filter(u => contextFollowers.includes(u.id))
             : allUsers;
 
@@ -132,7 +132,7 @@ export const Notifications: React.FC = () => {
     const filtered = useMemo(() => {
         const all = notifications || [];
         const result = notifFilter === 'all' ? all : all.filter(n => n.type === notifFilter);
-        
+
         // Map announcements to notification format
         const myAnnouncements = announcements.map(a => ({
             id: a.id || `ann_${Date.now()}`,
@@ -144,12 +144,12 @@ export const Notifications: React.FC = () => {
             imageUrl: a.imageUrl,
             isMassAnnouncement: true,
         }));
-        
+
         // Filter announcements by type (same filter as notifications)
-        const filteredAnnouncements = notifFilter === 'all' 
-            ? myAnnouncements 
+        const filteredAnnouncements = notifFilter === 'all'
+            ? myAnnouncements
             : myAnnouncements.filter(n => n.type === notifFilter);
-        
+
         const combined = [...result, ...filteredAnnouncements];
         return [...combined].sort((a, b) => {
             const ta = a.createdAt || (a as any).timestamp;
@@ -257,11 +257,11 @@ export const Notifications: React.FC = () => {
                         });
                     }
                     if (roomId) {
-                        const msgId = await sendRoomMessage(roomId, { senderId, senderName, senderAvatar, text: massText, isBusinessMessage: isBusiness });
+                        const msgId = await sendRoomMessage(roomId, { roomId, senderId, senderName, senderAvatar, text: massText, isBusinessMessage: isBusiness });
                         roomMessages.push({ roomId, messageId: msgId });
                         successCount++;
                     }
-                } catch {}
+                } catch { }
             }
 
             // Always save the announcement (even if 0 chat recipients)
@@ -368,7 +368,7 @@ export const Notifications: React.FC = () => {
                         const typeKey = (notif.type || 'info') as keyof typeof NOTIF_TYPE_STYLES;
                         const style = NOTIF_TYPE_STYLES[typeKey] || NOTIF_TYPE_STYLES.info;
                         const Icon = style.icon;
-                        
+
                         const handleItemClick = () => {
                             // For mass announcements, open detail modal
                             if ((notif as any).isMassAnnouncement) {
@@ -384,7 +384,7 @@ export const Notifications: React.FC = () => {
                                 setShowImageModal(true);
                             }
                         };
-                        
+
                         return (
                             <button
                                 key={notif.id}
@@ -401,9 +401,9 @@ export const Notifications: React.FC = () => {
                                     <p className="text-xs text-slate-300 leading-relaxed line-clamp-2">{(notif as any).message || (notif as any).body}</p>
                                     {notif.imageUrl && (
                                         <div className="relative mt-2 group/image">
-                                            <img 
-                                                src={notif.imageUrl} 
-                                                alt="notif" 
+                                            <img
+                                                src={notif.imageUrl}
+                                                alt="notif"
                                                 className="w-full max-h-40 object-cover rounded-xl border border-white/10 cursor-pointer hover:opacity-80 transition-opacity"
                                                 onClick={handleImageClick}
                                             />
@@ -510,7 +510,7 @@ export const Notifications: React.FC = () => {
                                         </span>
                                         <ChevronRight className={`w-3 h-3 transition-transform ${isLocalityOpen ? 'rotate-90' : ''}`} />
                                     </button>
-                                    
+
                                     {isLocalityOpen && (
                                         <div className="pt-1 space-y-1">
                                             <button
@@ -674,11 +674,11 @@ export const Notifications: React.FC = () => {
 
             {/* === Announcement Detail Modal === */}
             {selectedAnnouncement && (
-                <div 
+                <div
                     className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
                     onClick={() => setSelectedAnnouncement(null)}
                 >
-                    <div 
+                    <div
                         className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -687,7 +687,7 @@ export const Notifications: React.FC = () => {
                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${NOTIF_TYPE_STYLES[selectedAnnouncement.type]?.bg || NOTIF_TYPE_STYLES.system.bg} border`}>
                                     {(NOTIF_TYPE_STYLES[selectedAnnouncement.type] || NOTIF_TYPE_STYLES.system).icon && (
                                         React.createElement(
-                                            (NOTIF_TYPE_STYLES[selectedAnnouncement.type] || NOTIF_TYPE_STYLES.system).icon, 
+                                            (NOTIF_TYPE_STYLES[selectedAnnouncement.type] || NOTIF_TYPE_STYLES.system).icon,
                                             { className: `w-5 h-5 ${NOTIF_TYPE_STYLES[selectedAnnouncement.type]?.color || NOTIF_TYPE_STYLES.system.color}` }
                                         )
                                     )}
@@ -699,7 +699,7 @@ export const Notifications: React.FC = () => {
                                     </p>
                                 </div>
                             </div>
-                            <button 
+                            <button
                                 className="p-2 text-slate-400 hover:text-white transition-colors"
                                 onClick={() => setSelectedAnnouncement(null)}
                             >
@@ -708,9 +708,9 @@ export const Notifications: React.FC = () => {
                         </div>
                         <div className="p-4 space-y-4">
                             {selectedAnnouncement.imageUrl && (
-                                <img 
-                                    src={selectedAnnouncement.imageUrl} 
-                                    alt="announcement" 
+                                <img
+                                    src={selectedAnnouncement.imageUrl}
+                                    alt="announcement"
                                     className="w-full max-h-80 object-cover rounded-xl border border-white/10 cursor-pointer"
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -722,13 +722,13 @@ export const Notifications: React.FC = () => {
                             <p className="text-sm text-slate-300 leading-relaxed">{selectedAnnouncement.message || selectedAnnouncement.body}</p>
                         </div>
                         <div className="p-4 pt-0">
-                            <button 
+                            <button
                                 className="w-full flex items-center justify-center gap-2 py-3 bg-orange-500 hover:bg-orange-600 rounded-xl transition-all"
                                 onClick={async () => {
                                     try {
                                         const shareText = selectedAnnouncement.message || selectedAnnouncement.body || '';
                                         const shareUrl = selectedAnnouncement.imageUrl || '';
-                                        
+
                                         if (navigator.share) {
                                             await navigator.share({
                                                 title: selectedAnnouncement.title,
@@ -753,23 +753,23 @@ export const Notifications: React.FC = () => {
 
             {/* === Image Modal === */}
             {showImageModal && selectedImage && (
-                <div 
+                <div
                     className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center"
                     onClick={() => setShowImageModal(false)}
                 >
-                    <button 
+                    <button
                         className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all z-10"
                         onClick={() => setShowImageModal(false)}
                     >
                         <X className="w-6 h-6 text-white" />
                     </button>
-                    <img 
-                        src={selectedImage} 
-                        alt="Preview" 
+                    <img
+                        src={selectedImage}
+                        alt="Preview"
                         className="max-w-full max-h-full object-contain"
                         onClick={(e) => e.stopPropagation()}
                     />
-                    <button 
+                    <button
                         className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-full transition-all"
                         onClick={async () => {
                             try {

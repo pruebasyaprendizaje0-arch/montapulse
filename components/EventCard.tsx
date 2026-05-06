@@ -4,6 +4,7 @@ import { MontanitaEvent, Sector, Vibe } from '../types.ts';
 import { SECTOR_INFO } from '../constants.ts';
 import { Skeleton } from './Skeleton.tsx';
 import { incrementEventClickCount } from '../services/firestoreService';
+import { getEcuadorDate } from '../utils/timeUtils';
 
 interface EventCardProps {
   event: MontanitaEvent;
@@ -19,7 +20,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, locality, onClick, 
 
   const isEventLive = () => {
     if (!event.startAt) return false;
-    const now = new Date();
+    const now = getEcuadorDate();
     const start = new Date(event.startAt);
     const end = event.endAt ? new Date(event.endAt) : new Date(start.getTime() + 4 * 3600000); // 4h default
     return now >= start && now <= end;

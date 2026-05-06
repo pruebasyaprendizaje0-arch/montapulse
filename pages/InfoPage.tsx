@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { X, MapPin, Star, Search, ArrowRight, Waves, TreePine, Store, Hotel, Droplets, Activity } from 'lucide-react';
+import { X, MapPin, Star, Search, ArrowRight, Waves, TreePine, Store, Hotel, Droplets, Activity, Users, Settings } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useNavigate } from 'react-router-dom';
 import { SubscriptionPlan, BusinessCategory } from '../types';
@@ -38,7 +38,7 @@ export const InfoPage: React.FC = () => {
 
     const allBusinesses = useMemo(() => {
         let all = businesses || [];
-        
+
         // Filter by current locality
         const currentLocName = currentLocality?.name || 'Montañita';
         all = all.filter((b: any) => (b.locality || 'Montañita') === currentLocName);
@@ -70,9 +70,9 @@ export const InfoPage: React.FC = () => {
     }, [allBusinesses]);
 
     const otherBusinesses = useMemo(() => {
-        return allBusinesses.filter((b: any) => 
-            !REFERENCE_CATEGORIES.includes(b.category) && 
-            b.plan !== SubscriptionPlan.BASIC && b.plan !== SubscriptionPlan.EXPERT
+        return allBusinesses.filter((b: any) =>
+            !REFERENCE_CATEGORIES.includes(b.category) &&
+            b.plan !== SubscriptionPlan.PRO && b.plan !== SubscriptionPlan.EXPERT
         );
     }, [allBusinesses]);
 
@@ -100,7 +100,7 @@ export const InfoPage: React.FC = () => {
     };
 
     return (
-        <div className="h-full flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 overflow-y-auto" style={{height: '100%', minHeight: '100vh'}}>
+        <div className="h-full flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 overflow-y-auto" style={{ height: '100%', minHeight: '100vh' }}>
             <div className="p-6 border-b border-white/5">
                 <div className="flex items-center justify-between mb-4">
                     <div>
@@ -357,6 +357,46 @@ export const InfoPage: React.FC = () => {
                         </div>
                     </div>
                 )}
+
+                {/* DOCUMENTACIÓN */}
+                <div className="pt-8 border-t border-white/5">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-500/50 to-transparent" />
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">📚 DOCUMENTACIÓN</span>
+                        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-500/50 to-transparent" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <a 
+                            href="/docs/Manual_Usuario.md" 
+                            download="Guia_Usuario_MontaPulse.md"
+                            className="p-5 rounded-[2rem] bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all group flex items-center gap-4"
+                        >
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center shrink-0">
+                                <Users className="w-6 h-6 text-amber-400" />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="text-sm font-black text-white uppercase tracking-tight">Guía del Usuario</h4>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Manual de uso básico</p>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
+                        </a>
+
+                        <a 
+                            href="/docs/Manual_Funciones.md" 
+                            download="Manual_Tecnico_MontaPulse.md"
+                            className="p-5 rounded-[2rem] bg-white/5 border border-white/10 hover:border-cyan-500/30 hover:bg-white/10 transition-all group flex items-center gap-4"
+                        >
+                            <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 flex items-center justify-center shrink-0">
+                                <Settings className="w-6 h-6 text-cyan-400" />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="text-sm font-black text-white uppercase tracking-tight">Manual Técnico</h4>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Arquitectura y Funciones</p>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all" />
+                        </a>
+                    </div>
+                </div>
 
                 {referencePoints.length === 0 && premiumBusinesses.length === 0 && otherBusinesses.length === 0 && (
                     <div className="py-20 text-center flex flex-col items-center gap-4">

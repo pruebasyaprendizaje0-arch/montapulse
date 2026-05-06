@@ -75,8 +75,6 @@ export enum BusinessCategory {
 
 export enum SubscriptionPlan {
   FREE = 'Free',
-  BASIC = 'Basic',
-  PREMIUM = 'Premium',
   PRO = 'Pro',
   ELITE = 'Elite',
   EXPERT = 'Expert'
@@ -117,6 +115,7 @@ export interface UserProfile {
 
 export interface Business {
   id: string;
+  slug?: string;
   name: string;
   sector: Sector;
   locality?: string;
@@ -172,6 +171,7 @@ export interface ProfileReview {
 
 export interface MontanitaEvent {
   id: string;
+  slug?: string;
   businessId: string;
   title: string;
   locality?: string;
