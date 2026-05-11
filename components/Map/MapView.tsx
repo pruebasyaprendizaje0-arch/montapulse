@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Navigation, Layers, Plus, Minus, X, CheckCircle, MapPin, Zap, Flame, Info, Crosshair } from 'lucide-react';
-import { Business, Sector, MontanitaEvent, SubscriptionPlan, BusinessCategory, CommunityPost } from '../../types.ts';
+import { Business, Sector, MontanitaEvent, SubscriptionPlan, BusinessCategory, CommunityPost, AppSettings } from '../../types.ts';
 import { SECTOR_INFO, LOCALITIES, MAP_ICONS } from '../../constants.ts';
 import { useToast } from '../../context/ToastContext';
 import { useTranslation } from 'react-i18next';
@@ -37,6 +37,7 @@ interface MapViewProps {
   onLocalityChange?: (name: string) => void;
   onResetFilters?: () => void;
   events: MontanitaEvent[];
+  appSettings?: AppSettings | null;
   posts: CommunityPost[];
   isMovingBusiness?: boolean;
   movingBusinessId?: string;
@@ -130,6 +131,7 @@ export const MapView: React.FC<MapViewProps> = ({
   onTogglePanel,
   onToggleEditorFocus,
   localityName = 'Montañita',
+  appSettings,
   events = [],
   posts = [],
   isMovingBusiness = false,
@@ -142,7 +144,7 @@ export const MapView: React.FC<MapViewProps> = ({
   focusedBusinessId
 }) => {
   const { t } = useTranslation();
-  const { showConfirm, showPrompt } = useToast();
+  const { showConfirm, showPrompt, showToast } = useToast();
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
@@ -297,6 +299,10 @@ useEffect(() => {
 
     return () => {
       document.head.removeChild(style);
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.remove();
+        userLocationMarkerRef.current = null;
+      }
       map.remove();
       mapRef.current = null;
       tileLayerRef.current = null;
@@ -629,7 +635,13 @@ useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    map.locate({ setView: true, maxZoom: 16 });
+    showToast("Localizando...", 'info');
+    map.locate({ 
+      setView: true, 
+      maxZoom: 16,
+      enableHighAccuracy: true,
+      timeout: 10000
+    });
     
     const onLocationFound = (e: L.LocationEvent) => {
       if (userLocationMarkerRef.current) {
@@ -648,14 +660,36 @@ useEffect(() => {
         iconAnchor: [16, 16]
       });
 
-      userLocationMarkerRef.current = L.marker(e.latlng, { icon: pulseIcon }).addTo(map);
+      userLocationMarkerRef.current = L.marker(e.latlng, { 
+        icon: pulseIcon,
+        zIndexOffset: 2000,
+        interactive: false
+      }).addTo(map);
+
+      // Add a marker class for extra styling if needed
+      if (userLocationMarkerRef.current.getElement()) {
+        userLocationMarkerRef.current.getElement()?.classList.add('user-location-marker');
+      }
       
+      showToast("Ubicación encontrada", 'success');
       map.off('locationfound', onLocationFound);
       map.off('locationerror', onLocationError);
     };
 
     const onLocationError = (e: L.ErrorEvent) => {
-      console.error(e.message);
+      console.error('Location error:', e);
+      let msg = "No se pudo obtener tu ubicación";
+      
+      // Map common geolocation error codes to user-friendly messages
+      if (e.message.toLowerCase().includes('denied') || (e as any).code === 1) {
+        msg = "Permiso de ubicación denegado";
+      } else if (e.message.toLowerCase().includes('timeout') || (e as any).code === 3) {
+        msg = "Tiempo de espera agotado";
+      } else if ((e as any).code === 2) {
+        msg = "Posición no disponible";
+      }
+      
+      showToast(msg, 'error');
       map.off('locationfound', onLocationFound);
       map.off('locationerror', onLocationError);
     };
@@ -686,7 +720,7 @@ useEffect(() => {
         )}
 
         {/* SuperUser Tools */}
-        {isSuperUser && onAddLocality && (
+        {isSuperUser && onAddLocality && appSettings?.allowLocalityCreation && (
           <div className="absolute top-4 right-4 z-[1001] pointer-events-auto">
             <button
               onClick={async () => {

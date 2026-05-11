@@ -19,7 +19,8 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
         setEditingBusinessId, handleUpdateBusinessProfile,
         bizForm, setBizForm, handleBusinessRegister, setShowBusinessReg,
         handleDeleteBusiness,
-        customLocalities, allUsers
+        customLocalities, allUsers,
+        masterCategories, masterSectors, masterVibes
     } = useData();
 
     const bizEditFileInputRef = useRef<HTMLInputElement>(null);
@@ -164,10 +165,11 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                 value={data.category}
                                 onChange={(e) => updateField('category', e.target.value as BusinessCategory)}
                             >
-                                {Object.values(BusinessCategory)
+                                {[...Object.values(BusinessCategory), ...(masterCategories || []).map(c => c.name)]
+                                    .filter((cat, idx, self) => self.indexOf(cat) === idx)
                                     .filter(cat => data.isReference 
-                                        ? [BusinessCategory.PARQUE, BusinessCategory.CANCHA, BusinessCategory.MALECON, BusinessCategory.MERCADO, BusinessCategory.PARADA_TAXI, BusinessCategory.PLAYA, BusinessCategory.OTRO].includes(cat)
-                                        : ![BusinessCategory.PARQUE, BusinessCategory.CANCHA, BusinessCategory.MALECON, BusinessCategory.MERCADO, BusinessCategory.PARADA_TAXI, BusinessCategory.PLAYA, BusinessCategory.REFERENCIA].includes(cat)
+                                        ? [BusinessCategory.PARQUE, BusinessCategory.CANCHA, BusinessCategory.MALECON, BusinessCategory.MERCADO, BusinessCategory.PARADA_TAXI, BusinessCategory.PLAYA, BusinessCategory.OTRO].includes(cat as BusinessCategory) || masterCategories?.find(m => m.name === cat)
+                                        : ![BusinessCategory.PARQUE, BusinessCategory.CANCHA, BusinessCategory.MALECON, BusinessCategory.MERCADO, BusinessCategory.PARADA_TAXI, BusinessCategory.PLAYA, BusinessCategory.REFERENCIA].includes(cat as BusinessCategory) || masterCategories?.find(m => m.name === cat)
                                     )
                                     .map(cat => (
                                     <option key={cat} value={cat}>{cat}</option>
@@ -294,7 +296,9 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                 onChange={(e) => updateField('sector', e.target.value as Sector)}
                                 className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none appearance-none transition-all"
                             >
-                                {(LOCALITY_SECTORS[data.locality || 'Montañita'] || Object.values(Sector)).map(s => (
+                                {[...(LOCALITY_SECTORS[data.locality || 'Montañita'] || []), ...(masterSectors || []).map(s => s.name)]
+                                    .filter((s, idx, self) => self.indexOf(s) === idx)
+                                    .map(s => (
                                     <option key={s} value={s}>{s}</option>
                                 ))}
                             </select>

@@ -24,7 +24,7 @@ const InfoPage = lazy(() => import('./pages/InfoPage').then(m => ({ default: m.I
 const CalendarPage = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })));
 const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })));
 const Plans = lazy(() => import('./pages/Plans').then(m => ({ default: m.Plans })));
-const AdminUsers = lazy(() => import('./pages/AdminUsers').then(m => ({ default: m.AdminUsers })));
+
 const Policies = lazy(() => import('./pages/Policies').then(m => ({ default: m.Policies })));
 
 const PageLoader = () => (
@@ -239,7 +239,7 @@ const Dashboard: React.FC = () => {
     else if (path === '/history') setActiveView('history');
     else if (path === '/plans') setActiveView('plans');
     else if (path === '/saved-events') setActiveView('all-favorites');
-    else if (path === '/admin-users') setActiveView('admin-users');
+    
     else if (path === '/info') setActiveView('info');
     else if (path === '/services') setActiveView('services');
     else if (path === '/policies') setActiveView('policies');
@@ -445,8 +445,7 @@ const Dashboard: React.FC = () => {
       case 'community':
       case 'chat':
         return <Suspense fallback={<PageLoader />}><Notifications /></Suspense>;
-      case 'admin-users':
-        return <Suspense fallback={<PageLoader />}><AdminUsers /></Suspense>;
+
       case 'policies':
         return <Suspense fallback={<PageLoader />}><Policies /></Suspense>;
       case 'info':
@@ -523,20 +522,6 @@ const Dashboard: React.FC = () => {
                 <div className="w-8 h-8 rounded-xl border border-orange-500/50 overflow-hidden ring-2 ring-orange-500/20 shadow-lg cursor-pointer" onClick={() => navigate('/passport')}>
                   <img src={user.avatarUrl} className="w-full h-full object-cover" alt="User avatar" />
                 </div>
-              </div>
-            )}
-            
-            {isSuperAdmin && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => navigate('/admin-users')}
-                  className="p-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-xl transition-all border border-amber-500/20 flex items-center gap-2"
-                  title="Gestión de Usuarios"
-                >
-                  <Users className="w-5 h-5" />
-                  <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">Admin</span>
-                </button>
-
                 <button
                   onClick={logout}
                   className="p-3 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-xl transition-all active:scale-90 border border-orange-500/20"
@@ -546,6 +531,11 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
             )}
+            
+
+
+
+
 
             <div className="flex flex-col items-end opacity-20">
               <span className="text-[7px] font-bold text-slate-500 mt-1 uppercase tracking-widest leading-none">v1.0.4 ME</span>
@@ -553,7 +543,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <main className={`flex-1 lg:pt-0 pt-16 ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
+        <main className={`flex-1 lg:pt-0 pt-16 ${['favorites', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['favorites', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
           {renderView()}
         </main>
       </div>

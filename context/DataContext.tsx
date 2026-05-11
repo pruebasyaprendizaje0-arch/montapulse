@@ -14,9 +14,10 @@ import {
     purgeAllReferencePoints,
     restoreBusiness,
     getCustomLocalities, subscribeToCustomLocalities, createCustomLocality, deleteCustomLocality, updateCustomLocality,
-    subscribeToNotifications, createNotification, markNotificationRead,
+    subscribeToNotifications, createNotification, markNotificationRead, markAllNotificationsRead,
+    subscribeToAnnouncements, deleteAnnouncement,
     incrementEventViewCount, incrementEventClickCount as serviceIncrementClick,
-    subscribeToChatRooms, markRoomAsRead
+    subscribeToChatRooms, markRoomAsRead, subscribeToMasterData
 } from '../services/firestoreService';
 
 export type CommunityTab = 'chats' | 'updates' | 'communities' | 'calls' | 'notifications' | 'profile';
@@ -136,7 +137,7 @@ interface DataContextType {
     isAdmin: boolean;
     isSuperUser: boolean;
     isSuperAdmin: boolean;
-    customLocalities: { id?: string; name: string; coords: [number, number]; zoom: number }[];
+    customLocalities: { id?: string; name: string; coords: [number, number]; zoom: number; sectors?: Sector[] }[];
     customLocalitySectors: Record<string, Sector[]>;
     handleAddCustomLocality: (name: string, coords: [number, number], hasBeach: boolean) => Promise<void>;
     handleUpdateCustomLocality: (id: string, name: string, coords: [number, number], hasBeach: boolean) => Promise<void>;
@@ -146,6 +147,10 @@ interface DataContextType {
     pastEvents: MontanitaEvent[];
     journeyCards: any[];
     setJourneyCards: React.Dispatch<React.SetStateAction<any[]>>;
+    masterCategories: any[];
+    masterTags: any[];
+    masterSectors: any[];
+    masterVibes: any[];
     toggleSector: (sector: Sector) => void;
     handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>, target: 'event' | 'business') => void;
 
@@ -236,6 +241,8 @@ interface DataContextType {
     markAsRead: (id: string) => Promise<void>;
     incrementEventView: (id: string) => Promise<void>;
     incrementEventClick: (id: string) => Promise<void>;
+    markIndividualAsRead: (id: string) => Promise<void>;
+    showToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
     deletedBusinesses: Business[];
     chatRooms: ChatRoom[];
     unreadChatCount: number;
@@ -288,6 +295,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
     const [deletedBusinesses, setDeletedBusinesses] = useState<Business[]>([]);
     const [notifications, setNotifications] = useState<PulseNotification[]>([]);
+    const [dbNotifications, setDbNotifications] = useState<PulseNotification[]>([]);
+    const [masterCategories, setMasterCategories] = useState<any[]>([]);
+    const [masterTags, setMasterTags] = useState<any[]>([]);
+    const [masterSectors, setMasterSectors] = useState<any[]>([]);
+    const [masterVibes, setMasterVibes] = useState<any[]>([]);
 
     const [agendaRange, setAgendaRange] = useState<'day' | 'week' | 'month'>('day');
     const [calendarBaseDate, setCalendarBaseDate] = useState(new Date());
@@ -359,7 +371,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMood, setSelectedMood] = useState<Vibe | null>(null);
     
-    const [customLocalities, setCustomLocalities] = useState<{ id?: string; name: string; coords: [number, number]; zoom: number }[]>([]);
+    const [customLocalities, setCustomLocalities] = useState<{ id?: string; name: string; coords: [number, number]; zoom: number; sectors?: Sector[] }[]>([]);
     const [customLocalitySectors, setCustomLocalitySectors] = useState<Record<string, Sector[]>>({});
 
     // Handle Firestore Internal Assertion Failures
@@ -413,9 +425,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
         const eventNotifications: PulseNotification[] = [];
 
@@ -424,12 +435,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const eventStart = new Date(event.startAt);
             const eventEnd = new Date(event.endAt);
+            
+            // Un evento es relevante si:
+            // 1. Fue creado o empieza dentro de los últimos 30 días
+            // 2. Ocurre en el mes actual (aunque sea futuro)
+            // 3. Está activo actualmente
+            const isRecent = eventStart >= thirtyDaysAgo;
+            const happensThisMonth = eventStart.getMonth() === now.getMonth() && eventStart.getFullYear() === now.getFullYear();
+            const isOngoing = eventStart <= now && eventEnd >= now;
 
-            // Verifica que el evento coincide con "hoy" y aún no ha terminado.
-            const happensToday = eventStart < tomorrow && eventEnd >= today;
-            const hasNotEnded = now < eventEnd;
-
-            if (happensToday && hasNotEnded) {
+            if (isRecent || happensThisMonth || isOngoing) {
                 const business = businesses.find(b => b.id === event.businessId);
                 const isPremium = event.isPremium || business?.plan === SubscriptionPlan.EXPERT || business?.plan === SubscriptionPlan.ELITE;
                 const isAdminEvent = event.isFeatured || business?.isReference || event.ownerId === user.id;
@@ -440,8 +455,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         id: `evt-${event.id}`,
                         userId: user.id,
                         title: event.title,
-                        message: `¡Hoy! ${eventStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eventEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`,
-                        type: 'alert',
+                        message: `${eventStart.toLocaleDateString([], { day: '2-digit', month: 'short' })} - ${eventStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                        type: 'evento',
                         createdAt: eventStart,
                         read: false,
                         postId: event.id
@@ -450,17 +465,45 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         });
 
+        // 3. Combine with DB Notifications
         setNotifications(prev => {
-            const allNew = [...baseNotifications, ...eventNotifications];
-            return allNew.map(n => {
+            const allNew = [...baseNotifications, ...eventNotifications, ...dbNotifications];
+            
+            // Deduplicate by ID
+            const seen = new Set();
+            return allNew.filter(n => {
+                if (seen.has(n.id)) return false;
+                seen.add(n.id);
+                return true;
+            }).map(n => {
                 const existing = prev.find(p => p.id === n.id);
                 if (existing) {
-                    return { ...n, read: existing.read };
+                    return { ...n, read: existing.read || n.read };
                 }
                 return n;
             });
         });
-    }, [user?.id, user?.pulsePassActive, events, businesses, favorites]);
+    }, [user, businesses, events, favorites, dbNotifications]);
+
+    // Subscribe to Firestore Notifications
+    useEffect(() => {
+        if (!user?.id) {
+            setDbNotifications([]);
+            return;
+        }
+
+        let unsub: (() => void) | undefined;
+        const timeoutId = setTimeout(() => {
+            unsub = subscribeToNotifications(user.id, (notifs) => {
+                setDbNotifications(notifs);
+            });
+        }, 3500); // Wait for core data to stabilize
+
+        return () => {
+            clearTimeout(timeoutId);
+            if (unsub) unsub();
+        };
+    }, [user?.id]);
 
     const unreadNotificationsCount = useMemo(() =>
         notifications.filter(n => !n.read).length
@@ -638,6 +681,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const t2 = addStaggeredUnsub(1000, () => subscribeToAllSettings((allSettings) => {
             if (!active) return;
             
+            // app_config (general settings)
+            if (allSettings.app_config) {
+                setAppSettings(allSettings.app_config as AppSettings);
+            }
+            
             // services_guide
             if (allSettings.services_guide?.categories) setServices(allSettings.services_guide.categories);
             
@@ -701,6 +749,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (active) setMessages(data);
         }));
 
+        const tMaster = addStaggeredUnsub(4500, () => {
+            const unsubCategories = subscribeToMasterData('categories', setMasterCategories);
+            const unsubTags = subscribeToMasterData('tags', setMasterTags);
+            const unsubSectors = subscribeToMasterData('sectors', setMasterSectors);
+            const unsubVibes = subscribeToMasterData('vibes', setMasterVibes);
+            return () => {
+                unsubCategories();
+                unsubTags();
+                unsubSectors();
+                unsubVibes();
+            };
+        });
+
         // 4. User Data (Staggered - moved to separate effect for stability)
 
         // 5. One-off Loads
@@ -708,7 +769,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             try {
                 const customs = await getCustomLocalities();
                 if (!active) return;
-                setCustomLocalities(customs.map(c => ({ id: c.id, name: c.name, coords: c.coords, zoom: c.zoom })));
+                setCustomLocalities(customs.map(c => ({ id: c.id, name: c.name, coords: c.coords, zoom: c.zoom, sectors: c.sectors as Sector[] })));
                 const sectorsMap: Record<string, Sector[]> = {};
                 customs.forEach(c => {
                     sectorsMap[c.name] = (c.sectors || [Sector.CENTRO, Sector.PLAYA, Sector.MONTANA]) as Sector[];
@@ -727,6 +788,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             clearTimeout(t2);
             clearTimeout(t5);
             clearTimeout(t6);
+            clearTimeout(tMaster);
             unsubs.forEach(unsub => {
                 try {
                     unsub();
@@ -737,7 +799,39 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
     }, [authLoading, isAdmin, isSuperUser, user?.businessId]);
     
-    // 6. User Data Subscription (Separate for stability & plan-reactivity)
+    // 6. Dynamic Sectors & Localities Mapping
+    useEffect(() => {
+        const sectorsMap: Record<string, Sector[]> = {};
+        
+        // 1. Initialize with defaults from constants
+        Object.entries(LOCALITY_SECTORS).forEach(([loc, sectors]) => {
+            sectorsMap[loc] = [...sectors] as Sector[];
+        });
+
+        // 2. Add sectors from customLocalities (embedded array)
+        customLocalities.forEach(c => {
+            const locSectors = (c.sectors || [Sector.CENTRO, Sector.PLAYA, Sector.MONTANA]) as Sector[];
+            if (!sectorsMap[c.name]) sectorsMap[c.name] = [];
+            
+            locSectors.forEach(s => {
+                if (!sectorsMap[c.name].includes(s)) sectorsMap[c.name].push(s);
+            });
+        });
+
+        // 3. Add sectors from masterSectors (dynamic collection from admin panel)
+        masterSectors.forEach(s => {
+            if (s.locality && s.name) {
+                if (!sectorsMap[s.locality]) sectorsMap[s.locality] = [];
+                if (!sectorsMap[s.locality].includes(s.name as Sector)) {
+                    sectorsMap[s.locality].push(s.name as Sector);
+                }
+            }
+        });
+
+        setCustomLocalitySectors(sectorsMap);
+    }, [masterSectors, customLocalities]);
+    
+    // 7. User Data Subscription (Separate for stability & plan-reactivity)
     useEffect(() => {
         if (authLoading || !user) return;
         
@@ -875,7 +969,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (path === '/') return 'explore';
         if (path === '/calendar') return 'calendar';
         if (path === '/passport') return 'favorites';
-        if (path === '/admin-users') return 'admin-users';
+
         if (path === '/host') return 'host';
         if (path === '/history') return 'history';
         if (path === '/plans') return 'plans';
@@ -1136,7 +1230,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const handleUpdateAppSettings = async (settings: Partial<AppSettings>) => {
         try {
-            await updateAppSettings('general_settings', settings);
+            await updateAppSettings('app_config', settings);
             setAppSettings(prev => prev ? { ...prev, ...settings } : settings as AppSettings);
             showToast('Ajustes de la aplicación actualizados', 'success');
         } catch (error) {
@@ -1427,8 +1521,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         <DataContext.Provider value={{
             chatRooms,
             unreadChatCount,
-            markRoomAsRead,
-            markAllRoomsAsRead,
             events,
             eventsWithLiveCounts,
             businesses,
@@ -2027,7 +2119,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             markAllAsRead,
             unreadNotificationsCount,
             markAsRead: async (id: string) => {
+                if (!id) {
+                    // Mark all as read
+                    if (user?.id) await markAllNotificationsRead(user.id);
+                    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                    return;
+                }
+                
+                // Mark individual as read
                 await markNotificationRead(id);
+                setNotifications(prev => prev.map(n => 
+                    n.id === id ? { ...n, read: true } : n
+                ));
+            },
+            markIndividualAsRead: async (id: string) => {
+                await markNotificationRead(id);
+                setNotifications(prev => prev.map(n => 
+                    n.id === id ? { ...n, read: true } : n
+                ));
+            },
+            markRoomAsRead: async (roomId: string, userId: string) => {
+                await markRoomAsRead(roomId, userId);
+            },
+            markAllRoomsAsRead: async () => {
+                if (!authUser) return;
+                const updates = chatRooms.map(room => markRoomAsRead(room.id, authUser.uid));
+                await Promise.all(updates);
             },
             sendPushNotification: async (userId: string, title: string, body: string, type: string, metadata?: any) => {
                 const validTypes: ('system' | 'community' | 'offer' | 'alert')[] = ['system', 'community', 'offer', 'alert'];
@@ -2040,6 +2157,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             incrementEventClick: async (id: string) => {
                 await serviceIncrementClick(id);
             },
+            masterCategories,
+            masterTags,
+            masterSectors,
+            masterVibes,
             showPulseModal,
             setShowPulseModal,
             deletedBusinesses,
@@ -2050,6 +2171,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             customLocalities,
             customLocalitySectors,
             handleAddCustomLocality: async (name: string, coords: [number, number], hasBeach: boolean) => {
+                if (appSettings && appSettings.allowLocalityCreation === false) {
+                    showToast('La creación de localidades está desactivada globalmente.', 'error');
+                    return;
+                }
                 try {
                     const sectors = [Sector.CENTRO, Sector.NORTE, Sector.SUR];
                     if (hasBeach) sectors.push(Sector.PLAYA);
@@ -2062,7 +2187,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         createdBy: authUser?.uid || 'admin',
                         hasBeach
                     });
-                    setCustomLocalities(prev => [...prev, { id: newId, name, coords, zoom: 15 }]);
+                    setCustomLocalities(prev => [...prev, { id: newId, name, coords, zoom: 15, sectors }]);
                     setCustomLocalitySectors(prev => ({ ...prev, [name]: sectors }));
                     showToast(`Localidad "${name}" creada exitosamente`, 'success');
                 } catch (error) {
@@ -2081,7 +2206,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         hasBeach
                     });
                     
-                    setCustomLocalities(prev => prev.map(c => c.id === id ? { ...c, name, coords } : c));
+                    setCustomLocalities(prev => prev.map(c => c.id === id ? { ...c, name, coords, sectors } : c));
                     setCustomLocalitySectors(prev => ({ ...prev, [name]: sectors }));
                     showToast(`Localidad "${name}" actualizada exitosamente`, 'success');
                 } catch (error) {
@@ -2120,7 +2245,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             authUser,
             isAdmin,
             isSuperUser,
-            isSuperAdmin
+            isSuperAdmin,
+            showToast,
         }}>
             {children}
         </DataContext.Provider>

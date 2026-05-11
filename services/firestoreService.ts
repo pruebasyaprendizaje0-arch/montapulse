@@ -17,7 +17,8 @@ import {
     limit,
     startAfter,
     arrayUnion,
-    arrayRemove
+    arrayRemove,
+    writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { getEcuadorDate } from './dateUtils';
@@ -765,6 +766,8 @@ export const subscribeToRSVPCounts = (callback: (counts: Record<string, number>)
 
 // ==================== SETTINGS ====================
 
+
+
 export const getAppSettings = async (settingId: string) => {
     try {
         const settingRef = doc(db, 'settings', settingId);
@@ -788,6 +791,20 @@ export const updateAppSettings = async (settingId: string, data: any) => {
         throw error;
     }
 };
+
+export const updateAppConfig = async (data: any) => {
+    try {
+        const settingRef = doc(db, 'settings', 'app_config');
+        await setDoc(settingRef, {
+            ...data,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+    } catch (error) {
+        console.error('Error updating app config:', error);
+        throw error;
+    }
+};
+
 
 export const subscribeToAppSettings = (settingId: string, callback: (data: any) => void) => {
     const settingRef = doc(db, 'settings', settingId);
@@ -895,6 +912,16 @@ export const addCommentToPost = async (postId: string, comment: any) => {
         }
     } catch (error) {
         console.error('Error adding comment:', error);
+        throw error;
+    }
+};
+
+export const deletePost = async (id: string) => {
+    try {
+        const postRef = doc(db, 'posts', id);
+        await deleteDoc(postRef);
+    } catch (error) {
+        console.error('Error deleting post:', error);
         throw error;
     }
 };
@@ -1239,6 +1266,58 @@ export const updateCustomLocality = async (id: string, locality: Partial<CustomL
     }
 };
 
+// Generic Master Data CRUD
+export const subscribeToMasterData = (collectionName: string, callback: (data: any[]) => void) => {
+    const colRef = collection(db, collectionName);
+    const q = query(colRef, orderBy('name', 'asc'));
+    return safeOnSnapshot(q, (snapshot) => {
+        const items = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        callback(items);
+    }, `subscribeToMasterData:${collectionName}`);
+};
+
+export const createMasterDataItem = async (collectionName: string, data: any) => {
+    try {
+        const colRef = collection(db, collectionName);
+        const docRef = await addDoc(colRef, {
+            ...sanitizeData(data),
+            createdAt: serverTimestamp()
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error(`Error creating item in ${collectionName}:`, error);
+        throw error;
+    }
+};
+
+export const updateMasterDataItem = async (collectionName: string, id: string, data: any) => {
+    try {
+        const docRef = doc(db, collectionName, id);
+        const cleanData = sanitizeData(data);
+        if (cleanData.id) delete cleanData.id;
+        await updateDoc(docRef, {
+            ...cleanData,
+            updatedAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error(`Error updating item in ${collectionName}:`, error);
+        throw error;
+    }
+};
+
+export const deleteMasterDataItem = async (collectionName: string, id: string) => {
+    try {
+        const docRef = doc(db, collectionName, id);
+        await deleteDoc(docRef);
+    } catch (error) {
+        console.error(`Error deleting item in ${collectionName}:`, error);
+        throw error;
+    }
+};
+
 export const incrementPulseCount = async (amount: number = 1) => {
     try {
         const pulseRef = doc(db, 'metrics', 'pulse');
@@ -1292,6 +1371,22 @@ export const markNotificationRead = async (notificationId: string) => {
         await updateDoc(notificationRef, { read: true });
     } catch (error) {
         console.error('Error marking notification read:', error);
+    }
+};
+
+export const markAllNotificationsRead = async (userId: string) => {
+    try {
+        const notificationRef = collection(db, 'notifications');
+        const q = query(notificationRef, where('userId', '==', userId), where('read', '==', false));
+        const snapshot = await getDocs(q);
+        
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => {
+            batch.update(doc.ref, { read: true });
+        });
+        await batch.commit();
+    } catch (error) {
+        console.error('Error marking all notifications read:', error);
     }
 };
 

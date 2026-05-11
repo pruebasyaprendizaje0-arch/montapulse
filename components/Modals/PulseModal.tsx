@@ -1,10 +1,13 @@
-import React, { useState, useMemo } from 'react';
-import { X, Activity, Sparkles, MessageSquare, Heart, Zap, Bell, BellOff, Calendar, Clock, ArrowRight, Search, MapPin, Star, Building2, Info, CheckCircle2, AlertCircle, Check, ShieldCheck, Gift, Users, Map as MapIcon, ExternalLink } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { X, Activity, Sparkles, MessageSquare, Heart, Zap, Bell, BellOff, Calendar, Clock, ArrowRight, Search, MapPin, Star, Building2, Info, CheckCircle2, AlertCircle, Check, ShieldCheck, Gift, Users, Map as MapIcon, ExternalLink, Ticket } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, isTomorrow, isThisWeek, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Vibe, SubscriptionPlan, BusinessCategory } from '../../types';
+import { Vibe, SubscriptionPlan, BusinessCategory, Coupon } from '../../types';
+import { subscribeToPublicCoupons } from '../../services/couponService';
+import { CouponCard } from '../Coupons/CouponCard';
+import { CouponRedeemModal } from './CouponRedeemModal';
 
 interface PulseItem {
     id: string;
@@ -53,6 +56,8 @@ export const PulseModal: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'all' | 'events' | 'posts' | 'references' | 'followed' | 'gifts' | 'notifications'>('all');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
+    const [publicCoupons, setPublicCoupons] = useState<Coupon[]>([]);
+    const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null);
 
     const REFERENCE_CATEGORIES = [
         BusinessCategory.REFERENCIA,
@@ -76,6 +81,12 @@ export const PulseModal: React.FC = () => {
         BusinessCategory.SHOPPING,
         BusinessCategory.TRANSPORT
     ];
+
+    // Subscribe to public coupons
+    useEffect(() => {
+        const unsub = subscribeToPublicCoupons(setPublicCoupons);
+        return () => unsub();
+    }, []);
 
     const referencePoints = useMemo(() => {
         return (businesses || []).filter((b: any) => 
@@ -300,6 +311,7 @@ export const PulseModal: React.FC = () => {
     };
 
     return (
+        <>
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 pb-24 md:pb-6">
             <div
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
@@ -535,6 +547,29 @@ export const PulseModal: React.FC = () => {
                             </div>
                         )}
                     </div>
+
+                    {/* Cupones Disponibles */}
+                    {publicCoupons.length > 0 && (
+                        <div className="mt-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+                                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] flex items-center gap-1.5">
+                                    <Ticket className="w-3.5 h-3.5" /> CUPONES DISPONIBLES
+                                </span>
+                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+                            </div>
+                            <div className="grid grid-cols-1 gap-4">
+                                {publicCoupons.slice(0, 6).map(coupon => (
+                                    <CouponCard
+                                        key={coupon.id}
+                                        coupon={coupon}
+                                        compact
+                                        onRedeem={(c) => setSelectedCoupon(c)}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
      <div className="px-6 py-4 flex gap-4 overflow-x-auto no-scrollbar border-b border-white/5 bg-black/20">
@@ -995,6 +1030,18 @@ export const PulseModal: React.FC = () => {
                 </div>
             </div>
         </div>
+
+            {/* Coupon Redeem Modal */}
+            {selectedCoupon && user && (
+                <CouponRedeemModal
+                    isOpen={!!selectedCoupon}
+                    onClose={() => setSelectedCoupon(null)}
+                    coupon={selectedCoupon}
+                    userId={user.id || authUser?.uid || ''}
+                    userName={user.name || 'Cliente'}
+                />
+            )}
+        </>
     );
 };
 

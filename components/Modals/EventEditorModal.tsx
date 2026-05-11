@@ -18,13 +18,16 @@ export const EventEditorModal: React.FC = () => {
         handleGenerateAIEvent,
         isGeneratingDesc,
         generatedDesc,
-        businesses,
         events,
-        customLocalities
+        businesses,
+        customLocalities,
+        masterCategories,
+        masterSectors,
+        masterVibes
     } = useData();
 
-    const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
-    const userBusinessEvents = userBusiness ? events.filter(e => e.businessId === userBusiness.id) : [];
+    const userBusiness = user?.businessId && businesses ? businesses.find(b => b.id === user.businessId) : null;
+    const userBusinessEvents = userBusiness && events ? events.filter(e => e.businessId === userBusiness.id) : [];
     const isSpecialUser = user?.email === 'ubicameinformacion@gmail.com' || user?.role === 'admin';
     const isPremium = userBusiness?.plan === SubscriptionPlan.PRO || userBusiness?.plan === SubscriptionPlan.ELITE || userBusiness?.plan === SubscriptionPlan.EXPERT || isSpecialUser;
     const planCreditsLimit = isPremium ? Infinity : (PLAN_LIMITS[userBusiness?.plan || SubscriptionPlan.FREE] || 0);
@@ -33,7 +36,8 @@ export const EventEditorModal: React.FC = () => {
 
     if (!showHostWizard) return null;
 
-    const sectors = LOCALITY_SECTORS[newEvent.locality] || DEFAULT_NEW_LOCALITY_SECTORS;
+    const allLocalities = [...LOCALITIES, ...(customLocalities || [])];
+    const availableSectors = newEvent.locality ? (LOCALITY_SECTORS[newEvent.locality] || DEFAULT_NEW_LOCALITY_SECTORS) : [];
 
     const handleClose = () => {
         setShowHostWizard(false);
@@ -136,10 +140,15 @@ export const EventEditorModal: React.FC = () => {
                             </label>
                             <select
                                 className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-5 py-5 font-bold text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50"
-                                value={newEvent.locality}
-                                onChange={e => setNewEvent({ ...newEvent, locality: e.target.value, sector: (LOCALITY_SECTORS[e.target.value] || DEFAULT_NEW_LOCALITY_SECTORS)[0] || Sector.CENTRO })}
+                                value={newEvent.locality || ""}
+                                onChange={e => {
+                                    const loc = e.target.value;
+                                    const locSectors = LOCALITY_SECTORS[loc] || DEFAULT_NEW_LOCALITY_SECTORS;
+                                    setNewEvent({ ...newEvent, locality: loc, sector: locSectors[0] as Sector || Sector.CENTRO });
+                                }}
                             >
-                                {[...LOCALITIES, ...(customLocalities || [])].map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
+                                <option value="" disabled>Selecciona una localidad</option>
+                                {allLocalities.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                             </select>
                         </div>
                         <div className="space-y-2">
@@ -147,11 +156,13 @@ export const EventEditorModal: React.FC = () => {
                                 <MapPin className="w-3 h-3" /> Sector
                             </label>
                             <select
-                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-5 py-5 font-bold text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50"
-                                value={newEvent.sector}
+                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-5 py-5 font-bold text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50"
+                                value={newEvent.sector || ""}
                                 onChange={e => setNewEvent({ ...newEvent, sector: e.target.value as Sector })}
+                                disabled={!newEvent.locality}
                             >
-                                {sectors.map(s => <option key={s} value={s}>{s}</option>)}
+                                <option value="" disabled>Selecciona un sector</option>
+                                {[...availableSectors, ...(masterSectors || []).filter(s => s.locality === newEvent.locality).map(s => s.name)].map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
                     </div>
@@ -164,20 +175,30 @@ export const EventEditorModal: React.FC = () => {
                                 value={newEvent.vibe}
                                 onChange={e => setNewEvent({ ...newEvent, vibe: e.target.value as Vibe })}
                             >
-                                {Object.values(Vibe).map(v => <option key={v} value={v}>{v}</option>)}
+                                {[...Object.values(Vibe), ...(masterVibes || []).map(v => v.name)].map(v => <option key={v} value={v}>{v}</option>)}
                             </select>
                         </div>
                         <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-2 flex items-center gap-1.5">
                                 <Tag className="w-3 h-3" /> Categoría
                             </label>
-                            <input
-                                type="text"
-                                placeholder="Ej: Música, Surf..."
-                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-6 py-5 font-bold text-white shadow-inner focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                            <select
+                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-5 py-5 font-bold text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50"
                                 value={newEvent.category}
                                 onChange={e => setNewEvent({ ...newEvent, category: e.target.value })}
-                            />
+                            >
+                                <option value="">Seleccionar Categoría</option>
+                                {masterCategories?.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                {(!masterCategories || masterCategories.length === 0) && (
+                                    <>
+                                        <option value="Fiesta">Fiesta</option>
+                                        <option value="Cena">Cena</option>
+                                        <option value="Música">Música</option>
+                                        <option value="Deporte">Deporte</option>
+                                        <option value="Sunset">Sunset</option>
+                                    </>
+                                )}
+                            </select>
                         </div>
                     </div>
 

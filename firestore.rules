@@ -156,6 +156,25 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin() || isExpert();
     }
+
+    // Cupones: Público read, auth create, owner/admin update/delete
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        // Allow incrementing currentUses for redemption
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentUses', 'updatedAt'])) ||
+        isAdmin() || isExpert()
+      );
+      allow delete: if isAdmin() || isExpert();
+    }
+
+    // Redenciones de cupones: Auth read/create, admin manage
+    match /couponRedemptions/{redemptionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
     
     // Default: Solo Admin/Expert
     match /{document=**} {

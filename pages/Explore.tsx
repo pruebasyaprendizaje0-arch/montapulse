@@ -85,7 +85,8 @@ export const Explore: React.FC<ExploreProps> = ({
         customLocalities,
         handleAddCustomLocality,
         showLocalityManager,
-        setShowLocalityManager
+        setShowLocalityManager,
+        appSettings
     } = useData();
     const userBusinessIdResolved = userBusinessId || businesses.find(b => b.ownerId === authUser?.uid)?.id;
     const { t } = useTranslation();
@@ -598,6 +599,7 @@ export const Explore: React.FC<ExploreProps> = ({
                         isPanelMinimized={isPanelMinimized}
                         onTogglePanel={() => setIsPanelMinimized(!isPanelMinimized)}
                         hideUI={true}
+                        appSettings={appSettings || undefined}
                         localityName={currentLocality.name}
                         mapCenter={currentLocality.coords}
                         customLocalities={customLocalities}

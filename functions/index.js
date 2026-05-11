@@ -1,4 +1,5 @@
 import { onRequest } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
 import express from 'express';
 import cors from 'cors';
@@ -291,5 +292,81 @@ app.post('/api/webhook/dlocal', async (req, res) => {
     } catch (error) {
         logger.error('[Webhook dLocal] Error:', error);
         res.status(500).send('Error');
+    }
+});
+
+/**
+ * Scheduled Task: Notify users 2 hours before coupon reservation expires
+ * Runs every 30 minutes to ensure timely reminders.
+ */
+export const checkExpiringReservations = onSchedule("every 30 minutes", async (event) => {
+    try {
+        const now = new Date();
+        const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+        const bufferTime = new Date(now.getTime() + 2.5 * 60 * 60 * 1000); // 2.5h to catch 2h window
+
+        logger.info(`[Reminder] Checking reservations expiring between ${now.toISOString()} and ${twoHoursLater.toISOString()}`);
+
+        const reservationsSnapshot = await db.collection('couponRedemptions')
+            .where('status', '==', 'reserved')
+            .where('expiresAt', '>', admin.firestore.Timestamp.fromDate(now))
+            .where('expiresAt', '<=', admin.firestore.Timestamp.fromDate(bufferTime))
+            .get();
+
+        if (reservationsSnapshot.empty) {
+            return logger.info('[Reminder] No reservations found in the expiration window.');
+        }
+
+        const batch = db.batch();
+        let sentCount = 0;
+
+        for (const doc of reservationsSnapshot.docs) {
+            const data = doc.data();
+            
+            // Skip if already sent or if it's too early/late (extra safety)
+            if (data.reminderSent) continue;
+
+            // Create in-app notification
+            const notifRef = db.collection('notifications').doc();
+            batch.set(notifRef, {
+                userId: data.userId,
+                title: '⌛ ¡Tu cupón expira pronto!',
+                message: `Tu reserva para "${data.couponCode}" expira en menos de 2 horas. ¡No pierdas tu beneficio!`,
+                type: 'offer',
+                businessId: data.businessId,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                read: false,
+                timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            // Mark as reminder sent
+            batch.update(doc.ref, { reminderSent: true });
+            sentCount++;
+        }
+
+        if (sentCount > 0) {
+            await batch.commit();
+            logger.info(`[Reminder] Sent ${sentCount} expiration reminders.`);
+        } else {
+            logger.info('[Reminder] All potential reservations already had reminders sent.');
+        }
+
+        // --- NEW: Handle automated status transition for EXPIRED reservations ---
+        const expiredSnapshot = await db.collection('couponRedemptions')
+            .where('status', '==', 'reserved')
+            .where('expiresAt', '<=', admin.firestore.Timestamp.fromDate(now))
+            .get();
+
+        if (!expiredSnapshot.empty) {
+            const cleanupBatch = db.batch();
+            expiredSnapshot.forEach(doc => {
+                cleanupBatch.update(doc.ref, { status: 'expired', expiredAt: admin.firestore.FieldValue.serverTimestamp() });
+            });
+            await cleanupBatch.commit();
+            logger.info(`[Cleanup] Successfully expired ${expiredSnapshot.size} stale reservations.`);
+        }
+
+    } catch (error) {
+        logger.error('[Reminder] Critical error in scheduled task:', error);
     }
 });

@@ -39,8 +39,8 @@ if (confirmed) {
 ### Event Management (`EventModal.tsx`)
 The delete button in the event modal now triggers the custom confirmation system, ensuring users don't accidentally delete their pulses.
 
-### Admin Controls (`AdminUsers.tsx`)
-Role and plan changes for users are now gated by professional confirmation dialogs, preventing accidental clicks that would modify production data.
+### Admin Controls (`SuperAdminCenter.tsx`)
+Role and plan changes for users are now gated by professional confirmation dialogs in the Users Panel, preventing accidental clicks that would modify production data.
 
 ### Subscriptions (`Plans.tsx`)
 Switching plans triggers a confirmation before redirecting to WhatsApp support, providing a smoother transition for the user.

@@ -3,17 +3,17 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
     ChevronLeft, Edit3, LogOut, CheckCircle, MapPin, Store, Palmtree, Mountain,
-    Zap, Star, Sparkles, MessageCircle, Navigation, CreditCard, Banknote, Mail,
+    Zap, Star, Sparkles, MessageCircle, Navigation, CreditCard, Banknote, Mail, Ticket,
     BarChart2, Eye, Users, TrendingUp, Award, Phone, User, X, Camera, ImageIcon, Upload, ShieldCheck, Plus, Activity,
     Info, FileText, ExternalLink, Trash2, Save, HelpCircle, Globe, Shield, Instagram, Facebook, Twitter, Link
 } from 'lucide-react';
-import { UserProfile, Business, MontanitaEvent, Vibe, SubscriptionPlan, Sector, BusinessCategory } from '../types.ts';
+import { UserProfile, Business, MontanitaEvent, Vibe, SubscriptionPlan, Sector, BusinessCategory, Coupon, CouponRedemption } from '../types';
 import { Calendar, Clock } from 'lucide-react';
-import { EventCard } from '../components/EventCard.tsx';
-import { createUser, updateUser, getAppSettings, updateAppSettings } from '../services/firestoreService.ts';
-import { migrateAvatarsToStorage } from '../services/storageMigrationService.ts';
-import { logout, updateUserProfile as updateAuthProfile } from '../services/authService.ts';
-import { LOCALITY_SECTORS, MAP_ICONS, LOCALITIES, PLAN_LIMITS, SECTOR_INFO } from '../constants.ts';
+import { EventCard } from '../components/EventCard';
+import { createUser, updateUser, getAppSettings, updateAppSettings } from '../services/firestoreService';
+import { migrateAvatarsToStorage } from '../services/storageMigrationService';
+import { logout, updateUserProfile as updateAuthProfile } from '../services/authService';
+import { LOCALITY_SECTORS, MAP_ICONS, LOCALITIES, PLAN_LIMITS, SECTOR_INFO, BASE_URL } from '../constants';
 import { compressImage } from '../utils/imageUtils';
 import { uploadBase64Image } from '../services/storageService';
 
@@ -22,10 +22,16 @@ import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 import { DownloadManuals } from '../components/Passport/DownloadManuals';
+import { SuperAdminCenter } from '../components/Admin/SuperAdminCenter';
+import { AIMarketingModal } from '../components/Modals/AIMarketingModal';
+import CouponManagerModal from '../components/Modals/CouponManagerModal';
+import { UserWalletModal } from '../components/Coupons/UserWalletModal';
+import { subscribeToPublicCoupons, obtainCoupon, subscribeToUserWallet } from '../services/couponService';
+import { CouponCard } from '../components/Coupons/CouponCard';
 
 const HELP_ICON_MAP: Record<string, any> = {
     Mail, MessageCircle, Info, FileText, ExternalLink, Zap, Star, ShieldCheck, Activity,
-    HelpCircle, Globe, Shield, Phone, Instagram, Facebook, Twitter, Link
+    HelpCircle, Globe, Shield, Phone, Instagram, Facebook, Twitter, Link, Ticket
 };
 
 interface PassportProps {
@@ -64,7 +70,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         allUsers,
         showLogin,
         setShowLogin,
-        planNames
+        planNames,
+        masterVibes
     } = useData();
     const { showToast, showConfirm } = useToast();
     const [showProfileEdit, setShowProfileEdit] = useState(false);
@@ -80,6 +87,34 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const [tempHelpItems, setTempHelpItems] = useState<any[]>([]);
     const [showPulsePass, setShowPulsePass] = useState(false);
     const [isMigratingStorage, setIsMigratingStorage] = useState(false);
+    const [showAdminCenter, setShowAdminCenter] = useState(false);
+    const [showAIMarketing, setShowAIMarketing] = useState(false);
+    const [showCouponManager, setShowCouponManager] = useState(false);
+    const [showUserWallet, setShowUserWallet] = useState(false);
+    const [initialWalletRedemptionId, setInitialWalletRedemptionId] = useState<string | null>(null);
+    const [showCopied, setShowCopied] = useState(false);
+
+    const handleShareBusiness = (biz: Business) => {
+        const url = `${BASE_URL}/negocio/${biz.slug || biz.id}`;
+        if (navigator.share) {
+            navigator.share({
+                title: biz.name,
+                text: `Mira mi negocio en MontaPulse: ${biz.name}`,
+                url: url
+            }).catch(() => {
+                navigator.clipboard.writeText(url);
+                setShowCopied(true);
+                setTimeout(() => setShowCopied(false), 2000);
+            });
+        } else {
+            navigator.clipboard.writeText(url);
+            setShowCopied(true);
+            setTimeout(() => setShowCopied(false), 2000);
+        }
+    };
+    const [publicCoupons, setPublicCoupons] = useState<any[]>([]);
+    const [userActiveCoupons, setUserActiveCoupons] = useState<CouponRedemption[]>([]);
+    const [secretClickCount, setSecretClickCount] = useState(0);
     const [aboutContent, setAboutContent] = useState({
         description: 'Tu guía definitiva para no perderte nada en la costa. Descubre eventos, conecta con la comunidad y vive el pulso real de Montañita.',
         feature1: 'Ver eventos',
@@ -113,6 +148,15 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const creditsRemaining = isPremium ? null : availableCredits;
 
     useEffect(() => {
+        if (user) {
+            const unsubscribe = subscribeToUserWallet(user.id, (data) => {
+                setUserActiveCoupons(data.filter(r => r.status === 'reserved'));
+            });
+            return () => unsubscribe();
+        }
+    }, [user]);
+
+    useEffect(() => {
         const loadSettings = async () => {
             const data = await getAppSettings('about_info');
             if (data) {
@@ -120,6 +164,13 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
             }
         };
         loadSettings();
+
+        // Subscribe to public coupons
+        const unsubscribe = subscribeToPublicCoupons((data) => {
+            setPublicCoupons(data);
+        });
+
+        return () => unsubscribe();
     }, []);
 
     const getCategoryEmoji = (category: string) => {
@@ -284,18 +335,32 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
             <div className="min-h-screen bg-[#000000] text-white pb-24 overflow-y-auto no-scrollbar">
                 {/* Header */}
                 <div className="pt-12 px-8 flex items-center justify-between mb-10">
-                    <div className="flex flex-col">
+                    <div 
+                        className="flex flex-col cursor-default select-none"
+                        onClick={() => {
+                            if (isSuperAdmin) {
+                                setSecretClickCount(prev => prev + 1);
+                                if (secretClickCount + 1 >= 5) {
+                                    setShowAdminCenter(true);
+                                    setSecretClickCount(0);
+                                    showToast("Acceso al Centro de Comando Activado", "success");
+                                }
+                            }
+                        }}
+                    >
                         <h1 className="text-3xl font-black tracking-tight text-white">Mi Passport</h1>
                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-1">Centro de Control</span>
                     </div>
-                    <button
-                        onClick={onEditProfile}
-                        className="p-4 bg-white/5 text-white rounded-2xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all shadow-xl group flex items-center gap-2"
-                        title="Editar Perfil"
-                    >
-                        <Edit3 className="w-5 h-5 text-orange-500 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block">Editar</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={onEditProfile}
+                            className="p-4 bg-white/5 text-white rounded-2xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all shadow-xl group flex items-center gap-2"
+                            title="Editar Perfil"
+                        >
+                            <Edit3 className="w-5 h-5 text-orange-500 group-hover:scale-110 transition-transform" />
+                            <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block">Editar</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Profile Hero - Passport Card Style */}
@@ -383,15 +448,15 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Pulse Window & Discovery */}
+                {/* Pulse Window & Discovery & Wallet */}
                 <div className="px-6 mb-12">
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <button
                             onClick={() => setShowPulseModal(true)}
                             className="relative w-full group overflow-hidden rounded-[2.5rem] bg-indigo-600 p-1 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-95 shadow-2xl shadow-indigo-600/20"
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-violet-600 to-indigo-700 animate-shimmer bg-[length:200%_100%]" />
-                            <div className="relative flex-1 flex items-center justify-between bg-black/40 backdrop-blur-3xl rounded-[2.25rem] p-6 border border-white/10">
+                            <div className="relative flex-1 flex items-center justify-between bg-black/40 backdrop-blur-3xl rounded-[2.25rem] p-6 border border-white/10 h-full">
                                 <div className="flex items-center gap-5">
                                     <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
                                         <Activity className="w-7 h-7 text-indigo-400" />
@@ -412,8 +477,79 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                 </div>
                             </div>
                         </button>
+
+                        <button
+                            onClick={() => setShowUserWallet(true)}
+                            className="relative w-full group overflow-hidden rounded-[2.5rem] bg-orange-600 p-1 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-95 shadow-2xl shadow-orange-600/20"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-orange-500 via-amber-600 to-orange-700 animate-shimmer bg-[length:200%_100%]" />
+                            <div className="relative flex-1 flex items-center justify-between bg-black/40 backdrop-blur-3xl rounded-[2.25rem] p-6 border border-white/10 h-full">
+                                <div className="flex items-center gap-5">
+                                    <div className="w-14 h-14 rounded-2xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
+                                        <Ticket className="w-7 h-7 text-orange-400" />
+                                    </div>
+                                    <div className="text-left">
+                                        <h3 className="text-xl font-black text-white tracking-tight leading-tight">Mis Cupones</h3>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <p className="text-[10px] font-black text-orange-300 uppercase tracking-widest">Cartera Digital</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-orange-500 group-hover:border-orange-400 transition-all duration-500">
+                                    <Plus className="w-5 h-5 text-orange-400 group-hover:text-white transition-colors" />
+                                </div>
+                            </div>
+                        </button>
                     </div>
                 </div>
+
+                {/* My Active Coupons (Quick Access) */}
+                {userActiveCoupons.length > 0 && (
+                    <div className="px-6 mb-12">
+                        <div className="flex flex-col gap-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex flex-col">
+                                    <h3 className="text-xl font-black tracking-tighter text-white italic">Mis Reservas</h3>
+                                    <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Cupones listos para usar</p>
+                                </div>
+                                <button onClick={() => setShowUserWallet(true)} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-white transition-all">
+                                    Ver Cartera
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3">
+                                {userActiveCoupons.slice(0, 3).map((r) => (
+                                    <div 
+                                        key={r.id} 
+                                        onClick={() => {
+                                            setInitialWalletRedemptionId(r.id);
+                                            setShowUserWallet(true);
+                                        }}
+                                        className="p-4 bg-gradient-to-r from-orange-500/10 to-amber-500/5 border border-orange-500/20 rounded-3xl flex items-center justify-between cursor-pointer hover:border-orange-500/40 transition-all"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-500">
+                                                <Ticket className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black text-white">{r.couponCode}</p>
+                                                <p className="text-[9px] font-bold text-slate-500 uppercase">{r.couponValue}{r.couponType === 'percentage' ? '%' : '$'} OFF</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Listo</p>
+                                            <p className="text-[8px] font-bold text-slate-600 mt-0.5">MP-{r.reservationCode}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                                {userActiveCoupons.length > 3 && (
+                                    <button onClick={() => setShowUserWallet(true)} className="py-2 text-center text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] hover:text-orange-500 transition-colors">
+                                        + {userActiveCoupons.length - 3} cupones más en tu cartera
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* My Upcoming Pulses */}
                 <div className="mb-12">
@@ -450,7 +586,64 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Following Feed */}
+                {/* Available Coupons Feed */}
+                {publicCoupons.length > 0 && (
+                    <div className="mb-12">
+                        <div className="px-6 flex items-center justify-between mb-6">
+                            <div className="flex flex-col">
+                                <h3 className="text-xl font-black tracking-tighter text-white">
+                                    {publicCoupons.some(c => followedBusinessIds.includes(c.businessId)) ? 'Ofertas Exclusivas' : 'Ofertas para Ti'}
+                                </h3>
+                                <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest">
+                                    {publicCoupons.some(c => followedBusinessIds.includes(c.businessId)) 
+                                        ? 'Cupones de tus locales seguidos' 
+                                        : 'Ahorra en los mejores locales'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-4 overflow-x-auto no-scrollbar px-6 pb-4">
+                            {(publicCoupons.some(c => followedBusinessIds.includes(c.businessId))
+                                ? publicCoupons.filter(c => followedBusinessIds.includes(c.businessId))
+                                : publicCoupons
+                            ).map(coupon => (
+                                <div key={coupon.id} className="min-w-[300px] w-[300px] shrink-0">
+                                    <CouponCard
+                                        coupon={coupon}
+                                        onRedeem={async (c) => {
+                                            if (!user) {
+                                                setShowLogin(true);
+                                                return;
+                                            }
+                                            const confirmed = await showConfirm(
+                                                `¿Quieres reservar este cupón de ${c.type === 'percentage' ? c.value + '%' : '$' + c.value}?`
+                                            );
+                                            
+                                            if (confirmed) {
+                                                try {
+                                                    const result = await obtainCoupon(
+                                                        c.id,
+                                                        c.code,
+                                                        user.id,
+                                                        `${user.name} ${user.surname}`,
+                                                        c.businessId
+                                                    );
+                                                    if (result.success) {
+                                                        showToast(`¡Cupón reservado! Código: ${result.reservationCode}`, 'success');
+                                                        setShowUserWallet(true);
+                                                    } else {
+                                                        showToast(result.error || 'Error al reservar', 'error');
+                                                    }
+                                                } catch (err) {
+                                                    showToast('Error de conexión', 'error');
+                                                }
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 {followedBusinessIds.length > 0 && (
                     <div className="mb-12">
                         <div className="px-6 flex items-center justify-between mb-6">
@@ -501,7 +694,22 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
                 {/* Mi Negocio Section */}
                 <div className="px-8 mb-12">
-                    <h3 className="text-lg font-black tracking-tight mb-6">Mi Negocio</h3>
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-black tracking-tight">Mi Negocio</h3>
+                        {user?.businessId && (
+                            <button 
+                                onClick={() => {
+                                    setPublicProfileId(user.businessId!);
+                                    setPublicProfileType('business');
+                                    setShowPublicProfile(true);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black text-orange-500 uppercase tracking-widest hover:bg-white/10 transition-all"
+                            >
+                                <Store className="w-4 h-4" />
+                                Ver Perfil
+                            </button>
+                        )}
+                    </div>
 
                     {user?.businessId && businesses.find(b => b.id === user.businessId) ? (() => {
                         const biz = businesses.find(b => b.id === user.businessId)!;
@@ -599,6 +807,57 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                             >
                                                 <Zap className="w-3 h-3 fill-current" />
                                                 Mejorar Plan
+                                            </button>
+                                            <button
+                                                 onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowAIMarketing(true);
+                                                }}
+                                                className="px-4 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-indigo-500/10 flex items-center gap-1.5"
+                                            >
+                                                <Sparkles className="w-3 h-3 fill-current" />
+                                                Asistente IA
+                                            </button>
+                                            <button
+                                                 onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowCouponManager(true);
+                                                }}
+                                                className="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-emerald-500/10 flex items-center gap-1.5"
+                                            >
+                                                <Ticket className="w-3 h-3" />
+                                                Cupones
+                                            </button>
+                                            <button
+                                                 onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setPublicProfileId(biz.id);
+                                                    setPublicProfileType('business');
+                                                    setShowPublicProfile(true);
+                                                }}
+                                                className="px-4 py-1.5 bg-white/10 border border-white/20 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:bg-white/20 active:scale-95 transition-all flex items-center gap-1.5 shadow-lg"
+                                            >
+                                                <Eye className="w-3 h-3" />
+                                                Vista Previa
+                                            </button>
+                                            <button
+                                                 onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleShareBusiness(biz);
+                                                }}
+                                                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shadow-lg ${showCopied ? 'bg-emerald-500 text-white shadow-emerald-500/10' : 'bg-white/10 border border-white/20 text-white hover:bg-white/20 shadow-white/5'}`}
+                                            >
+                                                {showCopied ? (
+                                                    <>
+                                                        <CheckCircle className="w-3 h-3" />
+                                                        ¡Copiado!
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Link className="w-3 h-3" />
+                                                        Enlace
+                                                    </>
+                                                )}
                                             </button>
                                         </div>
                                         <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/5 group-hover:bg-orange-500 group-hover:border-orange-400 transition-colors">
@@ -857,7 +1116,9 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personaliza tu experiencia</p>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {Object.values(Vibe).map(v => (
+                            {[...Object.values(Vibe), ...(masterVibes || []).map(v => v.name)]
+                                .filter((v, idx, self) => self.indexOf(v) === idx)
+                                .map(v => (
                                 <button
                                     key={v}
                                     onClick={() => {
@@ -878,76 +1139,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Admin Control Center */}
-                {isAdmin && (
-                    <div className="px-6 mb-12">
-                        <div className="p-8 bg-black border border-white/5 rounded-[3rem] shadow-2xl space-y-6">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center">
-                                    <ShieldCheck className="w-6 h-6 text-sky-400" />
-                                </div>
-                                <div className="text-left">
-                                    <h3 className="text-lg font-black text-white tracking-tight leading-tight">Admin Center</h3>
-                                    <p className="text-[10px] font-bold text-sky-400 uppercase tracking-widest mt-0.5">Control Total</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-3">
-                                <button
-                                    onClick={() => navigate('/admin-users')}
-                                    className="w-full bg-[#111111] border border-white/5 text-slate-300 font-black py-4 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-[10px]"
-                                >
-                                    <Users className="w-4 h-4 text-sky-400" />
-                                    <span>Gestión de Usuarios</span>
-                                </button>
-
-                                <button
-                                    onClick={() => setShowMigrationPanel(true)}
-                                    className="w-full bg-[#111111] border border-white/5 text-slate-300 font-black py-4 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-[10px]"
-                                >
-                                    <Upload className="w-4 h-4 text-orange-400" />
-                                    <span>Migrar a Firestore</span>
-                                </button>
-
-                                <button
-                                    onClick={async () => {
-                                        if (await showConfirm('¿Quieres migrar todos los avatars de base64 a Firebase Storage? Esto mejorará el rendimiento.', 'Migrar Storage')) {
-                                            setIsMigratingStorage(true);
-                                            try {
-                                                const result = await migrateAvatarsToStorage();
-                                                if (result.success) {
-                                                    showToast(result.message, 'success');
-                                                } else {
-                                                    showToast(result.message, 'error');
-                                                }
-                                            } catch (error) {
-                                                showToast('Error en la migración', 'error');
-                                            } finally {
-                                                setIsMigratingStorage(false);
-                                            }
-                                        }
-                                    }}
-                                    disabled={isMigratingStorage}
-                                    className="w-full bg-[#111111] border border-white/5 text-slate-300 font-black py-4 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-[10px] disabled:opacity-50"
-                                >
-                                    <ImageIcon className="w-4 h-4 text-violet-400" />
-                                    <span>{isMigratingStorage ? 'Migrando...' : 'Migrar Avatars a Storage'}</span>
-                                </button>
-
-                                <button
-                                    onClick={toggleSuperUser}
-                                    className={`w-full py-4 rounded-2xl border transition-all uppercase tracking-widest text-[10px] font-black flex items-center justify-center gap-3 ${isSuperUser
-                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                        : 'bg-[#111111] text-slate-500 border-white/5 hover:bg-white/5'
-                                        }`}
-                                >
-                                    <Zap className={`w-4 h-4 ${isSuperUser ? 'animate-pulse text-emerald-400' : 'text-slate-600'}`} />
-                                    <span>{isSuperUser ? 'SuperUsuario: ACTIVO' : 'Activar Modo SuperUsuario'}</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                {/* Removed Admin Center from main flow, now in hidden modal */}
 
                 {/* Final Sign Out */}
                 <div className="px-6 pt-12 pb-24">
@@ -1104,7 +1296,9 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Vibe Favorita</label>
                                 <div className="grid grid-cols-2 gap-2">
-                                    {Object.values(Vibe).map(v => (
+                                    {[...Object.values(Vibe), ...(masterVibes || []).map(v => v.name)]
+                                        .filter((v, idx, self) => self.indexOf(v) === idx)
+                                        .map(v => (
                                         <button
                                             key={v}
                                             onClick={() => setEditingUser({ ...editingUser, preferredVibe: v })}
@@ -1428,14 +1622,53 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                         </div>
                         <button
                             onClick={() => {
-                                showToast('Próximamente disponible', 'info');
+                                setShowPulsePass(false);
                             }}
-                            className="w-full py-3 bg-rose-500 hover:bg-rose-400 text-white font-black text-sm rounded-xl transition-colors mt-6"
+                            className="w-full py-3 bg-rose-500 hover:bg-rose-400 text-white font-black text-sm rounded-xl transition-colors mt-6 flex justify-center items-center"
                         >
-                            Obtener Pulse Pass
+                            <span className="uppercase tracking-widest font-black text-xs">Cerrar</span>
                         </button>
                     </div>
                 </div>
+            )}
+
+            {/* Hidden Command Center Modal */}
+            {showAdminCenter && (
+                <SuperAdminCenter onClose={() => setShowAdminCenter(false)} />
+            )}
+            
+            {showAIMarketing && userBusiness && (
+                <AIMarketingModal
+                    isOpen={showAIMarketing}
+                    onClose={() => setShowAIMarketing(false)}
+                    business={userBusiness}
+                    metrics={{ 
+                        weeklyViews: Math.round((userStats.totalClicks || 0) / 4), // Simple estimate
+                        totalClicks: userStats.totalClicks || 0,
+                        impactCount: userStats.impactCount || 0,
+                        followers: userBusiness.followerCount || 0
+                    }}
+                />
+            )}
+
+            {showCouponManager && userBusiness && (
+                <CouponManagerModal
+                    isOpen={showCouponManager}
+                    onClose={() => setShowCouponManager(false)}
+                    business={userBusiness}
+                />
+            )}
+
+            {showUserWallet && user && (
+                <UserWalletModal
+                    isOpen={showUserWallet}
+                    onClose={() => {
+                        setShowUserWallet(false);
+                        setInitialWalletRedemptionId(null);
+                    }}
+                    userId={user.id}
+                    initialRedemptionId={initialWalletRedemptionId}
+                />
             )}
         </>
     );
@@ -1458,4 +1691,4 @@ const AnalyticsCard = ({ icon, label, value, trend }: { icon: React.ReactNode, l
     </div>
 );
 
-
+export default Passport;

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight, Clock, Circle } from 'lucide-react';
-import { Business, UserProfile, MontanitaEvent, ProfileReview } from '../types';
+import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight, Clock, Circle, Ticket } from 'lucide-react';
+import { Business, UserProfile, MontanitaEvent, ProfileReview, Coupon } from '../types';
 import { useData } from '../context/DataContext';
 import { BASE_URL } from '../constants';
 import { subscribeToProfileReviews, addProfileReview, getUser, incrementBusinessViewCount } from '../services/firestoreService';
+import { subscribeToBusinessCoupons, obtainCoupon } from '../services/couponService';
 import { useAuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { getEcuadorDate, isBusinessOpen } from '../utils/timeUtils';
@@ -43,6 +44,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
 
     const [fetchedUser, setFetchedUser] = useState<UserProfile | null>(null);
     const [isLoadingUser, setIsLoadingUser] = useState(false);
+    const [coupons, setCoupons] = useState<Coupon[]>([]);
 
     // Find the target profile
     const business = businessId ? businesses.find(b => b.id === businessId) : null;
@@ -84,11 +86,42 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
         fetchTargetUser();
 
         if ((businessId || userId) && isOpen) {
-            const targetId = (businessId || userId) as string;
-            if (businessId) incrementBusinessViewCount(businessId);
-            return subscribeToProfileReviews(targetId, setReviews);
+            // Determine the business ID to fetch coupons for
+            const effectiveBusinessId = businessId || userProfile?.businessId;
+            
+            if (effectiveBusinessId) {
+                incrementBusinessViewCount(effectiveBusinessId);
+                // Subscribe to coupons if we have a business ID
+                const unsubCoupons = subscribeToBusinessCoupons(effectiveBusinessId, (businessCoupons) => {
+                    const active = businessCoupons.filter(c => {
+                        const expirationDate = c.expiresAt?.toDate ? c.expiresAt.toDate() : new Date(c.expiresAt);
+                        
+                        // Set to end of day to be generous with expiration
+                        const endOfExpirationDay = new Date(expirationDate);
+                        if (!isNaN(endOfExpirationDay.getTime())) {
+                            endOfExpirationDay.setHours(23, 59, 59, 999);
+                        }
+                        
+                        const isExpired = !isNaN(endOfExpirationDay.getTime()) ? endOfExpirationDay.getTime() < Date.now() : false;
+                        const isFull = c.maxUses > 0 ? c.currentUses >= c.maxUses : false;
+                        return !isExpired && !isFull && c.isActive;
+                    });
+                    setCoupons(active);
+                });
+                
+                const targetIdForReviews = userId || business?.ownerId || (businessId as string);
+                const unsubReviews = subscribeToProfileReviews(targetIdForReviews, setReviews);
+                
+                return () => {
+                    unsubCoupons();
+                    unsubReviews();
+                };
+            } else if (userId) {
+                // If it's just a user profile (no business), only subscribe to reviews
+                return subscribeToProfileReviews(userId, setReviews);
+            }
         }
-    }, [businessId, userId, business?.ownerId, isOpen, allUsers]);
+    }, [businessId, userId, business?.ownerId, isOpen, allUsers, fetchedUser]);
 
     const handleSubmitReview = async () => {
         const targetId = businessId || userId;
@@ -112,6 +145,34 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
             showToast("No se pudo enviar la reseña.", "error");
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleObtainCoupon = async (coupon: Coupon) => {
+        if (!currentUser) {
+            showToast("Debes iniciar sesión para reservar cupones", "error");
+            return;
+        }
+
+        const confirmRes = window.confirm(`¿Deseas reservar el cupón "${coupon.code}"? Tendrás 24 horas para canjearlo.`);
+        if (!confirmRes) return;
+
+        try {
+            const result = await obtainCoupon(
+                coupon.id, 
+                coupon.code, 
+                currentUser.id, 
+                currentUser.name || 'Usuario',
+                businessId
+            );
+            if (result.success) {
+                showToast("¡Cupón reservado con éxito! Revisa tu billetera.", "success");
+            } else {
+                showToast(result.error || "No se pudo reservar el cupón.", "error");
+            }
+        } catch (error) {
+            console.error("Error obtaining coupon:", error);
+            showToast("Error al procesar la reserva.", "error");
         }
     };
 
@@ -331,6 +392,44 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                                 </div>
                                 <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-sky-400 transition-colors shrink-0" />
                             </button>
+                        </div>
+                    )}
+                    
+                    {/* Business Coupons */}
+                    {coupons.length > 0 && (
+                        <div className="space-y-4">
+                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <Ticket className="w-3 h-3 text-pink-400" />
+                                Cupones Disponibles
+                            </h3>
+                            <div className="space-y-2">
+                                {coupons.map(coupon => (
+                                    <button 
+                                        key={coupon.id}
+                                        onClick={() => handleObtainCoupon(coupon)}
+                                        className="w-full p-3 bg-pink-500/10 border border-pink-500/20 rounded-2xl flex items-center gap-3 relative overflow-hidden group hover:border-pink-500/40 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-pink-500/20 flex items-center justify-center shrink-0">
+                                            <Ticket className="w-5 h-5 text-pink-400" />
+                                        </div>
+                                        <div className="flex-1 text-left min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-black text-white">{coupon.value}{coupon.type === 'percentage' ? '%' : '$'} OFF</span>
+                                                <span className="text-[10px] font-black bg-pink-500 text-white px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                                                    {coupon.code}
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-pink-400 font-bold truncate">
+                                                Válido hasta: {coupon.expiresAt ? (coupon.expiresAt.toDate ? coupon.expiresAt.toDate().toLocaleDateString() : new Date(coupon.expiresAt).toLocaleDateString()) : 'Sin límite'}
+                                            </p>
+                                        </div>
+                                        <div className="text-[8px] font-black text-pink-400 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                                            Reservar →
+                                        </div>
+                                        <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-pink-500/5 rounded-full blur-2xl group-hover:bg-pink-500/10 transition-all" />
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
 

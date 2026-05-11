@@ -21,6 +21,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
             case 'system': return <Info className="w-4 h-4 text-orange-400" />;
             case 'community': return <Zap className="w-4 h-4 text-amber-400" />;
             case 'offer': return <Sparkles className="w-4 h-4 text-rose-400" />;
+            case 'coupon': return <Ticket className="w-4 h-4 text-pink-400" />;
             default: return <Bell className="w-4 h-4 text-slate-400" />;
         }
     };

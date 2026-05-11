@@ -33,3 +33,17 @@ export const getEcuadorDayString = (): string => {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+
+/**
+ * Ensures a value is a Date object, converting from Firestore Timestamp if necessary.
+ */
+export const ensureDate = (val: any): Date => {
+  if (!val) return new Date();
+  if (typeof val.toDate === 'function') return val.toDate();
+  if (val instanceof Date) return val;
+  // Handle Firestore-like timestamp objects {seconds, nanoseconds}
+  if (val && typeof val === 'object' && 'seconds' in val) {
+    return new Date(val.seconds * 1000);
+  }
+  return new Date(val);
+};

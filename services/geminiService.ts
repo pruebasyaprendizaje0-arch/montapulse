@@ -148,3 +148,69 @@ export async function getRecommendationForUser(events: MontanitaEvent[], busines
     return [];
   }
 }
+
+export type MarketingQueryType = 'social_media' | 'lightning_offer' | 'keywords' | 'thematic_ideas' | 'customer_preferences';
+
+export async function getMarketingRecommendations(
+  business: Business,
+  metrics: { weeklyViews: number, totalClicks: number, impactCount: number, followers: number },
+  queryType: MarketingQueryType
+): Promise<{ text: string }> {
+  
+  let taskDescription = "";
+  
+  switch (queryType) {
+    case 'social_media':
+      taskDescription = "Redacta un texto atractivo y persuasivo para una publicación en redes sociales (Instagram/Facebook) promocionando este negocio. Usa emojis y un tono invitador.";
+      break;
+    case 'lightning_offer':
+      taskDescription = "Sugiere 3 ideas creativas para 'ofertas relámpago' (promociones por tiempo limitado) que este negocio podría lanzar hoy para atraer más clientes, basándote en su categoría.";
+      break;
+    case 'keywords':
+      taskDescription = "Proporciona una lista de 10 palabras clave (keywords) y hashtags altamente relevantes que este negocio debería usar en su marketing digital para mejorar su visibilidad local en Montañita.";
+      break;
+    case 'thematic_ideas':
+      taskDescription = "Sugiere 2 ideas para días o semanas temáticas (ej. 'Martes de Tacos', 'Semana del Surfista') que el negocio podría organizar para crear un evento recurrente o promoción especial.";
+      break;
+    case 'customer_preferences':
+      taskDescription = "Analiza las métricas actuales del negocio y sugiere qué tipo de contenido, productos o servicios podrían gustarle más a sus clientes actuales para aumentar el 'engagement'.";
+      break;
+  }
+
+  const systemPrompt = `Eres un asistente experto en marketing digital para negocios locales en Montañita, Ecuador.
+Tu objetivo es proporcionar consejos de marketing accionables, creativos y basados en datos.
+Responde de manera concisa, profesional pero con un tono amigable y playero (vibe Montañita).
+NO uses formato markdown complejo, solo texto claro, listas con guiones y emojis.`;
+
+  const userPrompt = `
+Información del Negocio:
+- Nombre: ${business.name}
+- Categoría: ${business.category}
+- Sector: ${business.sector}
+- Descripción: ${business.description || 'No especificada'}
+
+Métricas Actuales en la App:
+- Vistas esta semana: ${metrics.weeklyViews}
+- Clicks totales en eventos: ${metrics.totalClicks}
+- Nivel de interés (Impacto): ${metrics.impactCount}
+- Seguidores: ${metrics.followers}
+
+Tarea: ${taskDescription}
+`;
+
+  try {
+    const text = await callOpenRouter([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ]);
+
+    return {
+      text: text || "No se pudo generar la recomendación en este momento.",
+    };
+  } catch (error) {
+    console.error("Marketing AI Error:", error);
+    return {
+      text: "Hubo un problema al consultar la IA. Por favor, intenta de nuevo más tarde.",
+    };
+  }
+}

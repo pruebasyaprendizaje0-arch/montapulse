@@ -79,22 +79,7 @@ export const Sidebar: React.FC = () => {
                     );
                 })}
 
-                {isSuperAdmin && (
-                    <div className="pt-6 mt-6 border-t border-white/5 space-y-2">
-                        <p className="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">King Admin</p>
-                        <button
-                            onClick={() => navigate('/admin-users')}
-                            className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 group ${
-                                currentPath.includes('/admin-users') 
-                                ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' 
-                                : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                            }`}
-                        >
-                            <Users className="w-5 h-5" />
-                            <span className="text-xs font-black uppercase tracking-widest">Gestión Usuarios</span>
-                        </button>
-                    </div>
-                )}
+
             </div>
 
             <div className="mt-auto pt-6 border-t border-white/5 flex flex-col gap-4">

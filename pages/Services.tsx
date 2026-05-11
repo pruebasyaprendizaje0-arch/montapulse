@@ -260,7 +260,7 @@ const BusinessCard: React.FC<BusinessCardProps> = ({ business, onOpenProfile, on
 
 // ── Main Services Page ─────────────────────────────────
 export const Services: React.FC = () => {
-    const { businesses } = useData();
+    const { businesses, masterCategories = [] } = useData();
     const navigate = useNavigate();
 
     const [search, setSearch] = useState('');
@@ -366,7 +366,17 @@ export const Services: React.FC = () => {
 
                 {/* ── Category Chips ── */}
                 <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-4">
-                    {CATEGORIES.map(cat => (
+                    {[
+                        { label: 'Todos', value: 'all', emoji: '🌐' },
+                        ...CATEGORIES.filter(c => c.value !== 'all'),
+                        ...masterCategories.map(c => ({
+                            label: c.name,
+                            value: c.name as BusinessCategory,
+                            emoji: '✨'
+                        }))
+                    ]
+                    .filter((c, idx, self) => self.findIndex(t => t.value === c.value) === idx)
+                    .map(cat => (
                         <button
                             key={cat.value}
                             onClick={() => setActiveCategory(cat.value)}

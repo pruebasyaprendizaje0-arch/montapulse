@@ -26,7 +26,8 @@ export const Notifications: React.FC = () => {
     const { user, isAdmin } = useAuthContext();
     const { showToast } = useToast();
     const {
-        notifications, markAsRead, businesses, customLocalities = [], businessFollowers: contextFollowers = [],
+        notifications, markAsRead, businesses, businessFollowers: contextFollowers = [],
+        events, masterVibes = [], masterLocalities = []
     } = useData();
 
     // Announce modal state
@@ -130,9 +131,11 @@ export const Notifications: React.FC = () => {
 
     // Filtered notifications
     const filtered = useMemo(() => {
-        const all = notifications || [];
-        const result = notifFilter === 'all' ? all : all.filter(n => n.type === notifFilter);
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+        const all = notifications || [];
+        
         // Map announcements to notification format
         const myAnnouncements = announcements.map(a => ({
             id: a.id || `ann_${Date.now()}`,
@@ -145,20 +148,38 @@ export const Notifications: React.FC = () => {
             isMassAnnouncement: true,
         }));
 
-        // Filter announcements by type (same filter as notifications)
-        const filteredAnnouncements = notifFilter === 'all'
-            ? myAnnouncements
-            : myAnnouncements.filter(n => n.type === notifFilter);
+        const combined = [...all, ...myAnnouncements];
 
-        const combined = [...result, ...filteredAnnouncements];
-        return [...combined].sort((a, b) => {
-            const ta = a.createdAt || (a as any).timestamp;
-            const tb = b.createdAt || (b as any).timestamp;
-            const da = ta instanceof Date ? ta : new Date(ta || 0);
-            const db = tb instanceof Date ? tb : new Date(tb || 0);
-            return db.getTime() - da.getTime();
-        });
-    }, [notifications, notifFilter, announcements]);
+        return combined
+            .filter(n => {
+                // 1. Basic Type Filter
+                if (notifFilter !== 'all' && n.type !== notifFilter) return false;
+
+                // 2. 30-Day Retention & Active Event Logic
+                const createdAt = n.createdAt instanceof Date ? n.createdAt : new Date(n.createdAt || 0);
+                const isRecent = createdAt >= thirtyDaysAgo;
+
+                // Check if it's an active event/pulse
+                let isActive = false;
+                const postId = n.metadata?.postId || (n as any).postId; // Handle both notification formats
+                if (postId) {
+                    const event = events.find(e => e.id === postId);
+                    if (event) {
+                        const endAt = event.endAt instanceof Date ? event.endAt : new Date(event.endAt);
+                        isActive = endAt > now;
+                    }
+                }
+
+                return isRecent || isActive;
+            })
+            .sort((a, b) => {
+                const ta = a.createdAt;
+                const tb = b.createdAt;
+                const da = ta instanceof Date ? ta : new Date(ta || 0);
+                const db = tb instanceof Date ? tb : new Date(tb || 0);
+                return db.getTime() - da.getTime();
+            });
+    }, [notifications, notifFilter, announcements, events]);
 
     const unread = useMemo(() => (notifications || []).filter(n => !n.read).length, [notifications]);
 
@@ -519,7 +540,7 @@ export const Notifications: React.FC = () => {
                                             >
                                                 Todas las localidades
                                             </button>
-                                            {[...LOCALITIES, ...customLocalities].map(l => (
+                                            {[...LOCALITIES, ...masterLocalities].map(l => (
                                                 <button
                                                     key={l.name}
                                                     onClick={() => { setMassLocalityMode('specific'); setMassLocality(l.name); setIsLocalityOpen(false); }}
@@ -555,15 +576,17 @@ export const Notifications: React.FC = () => {
                                             >
                                                 Todos los estilos
                                             </button>
-                                            {Object.values(Vibe).map(v => (
-                                                <button
-                                                    key={v}
-                                                    onClick={() => { setMassVibeMode('specific'); setMassVibe(v); setIsVibeOpen(false); }}
-                                                    className={`w-full text-left px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all ${massVibeMode === 'specific' && massVibe === v ? 'bg-amber-500 text-white' : 'text-slate-400 hover:bg-white/5'}`}
-                                                >
-                                                    {v}
-                                                </button>
-                                            ))}
+                                            {[...Object.values(Vibe), ...masterVibes.map(v => v.name)]
+                                                .filter((v, idx, self) => self.indexOf(v) === idx)
+                                                .map(v => (
+                                                    <button
+                                                        key={v}
+                                                        onClick={() => { setMassVibeMode('specific'); setMassVibe(v as any); setIsVibeOpen(false); }}
+                                                        className={`w-full text-left px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all ${massVibeMode === 'specific' && massVibe === v ? 'bg-amber-500 text-white' : 'text-slate-400 hover:bg-white/5'}`}
+                                                    >
+                                                        {v}
+                                                    </button>
+                                                ))}
                                         </div>
                                     )}
                                 </div>
