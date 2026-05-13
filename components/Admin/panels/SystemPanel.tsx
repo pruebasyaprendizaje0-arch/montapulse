@@ -49,7 +49,7 @@ export const SystemPanel: React.FC<SystemPanelProps> = ({ appConfig, aiConfig, s
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Maintenance Section */}
-                <div className="bg-neutral-900/50 border border-white/5 rounded-[2.5rem] p-8 shadow-xl">
+                <div className="bg-neutral-900/50 border border-white/5 rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-8 shadow-xl">
                     <div className="flex items-center gap-3 mb-8">
                         <div className="w-10 h-10 rounded-2xl bg-orange-500/10 flex items-center justify-center border border-orange-500/20">
                             <Settings className="w-5 h-5 text-orange-500" />
@@ -85,7 +85,7 @@ export const SystemPanel: React.FC<SystemPanelProps> = ({ appConfig, aiConfig, s
                 </div>
 
                 {/* AI Configuration Section */}
-                <div className="bg-neutral-900/50 border border-white/5 rounded-[2.5rem] p-8 shadow-xl">
+                <div className="bg-neutral-900/50 border border-white/5 rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-8 shadow-xl">
                     <div className="flex items-center gap-3 mb-8">
                         <div className="w-10 h-10 rounded-2xl bg-sky-500/10 flex items-center justify-center border border-sky-500/20">
                             <Cpu className="w-5 h-5 text-sky-500" />
@@ -141,7 +141,7 @@ export const SystemPanel: React.FC<SystemPanelProps> = ({ appConfig, aiConfig, s
             </div>
 
             {/* Infrastructure Monitor */}
-            <div className="bg-neutral-900/50 border border-white/5 rounded-[2.5rem] p-8 shadow-xl">
+            <div className="bg-neutral-900/50 border border-white/5 rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-8 shadow-xl">
                 <div className="flex items-center gap-3 mb-8">
                     <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
                         <Network className="w-5 h-5 text-emerald-500" />

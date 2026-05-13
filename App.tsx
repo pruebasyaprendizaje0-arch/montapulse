@@ -4,6 +4,7 @@ import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, 
 import { getToken } from 'firebase/messaging';
 import { messaging } from './firebase.config';
 import { saveFCMToken } from './services/firestoreService';
+import { PageLoader as PremiumLoader } from './components/common/PageLoader';
 
 // Lazy load heavy components
 const EventCard = lazy(() => import('./components/EventCard').then(m => ({ default: m.EventCard })));
@@ -27,12 +28,9 @@ const Plans = lazy(() => import('./pages/Plans').then(m => ({ default: m.Plans }
 
 const Policies = lazy(() => import('./pages/Policies').then(m => ({ default: m.Policies })));
 
-const PageLoader = () => (
-  <div className="flex items-center justify-center min-h-[50vh]">
-    <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-  </div>
-);
+const PageLoader = () => <PremiumLoader message="Iniciando MontaPulse..." />;
 import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan, BusinessCategory } from './types';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS, DEFAULT_NEW_LOCALITY_SECTORS } from './constants';
 import { getSmartRecommendations, generateEventDescription } from './services/geminiService';
 import { useAuthContext } from './context/AuthContext';
@@ -245,8 +243,14 @@ const Dashboard: React.FC = () => {
     else if (path === '/policies') setActiveView('policies');
   }, [location.pathname]);
 
-  // Sincronizar URL hacia el estado (al cargar o navegar directamente)
+  const urlToStateRef = React.useRef<string>('');
+  const initialLoadRef = React.useRef(true);
+  
+  // Sincronizar URL hacia el estado (solo al cargar la página, no cuando el usuario abre algo)
   React.useEffect(() => {
+    if (!initialLoadRef.current) return;
+    initialLoadRef.current = false;
+    
     const path = location.pathname;
     const searchParams = new URLSearchParams(location.search);
     
@@ -259,7 +263,8 @@ const Dashboard: React.FC = () => {
       }
     } else if (path.startsWith('/negocio/')) {
       const slug = path.replace('/negocio/', '');
-      if (slug && businesses.length > 0 && (!showPublicProfile || publicProfileId !== slug)) {
+      if (slug && businesses.length > 0) {
+        urlToStateRef.current = path;
         const business = businesses.find(b => b.slug === slug || b.id === slug);
         if (business) {
           setPublicProfileId(business.id);
@@ -276,7 +281,7 @@ const Dashboard: React.FC = () => {
        if (event) setSelectedEvent(event);
     }
     const bizId = searchParams.get('business');
-    if (bizId && businesses.length > 0 && !showPublicProfile) {
+    if (bizId && businesses.length > 0) {
        const biz = businesses.find(b => b.id === bizId);
        if (biz) {
          setPublicProfileId(biz.id);
@@ -284,37 +289,65 @@ const Dashboard: React.FC = () => {
          setShowPublicProfile(true);
        }
     }
-  }, [location.pathname, location.search, eventsWithLiveCounts, businesses]);
+  }, []);
 
+  const prevUrlRef = React.useRef<string>('');
+  const prevShowPublicProfileRef = React.useRef(false);
+  const businessesRef = React.useRef(businesses);
+  businessesRef.current = businesses;
+  
+  // Modal open prevention flag
+  const modalOpenBlockRef = React.useRef(false);
+  
+  // Block modal from opening if already open with same ID (prevents flicker)
+  React.useEffect(() => {
+    if (showPublicProfile && publicProfileId && modalOpenBlockRef.current) {
+      // Modal already open with different ID, don't reopen
+      modalOpenBlockRef.current = false;
+    } else if (!showPublicProfile) {
+      modalOpenBlockRef.current = false;
+    }
+  }, [showPublicProfile, publicProfileId]);
+  
   // Sincronizar estado hacia la URL (cuando se abren/cierran modales)
   React.useEffect(() => {
+    const currentPath = location.pathname;
+    
+    // Only run when modal actually opens/closes, not on every render
+    if (prevShowPublicProfileRef.current === showPublicProfile) {
+      if (prevUrlRef.current === currentPath) return;
+    }
+    prevShowPublicProfileRef.current = showPublicProfile;
+    
     if (selectedEvent) {
       const slug = selectedEvent.slug || selectedEvent.id;
-      if (!location.pathname.includes(`/evento/${slug}`)) {
+      if (!currentPath.includes(`/evento/${slug}`)) {
+         prevUrlRef.current = `/evento/${slug}`;
          window.history.replaceState(null, '', `/evento/${slug}`);
       }
     } else if (showPublicProfile && publicProfileType === 'business' && publicProfileId) {
-       const business = businesses.find(b => b.id === publicProfileId);
+       const business = businessesRef.current.find(b => b.id === publicProfileId);
        if (business) {
          const slug = business.slug || business.id;
-         if (!location.pathname.includes(`/negocio/${slug}`)) {
+         if (!currentPath.includes(`/negocio/${slug}`)) {
+            prevUrlRef.current = `/negocio/${slug}`;
             window.history.replaceState(null, '', `/negocio/${slug}`);
          }
        }
-    } else if (activeView === 'explore' && (location.pathname.startsWith('/evento/') || location.pathname.startsWith('/negocio/'))) {
+    } else if (activeView === 'explore' && (currentPath.startsWith('/evento/') || currentPath.startsWith('/negocio/'))) {
+       prevUrlRef.current = '/explore';
        window.history.replaceState(null, '', '/explore');
     }
-  }, [selectedEvent, showPublicProfile, publicProfileId, publicProfileType, activeView, businesses]);
+  }, [selectedEvent, showPublicProfile, publicProfileId, publicProfileType, activeView]);
 
   const [profileError, setProfileError] = useState<string | null>(null);
   const [managementTab, setManagementTab] = useState<'users' | 'businesses' | 'stats'>('users');
 
+  const resizeRefreshRef = React.useRef(false);
   React.useEffect(() => {
-    if (activeView === 'explore') {
-      const refresh = () => {
-        window.dispatchEvent(new Event('resize'));
-      };
-      [10, 150, 400, 800, 1500].forEach(delay => setTimeout(refresh, delay));
+    if (activeView === 'explore' && !resizeRefreshRef.current) {
+      resizeRefreshRef.current = true;
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
     }
   }, [activeView]);
 
@@ -430,28 +463,81 @@ const Dashboard: React.FC = () => {
   const renderView = () => {
     switch (activeView) {
       case 'explore':
-        return <Suspense fallback={<PageLoader />}><Explore
-          onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)}
-          userBusinessId={userBusiness?.id}
-        /></Suspense>;
+        return (
+          <ErrorBoundary name="Explore">
+            <Suspense fallback={<PageLoader />}>
+              <Explore
+                onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)}
+                userBusinessId={userBusiness?.id}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'calendar':
-        return <Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>;
+        return (
+          <ErrorBoundary name="Calendar">
+            <Suspense fallback={<PageLoader />}>
+              <CalendarPage />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'favorites':
-        return <Suspense fallback={<PageLoader />}><Passport onNavigate={setActiveView} /></Suspense>;
+        return (
+          <ErrorBoundary name="Passport">
+            <Suspense fallback={<PageLoader />}>
+              <Passport onNavigate={setActiveView} />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'history':
-        return <Suspense fallback={<PageLoader />}><History /></Suspense>;
+        return (
+          <ErrorBoundary name="History">
+            <Suspense fallback={<PageLoader />}>
+              <History />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'plans':
-        return <Suspense fallback={<PageLoader />}><Plans /></Suspense>;
+        return (
+          <ErrorBoundary name="Plans">
+            <Suspense fallback={<PageLoader />}>
+              <Plans />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'community':
       case 'chat':
-        return <Suspense fallback={<PageLoader />}><Notifications /></Suspense>;
-
+        return (
+          <ErrorBoundary name="Community">
+            <Suspense fallback={<PageLoader />}>
+              <Notifications />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'policies':
-        return <Suspense fallback={<PageLoader />}><Policies /></Suspense>;
+        return (
+          <ErrorBoundary name="Policies">
+            <Suspense fallback={<PageLoader />}>
+              <Policies />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'info':
-        return <Suspense fallback={<PageLoader />}><InfoPage /></Suspense>;
+        return (
+          <ErrorBoundary name="Info">
+            <Suspense fallback={<PageLoader />}>
+              <InfoPage />
+            </Suspense>
+          </ErrorBoundary>
+        );
       default:
-        return <Suspense fallback={<PageLoader />}><Explore onEditBusiness={handleEditBusiness} /></Suspense>;
+        return (
+          <ErrorBoundary name="Default Explore">
+            <Suspense fallback={<PageLoader />}>
+              <Explore onEditBusiness={handleEditBusiness} />
+            </Suspense>
+          </ErrorBoundary>
+        );
     }
   };
 
@@ -551,7 +637,11 @@ const Dashboard: React.FC = () => {
       <BottomNav />
 
       {showBusinessReg && (
-        <Suspense fallback={<PageLoader />}>
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        }>
           <BusinessEditModal
             isRegistration
             onClose={() => {
@@ -805,10 +895,14 @@ const Dashboard: React.FC = () => {
 
       {/* Global Pulse Window FAB */}
       {!isEditorFocus && (
-        <div className="fixed bottom-36 right-6 z-50 animate-in slide-in-from-right duration-500 delay-150">
+        <div className="fixed bottom-36 right-6 z-[1100] animate-in slide-in-from-right duration-500 delay-150">
           <button
             onClick={() => setShowPulseModal(true)}
-            className="group relative w-16 h-16 bg-[#111111] border-2 border-orange-500/30 rounded-2xl flex flex-col items-center justify-center shadow-[0_20px_50px_rgba(0,0,0,0.8)] transition-all hover:scale-110 active:scale-95 hover:border-orange-500 hover:shadow-[0_20px_60px_rgba(249,115,22,0.3)] overflow-hidden"
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setShowPulseModal(true);
+            }}
+            className="group relative w-16 h-16 bg-[#111111] border-2 border-orange-500/30 rounded-2xl flex flex-col items-center justify-center shadow-[0_20px_50px_rgba(0,0,0,0.8)] transition-all hover:scale-110 active:scale-95 hover:border-orange-500 hover:shadow-[0_20px_60px_rgba(249,115,22,0.3)] overflow-hidden cursor-pointer"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-amber-500/10 opacity-50" />
             <Activity className="w-6 h-6 text-orange-500 mb-1 group-hover:animate-pulse" />
@@ -825,7 +919,7 @@ const Dashboard: React.FC = () => {
 
       {/* Global Login Modal Overlay */}
       {showLogin && !user && (
-        <div className="fixed inset-0 z-[3000] bg-slate-900/90 backdrop-blur-xl animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl animate-in fade-in duration-300">
           <Suspense fallback={<PageLoader />}>
             <LoginScreen />
           </Suspense>
@@ -845,10 +939,16 @@ const Dashboard: React.FC = () => {
 
       {/* Event Modal with Navigation */}
       {selectedEvent && (
-        <Suspense fallback={<PageLoader />}>
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[4000] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        }>
           <EventModal
-            event={events.find(e => e.id === selectedEvent.id) || selectedEvent}
+            key={selectedEvent.id}
+            event={selectedEvent}
             business={businesses.find(b => b.id === selectedEvent.businessId)}
+            dataLoading={loading}
             onClose={() => setSelectedEvent(null)}
             onNext={navigateToNextEvent}
             onPrevious={navigateToPreviousEvent}
@@ -872,7 +972,11 @@ const Dashboard: React.FC = () => {
 
       {/* Public Profile Modal */}
       {showPublicProfile && (
-        <Suspense fallback={<PageLoader />}>
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[4000] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        }>
           <PublicProfileModal
             isOpen={showPublicProfile}
             onClose={() => {
@@ -881,6 +985,7 @@ const Dashboard: React.FC = () => {
             }}
             businessId={publicProfileType === 'business' ? publicProfileId || undefined : undefined}
             userId={publicProfileType === 'user' ? publicProfileId || undefined : undefined}
+            dataLoading={loading}
           />
         </Suspense>
       )}

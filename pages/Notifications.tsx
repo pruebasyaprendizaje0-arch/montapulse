@@ -27,7 +27,7 @@ export const Notifications: React.FC = () => {
     const { showToast } = useToast();
     const {
         notifications, markAsRead, businesses, businessFollowers: contextFollowers = [],
-        events, masterVibes = [], masterLocalities = []
+        events, masterVibes = [], customLocalities = []
     } = useData();
 
     // Announce modal state
@@ -161,7 +161,7 @@ export const Notifications: React.FC = () => {
 
                 // Check if it's an active event/pulse
                 let isActive = false;
-                const postId = n.metadata?.postId || (n as any).postId; // Handle both notification formats
+                const postId = (n as any).metadata?.postId || (n as any).postId; // Handle both notification formats
                 if (postId) {
                     const event = events.find(e => e.id === postId);
                     if (event) {
@@ -540,9 +540,9 @@ export const Notifications: React.FC = () => {
                                             >
                                                 Todas las localidades
                                             </button>
-                                            {[...LOCALITIES, ...masterLocalities].map(l => (
+                                            {[...LOCALITIES, ...customLocalities].filter((l, i, arr) => arr.findIndex(x => x.name === l.name) === i).map(l => (
                                                 <button
-                                                    key={l.name}
+                                                    key={(l as any).id || l.name}
                                                     onClick={() => { setMassLocalityMode('specific'); setMassLocality(l.name); setIsLocalityOpen(false); }}
                                                     className={`w-full text-left px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all ${massLocalityMode === 'specific' && massLocality === l.name ? 'bg-cyan-500 text-white' : 'text-slate-400 hover:bg-white/5'}`}
                                                 >

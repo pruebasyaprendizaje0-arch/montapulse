@@ -1,7 +1,8 @@
 import React from 'react';
 import { X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings, Share2 } from 'lucide-react';
-import { MontanitaEvent, Business, Sector } from '../types.ts';
-import { SECTOR_INFO, BASE_URL } from '../constants.ts';
+import { MontanitaEvent, Business, Sector } from '../types';
+import { Skeleton } from './Skeleton';
+import { SECTOR_INFO, BASE_URL } from '../constants';
 import { useToast } from '../context/ToastContext';
 import { useSEO } from '../hooks/useSEO';
 
@@ -20,7 +21,9 @@ interface EventModalProps {
     onEditBusiness?: (id: string) => void;
     onRsvp?: () => void;
     isRsvp?: boolean;
+    dataLoading?: boolean;
 }
+
 
 export const EventModal: React.FC<EventModalProps> = ({
     event,
@@ -35,18 +38,46 @@ export const EventModal: React.FC<EventModalProps> = ({
     onDelete,
     onEditBusiness,
     onRsvp,
-    isRsvp
+    isRsvp,
+    dataLoading
 }) => {
-    const sectorStyle = SECTOR_INFO[event.sector] || SECTOR_INFO[Sector.CENTRO];
-    const eventDate = new Date(event.startAt);
-    const eventEndDate = event.endAt ? new Date(event.endAt) : null;
+    const [imgError, setImgError] = React.useState(false);
+    const { showToast, showConfirm } = useToast();
 
     useSEO({
-      title: event.title,
-      description: event.description || `Descubre el evento ${event.title} en ubicame.info PULSE.`,
-      image: event.imageUrl,
-      url: BASE_URL + window.location.pathname
+        title: event?.title || 'Evento',
+        description: event?.description || `Descubre el evento en ubicame.info PULSE.`,
+        image: event?.imageUrl,
+        url: BASE_URL + window.location.pathname
     });
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'ArrowRight' && hasNext) onNext?.();
+            if (e.key === 'ArrowLeft' && hasPrevious) onPrevious?.();
+            if (e.key === 'Escape') onClose();
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [hasNext, hasPrevious, onNext, onPrevious, onClose]);
+
+    if (!event) return null;
+
+    const sectorStyle = SECTOR_INFO[event.sector] || SECTOR_INFO[Sector.CENTRO];
+
+    // Safe date parsing
+    let eventDate: Date;
+    try {
+        eventDate = event.startAt instanceof Date ? event.startAt : new Date(event.startAt);
+    } catch { eventDate = new Date(); }
+
+    let eventEndDate: Date | null = null;
+    if (event.endAt) {
+        try {
+            eventEndDate = event.endAt instanceof Date ? event.endAt : new Date(event.endAt);
+        } catch { eventEndDate = null; }
+    }
 
     const formatDate = (date: Date) => {
         const day = date.getDate();
@@ -62,8 +93,6 @@ export const EventModal: React.FC<EventModalProps> = ({
         });
     };
 
-    const { showToast, showConfirm } = useToast();
-
     const handleWhatsApp = () => {
         if (business?.phone || business?.whatsapp) {
             const phone = business.whatsapp || business.phone;
@@ -75,7 +104,7 @@ export const EventModal: React.FC<EventModalProps> = ({
         const shareData = {
             title: event.title,
             text: `¡Mira este evento en ubicame.info Pulse!
-            
+
 📅 ${event.title}
 📍 Lugar: ${business?.name || 'Local'}
 🌍 Localidad: ${business?.locality || 'Montañita'}
@@ -102,51 +131,52 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
     };
 
 
-    // Keyboard Shortcuts
-    React.useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'ArrowRight' && hasNext) onNext?.();
-            if (e.key === 'ArrowLeft' && hasPrevious) onPrevious?.();
-            if (e.key === 'Escape') onClose();
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [hasNext, hasPrevious, onNext, onPrevious, onClose]);
-
-    // Import CheckCircle and Zap if not already imported, for now assume MessageCircle/Users are available
-    // Actually lines 2 import: X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings
-    // We can use Users or CheckCircle (add to imports in separate edit if strictly needed, but Zap is good for Pulse)
-
     return (
         <div
-            className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-end justify-center animate-in fade-in duration-300"
+            className="fixed inset-0 z-[4000] bg-black/80 flex items-end justify-center"
             onClick={onClose}
         >
             <div
-                className="w-full max-w-2xl bg-slate-900 rounded-t-[3rem] overflow-hidden max-h-[95vh] overflow-y-auto animate-in slide-in-from-bottom duration-500"
+                className="w-full max-w-2xl bg-slate-900 rounded-t-[3rem] overflow-hidden max-h-[90dvh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
+                style={{
+                    willChange: 'transform',
+                    transform: 'translateZ(0)',
+                    contain: 'layout style paint'
+                }}
             >
                 {/* Header with Image */}
                 <div className="relative h-96">
-                    <img
-                        src={event.imageUrl}
-                        alt={event.title}
-                        className="w-full h-full object-cover"
-                    />
+                    {/* Fallback gradient - always visible */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-violet-900/60 via-slate-900 to-pink-900/40" />
+
+                    {/* Actual image - overlays the gradient */}
+                    {event.imageUrl && !imgError ? (
+                        <img
+                            src={event.imageUrl}
+                            alt={event.title}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            loading="lazy"
+                            onLoad={(e) => {
+                                e.currentTarget.style.opacity = '1';
+                            }}
+                            onError={() => setImgError(true)}
+                            style={{ opacity: 0, transition: 'opacity 0.3s ease' }}
+                        />
+                    ) : null}
 
                     {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
 
                     {/* Action Buttons */}
-                    <div className="absolute top-6 right-6 flex gap-2 z-[2010]">
+                    <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex gap-2 z-[2010]">
                         {isAdmin && (
                             <>
                                 <button
                                     onClick={() => onEdit?.(event)}
-                                    className="w-14 h-14 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform border-4 border-slate-900"
+                                    className="w-10 h-10 sm:w-14 sm:h-14 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform border-2 sm:border-4 border-slate-900"
                                 >
-                                    <Edit3 className="w-6 h-6" />
+                                    <Edit3 className="w-5 h-5 sm:w-6 sm:h-6" />
                                 </button>
                                 <button
                                     onClick={async () => {
@@ -154,9 +184,9 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                             onDelete?.(event.id);
                                         }
                                     }}
-                                    className="w-14 h-14 bg-orange-500/20 text-orange-500 border-2 border-orange-500/20 rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
+                                    className="w-10 h-10 sm:w-14 sm:h-14 bg-orange-500/20 text-orange-500 border border-orange-500/20 rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
                                 >
-                                    <Trash2 className="w-6 h-6" />
+                                    <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
                                 </button>
                             </>
                         )}
@@ -165,20 +195,19 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                 e.stopPropagation();
                                 handleShare();
                             }}
-                            className="w-14 h-14 bg-white/10 backdrop-blur-xl text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all border-4 border-slate-900 group"
+                            className="w-10 h-10 sm:w-14 sm:h-14 bg-white/10 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all border-2 sm:border-4 border-slate-900 group"
                         >
-                            <Share2 className="w-6 h-6 group-hover:text-orange-400 transition-colors" />
+                            <Share2 className="w-5 h-5 sm:w-6 sm:h-6 group-hover:text-orange-400 transition-colors" />
                         </button>
                         <button
                             onClick={onClose}
-                            className="w-14 h-14 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all border-4 border-slate-900"
+                            className="w-10 h-10 sm:w-14 sm:h-14 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all border-2 sm:border-4 border-slate-900"
                         >
-                            <X className="w-6 h-6 stroke-[3px]" />
+                            <X className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3px]" />
                         </button>
-
                     </div>
 
-                    {/* Navigation Buttons - Screen Sides (Shifted to be visible over whole modal) */}
+                    {/* Navigation Buttons */}
                     <div className="fixed inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-4 z-[2020] pointer-events-none max-w-2xl mx-auto w-full">
                         {hasPrevious && onPrevious ? (
                             <button
@@ -186,7 +215,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                     e.stopPropagation();
                                     onPrevious();
                                 }}
-                                className="pointer-events-auto p-5 bg-white/20 backdrop-blur-3xl rounded-full border border-white/30 hover:bg-white/30 active:scale-90 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)] group"
+                                className="pointer-events-auto p-5 bg-white/20 rounded-full border border-white/30 hover:bg-white/30 active:scale-90 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)] group"
                             >
                                 <ChevronLeft className="w-10 h-10 text-white group-hover:-translate-x-1 transition-transform" />
                             </button>
@@ -198,7 +227,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                     e.stopPropagation();
                                     onNext();
                                 }}
-                                className="pointer-events-auto p-5 bg-white/20 backdrop-blur-3xl rounded-full border border-white/30 hover:bg-white/30 active:scale-90 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)] group"
+                                className="pointer-events-auto p-5 bg-white/20 rounded-full border border-white/30 hover:bg-white/30 active:scale-90 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)] group"
                             >
                                 <ChevronRight className="w-10 h-10 text-white group-hover:translate-x-1 transition-transform" />
                             </button>
@@ -210,7 +239,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                         <div className="px-4 py-2 bg-amber-400 text-black text-xs font-black uppercase rounded-xl shadow-xl">
                             {event.vibe}
                         </div>
-                        <div className={`px-4 py-2 ${sectorStyle.bg} ${sectorStyle.color} text-xs font-black uppercase rounded-xl border ${sectorStyle.color.replace('text-', 'border-')}/30 backdrop-blur-md`}>
+                        <div className={`px-4 py-2 ${sectorStyle.bg} ${sectorStyle.color} text-xs font-black uppercase rounded-xl border ${sectorStyle.color.replace('text-', 'border-')}/30`}>
                             {Object.values(Sector).includes(event.sector as any) ? event.sector : (business?.sector || '')}
                         </div>
                     </div>
@@ -221,16 +250,15 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                             {event.title}
                         </h1>
 
-                        {/* Centered Description */}
                         {event.description && (
                             <p className="text-slate-200 text-sm font-medium leading-relaxed max-w-[70%] mb-6">
                                 {event.description}
                             </p>
                         )}
 
-                        {business && (
+                        {business ? (
                             <div className="flex items-center gap-3 mb-2">
-                                <div className="relative group/biz">
+                                <div className="relative group">
                                     <img
                                         src={business.imageUrl}
                                         alt={business.name}
@@ -239,7 +267,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                     {isAdmin && (
                                         <button
                                             onClick={() => onEditBusiness?.(business.id)}
-                                            className="absolute -top-1 -right-1 bg-orange-500 p-1.5 rounded-lg shadow-lg opacity-0 group-hover/biz:opacity-100 transition-opacity"
+                                            className="absolute -top-1 -right-1 bg-orange-500 p-1.5 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
                                         >
                                             <Settings className="w-3 h-3 text-white" />
                                         </button>
@@ -260,15 +288,21 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                     </div>
                                 </div>
                             </div>
-                        )}
+                        ) : dataLoading ? (
+                            <div className="flex items-center gap-3 mb-2">
+                                <Skeleton className="w-10 h-10 rounded-full" />
+                                <div className="flex flex-col gap-1">
+                                    <Skeleton className="w-16 h-2" />
+                                    <Skeleton className="w-24 h-4" />
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="p-8 pt-4 space-y-6">
-
-                    {/* Event Details Grid */}
-                    <div className="grid grid-cols-2 gap-4">
+                {/* Content - SIN ANIMACIONES PARA EVITAR PROBLEMAS EN MOVIL */}
+                <div className="p-8 pt-4">
+                    <div className="grid grid-cols-2 gap-4 mb-6">
                         <div className="bg-slate-800/50 rounded-2xl p-4 border border-white/5">
                             <div className="flex items-center gap-3 mb-2">
                                 <div className="p-2 bg-orange-500/10 rounded-xl">
@@ -296,8 +330,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                         </div>
                     </div>
 
-                    {/* Interest Count */}
-                    <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/10 rounded-2xl p-6 border border-orange-500/20">
+                    <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/10 rounded-2xl p-6 border border-orange-500/20 mb-6">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-orange-500 rounded-2xl">
@@ -311,18 +344,15 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                         </div>
                     </div>
 
-                    {/* Contact Buttons */}
+                    {/* Botón RSVP */}
                     <div className="pt-4">
-                        {/* MAIN ACTION: SENTIR EL PULSO (RSVP) */}
                         <button
                             onClick={onRsvp}
-                            className={`w-full py-5 font-black rounded-[2rem] shadow-2xl transition-all flex items-center justify-center gap-3 uppercase tracking-wider relative overflow-hidden group ${isRsvp
-                                ? 'bg-emerald-500 text-white shadow-emerald-500/40 hover:bg-emerald-400'
-                                : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-orange-500/30 hover:shadow-orange-500/50'}`}
+                            className={`w-full py-5 font-black rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 uppercase tracking-wider relative overflow-hidden group ${isRsvp
+                                ? 'bg-emerald-500 text-white shadow-emerald-500/40'
+                                : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-orange-500/30'
+                                }`}
                         >
-                            {/* Animated Pulse Ring if NOT rsvp */}
-                            {!isRsvp && <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity animate-pulse"></div>}
-
                             {isRsvp ? (
                                 <>
                                     <Users className="w-6 h-6" />
@@ -343,7 +373,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                     href={`https://wa.me/${business.whatsapp}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-2 px-6 py-3 bg-green-500/10 text-green-400 rounded-full border border-green-500/20 hover:bg-green-500/20 transition-all"
+                                    className="flex items-center gap-2 px-6 py-3 bg-green-500/10 text-green-400 rounded-full border border-green-500/20"
                                 >
                                     <MessageCircle className="w-4 h-4" />
                                     <span className="font-bold text-sm">WhatsApp</span>

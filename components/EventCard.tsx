@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Clock, Users, Flame, Star, MapPin } from 'lucide-react';
-import { MontanitaEvent, Sector, Vibe } from '../types.ts';
-import { SECTOR_INFO } from '../constants.ts';
-import { Skeleton } from './Skeleton.tsx';
+import { MontanitaEvent, Sector, Vibe } from '../types';
+import { SECTOR_INFO } from '../constants';
+import { Skeleton } from './Skeleton';
 import { incrementEventClickCount } from '../services/firestoreService';
 import { getEcuadorDate } from '../utils/timeUtils';
 
@@ -14,8 +14,9 @@ interface EventCardProps {
   isRsvp?: boolean;
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ event, locality, onClick, onRsvp, isRsvp }) => {
+export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp }: EventCardProps) => {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const sectorStyle = SECTOR_INFO[event.sector] || SECTOR_INFO[Sector.CENTRO];
 
   const isEventLive = () => {
@@ -53,18 +54,36 @@ export const EventCard: React.FC<EventCardProps> = ({ event, locality, onClick, 
       {isLive && (
         <div className="absolute inset-0 rounded-[2.5rem] ring-2 ring-red-500 animate-pulse pointer-events-none z-10" />
       )}
-      
-      <div className="relative h-64">
-        {!isLoaded && <Skeleton className="w-full h-full" />}
-        <img
-          src={event.imageUrl}
-          alt={event.title}
-          onLoad={() => setIsLoaded(true)}
-          className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
-        />
+
+      {/* Imagen con contenedor de aspecto fijo */}
+      <div className="relative w-full aspect-video rounded-[2.5rem] overflow-hidden">
+        {/* Skeleton placeholder mientras carga */}
+        {!isLoaded && !hasError && (
+          <div className="absolute inset-0">
+            <Skeleton className="w-full h-full rounded-[2.5rem]" />
+          </div>
+        )}
+
+        {/* Imagen principal */}
+        {!hasError ? (
+          <img
+            src={event.imageUrl}
+            alt={event.title}
+            loading="lazy"
+            onLoad={() => setIsLoaded(true)}
+            onError={() => setHasError(true)}
+            className={`w-full h-full object-cover transition-opacity duration-500 ${
+              isLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+        ) : (
+          <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+            <span className="text-sm text-slate-400 px-4 text-center">Imagen no disponible</span>
+          </div>
+        )}
 
         {/* Overlay Gradients */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-black/20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent/60 to-black/20" />
 
         {/* Top Badges */}
         <div className="absolute top-4 left-4 flex gap-2 z-20">
@@ -103,7 +122,12 @@ export const EventCard: React.FC<EventCardProps> = ({ event, locality, onClick, 
               <div className="flex -space-x-2">
                 {[1, 2, 3].map(i => (
                   <div key={i} className="w-8 h-8 rounded-full border-2 border-slate-900 bg-slate-800 overflow-hidden ring-1 ring-white/10">
-                    <img src={`https://i.pravatar.cc/100?u=${i + event.id}`} className="w-full h-full object-cover" />
+                    <img
+                      src={`https://i.pravatar.cc/100?u=${i + event.id}`}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      alt="avatar"
+                    />
                   </div>
                 ))}
               </div>
@@ -129,4 +153,4 @@ export const EventCard: React.FC<EventCardProps> = ({ event, locality, onClick, 
       </div>
     </div>
   );
-};
+});

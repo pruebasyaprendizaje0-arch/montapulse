@@ -3,14 +3,7 @@ import { X, Ticket, CheckCircle, AlertTriangle, Clock, Loader2, ShieldCheck } fr
 import { Coupon } from '../../types';
 import { validateCoupon, obtainCoupon } from '../../services/couponService';
 
-// Conditional QR import - gracefully handles missing package
-let QRCodeSVG: any = null;
-try {
-    const qr = require('qrcode.react');
-    QRCodeSVG = qr.QRCodeSVG || qr.default;
-} catch {
-    // QR package not installed — will show code-only fallback
-}
+import { QRCodeSVG } from 'qrcode.react';
 
 interface CouponRedeemModalProps {
     isOpen: boolean;
@@ -27,6 +20,8 @@ export const CouponRedeemModal: React.FC<CouponRedeemModalProps> = ({
     const [step, setStep] = useState<'preview' | 'validating' | 'success' | 'error'>('preview');
     const [errorMsg, setErrorMsg] = useState('');
     const [reservationCode, setReservationCode] = useState('');
+    const [timeLeft, setTimeLeft] = useState(120); // 2 minutes
+    const [isRedeeming, setIsRedeeming] = useState(false);
 
     // QR payload
     const qrPayload = useMemo(() => JSON.stringify({
@@ -37,39 +32,48 @@ export const CouponRedeemModal: React.FC<CouponRedeemModalProps> = ({
         ts: Date.now()
     }), [coupon, userId, reservationCode]);
 
-    // Timer countdown for QR
+    // Timer countdown for success/QR view
     useEffect(() => {
-        if (step !== 'qr') return;
+        if (step !== 'success') return;
         const timer = setInterval(() => {
             setTimeLeft(prev => {
                 if (prev <= 1) {
                     clearInterval(timer);
-                    setStep('preview');
-                    setErrorMsg('El código QR expiró. Genera uno nuevo.');
+                    onClose(); // Automatically close when QR expires for security
                     return 0;
                 }
                 return prev - 1;
             });
         }, 1000);
         return () => clearInterval(timer);
-    }, [step]);
+    }, [step, onClose]);
 
     if (!isOpen) return null;
 
     const handleObtain = async () => {
         setStep('validating');
-        setErrorMsg('');
-        
-        const result = await obtainCoupon(coupon.id, coupon.code, userId, userName, coupon.businessId);
-        
-        if (result.success && result.reservationCode) {
-            setReservationCode(result.reservationCode);
-            setStep('success');
-        } else {
-            setErrorMsg(result.error || 'Error al obtener el cupón');
+        try {
+            const result = await obtainCoupon(
+                coupon.id,
+                coupon.code,
+                userId,
+                userName,
+                coupon.businessId
+            );
+
+            if (result.success && result.reservationCode) {
+                setReservationCode(result.reservationCode);
+                setStep('success');
+            } else {
+                setErrorMsg(result.error || 'No se pudo obtener el cupón');
+                setStep('error');
+            }
+        } catch (err: any) {
+            setErrorMsg(err.message || 'Error de conexión');
             setStep('error');
         }
     };
+
 
     const formatTime = (s: number) => {
         const m = Math.floor(s / 60);
@@ -159,62 +163,6 @@ export const CouponRedeemModal: React.FC<CouponRedeemModalProps> = ({
                         </div>
                     )}
 
-                    {/* QR step */}
-                    {step === 'qr' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="text-center">
-                                <h3 className="text-lg font-black text-white mb-1">Muestra este código al negocio</h3>
-                                <p className="text-[10px] text-slate-500">El negocio escaneará o ingresará el código para validar</p>
-                            </div>
-
-                            {/* QR Code */}
-                            <div className="flex justify-center">
-                                <div className="bg-white p-6 rounded-3xl shadow-2xl">
-                                    {QRCodeSVG ? (
-                                        <QRCodeSVG value={qrPayload} size={200} level="M" />
-                                    ) : (
-                                        <div className="w-[200px] h-[200px] bg-slate-100 rounded-2xl flex items-center justify-center">
-                                            <div className="text-center">
-                                                <Ticket className="w-12 h-12 text-slate-400 mx-auto mb-2" />
-                                                <p className="text-[10px] text-slate-500 font-bold">QR no disponible</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Redemption token */}
-                            <div className="bg-black/40 rounded-2xl p-4 border border-white/5 text-center">
-                                <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2">ID de Redención</p>
-                                <p className="text-sm font-black text-orange-400 font-mono tracking-wider">{redemptionToken}</p>
-                            </div>
-
-                            {/* Timer */}
-                            <div className="flex items-center justify-center gap-2">
-                                <Clock className={`w-4 h-4 ${timeLeft < 60 ? 'text-rose-400 animate-pulse' : 'text-slate-500'}`} />
-                                <span className={`text-sm font-black ${timeLeft < 60 ? 'text-rose-400' : 'text-slate-400'}`}>
-                                    Válido por {formatTime(timeLeft)}
-                                </span>
-                            </div>
-
-                            {/* Business validate button */}
-                            <button
-                                onClick={handleRedeem}
-                                disabled={isRedeeming}
-                                className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm uppercase tracking-widest rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
-                            >
-                                {isRedeeming ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                ) : (
-                                    <>
-                                        <ShieldCheck className="w-5 h-5" />
-                                        Confirmar Redención
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    )}
-
                     {/* Success step */}
                     {step === 'success' && (
                         <div className="space-y-6 animate-in zoom-in duration-500">
@@ -228,11 +176,11 @@ export const CouponRedeemModal: React.FC<CouponRedeemModalProps> = ({
 
                             {/* QR Code */}
                             <div className="flex justify-center">
-                                <div className="bg-white p-4 rounded-3xl shadow-2xl">
+                                <div className="bg-white p-4 rounded-[2rem] shadow-2xl shadow-black/50">
                                     {QRCodeSVG ? (
-                                        <QRCodeSVG value={qrPayload} size={180} level="M" />
+                                        <QRCodeSVG value={qrPayload} size={200} level="M" />
                                     ) : (
-                                        <div className="w-[180px] h-[180px] bg-slate-100 rounded-2xl flex items-center justify-center">
+                                        <div className="w-[200px] h-[200px] bg-slate-100 rounded-2xl flex items-center justify-center">
                                             <Ticket className="w-12 h-12 text-slate-400" />
                                         </div>
                                     )}
@@ -240,20 +188,20 @@ export const CouponRedeemModal: React.FC<CouponRedeemModalProps> = ({
                             </div>
 
                             {/* Reservation code */}
-                            <div className="bg-black/40 rounded-2xl p-4 border border-white/5 text-center">
-                                <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Código de Validación</p>
-                                <p className="text-2xl font-black text-orange-400 font-mono tracking-[0.2em]">{reservationCode}</p>
+                            <div className="bg-black/40 rounded-3xl p-5 border border-white/5 text-center">
+                                <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] mb-2">Código de Validación</p>
+                                <p className="text-3xl font-black text-orange-400 font-mono tracking-[0.25em]">{reservationCode}</p>
                             </div>
 
                             <div className="p-4 bg-orange-500/10 rounded-2xl border border-orange-500/20">
-                                <p className="text-[10px] text-orange-400 leading-relaxed text-center">
+                                <p className="text-[11px] text-orange-400/80 leading-relaxed text-center font-medium">
                                     Presenta este código o QR en el local para hacer efectivo tu descuento.
                                 </p>
                             </div>
 
                             <button
                                 onClick={onClose}
-                                className="w-full py-4 bg-white/10 hover:bg-white/15 text-white font-black text-xs uppercase tracking-widest rounded-2xl transition-all"
+                                className="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-black text-xs uppercase tracking-widest rounded-2xl transition-all border border-white/5"
                             >
                                 Entendido
                             </button>

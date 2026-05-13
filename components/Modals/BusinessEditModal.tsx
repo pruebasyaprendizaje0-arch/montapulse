@@ -284,7 +284,9 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                 }}
                                 className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none appearance-none transition-all"
                             >
-                                {[...LOCALITIES, ...(customLocalities || [])].map(l => (
+                                {[...LOCALITIES, ...(customLocalities || [])]
+                                    .filter((l, idx, self) => self.findIndex(x => x.name === l.name) === idx)
+                                    .map(l => (
                                     <option key={l.name} value={l.name}>{l.name}</option>
                                 ))}
                             </select>

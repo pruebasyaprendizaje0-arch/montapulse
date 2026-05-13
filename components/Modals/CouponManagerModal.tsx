@@ -8,18 +8,13 @@ import {
 } from '../../services/couponService';
 import { createNotification } from '../../services/firestoreService';
 import { CouponCard } from '../Coupons/CouponCard';
+import { QRScanner } from '../Coupons/QRScanner';
 import { useToast } from '../../context/ToastContext';
 import { useData } from '../../context/DataContext';
 import { useAuthContext } from '../../context/AuthContext';
 import { ensureDate } from '../../services/dateUtils';
 
-// Temporary placeholder for QRScanner during stabilization
-const PlaceholderScanner = ({ onScanSuccess }: { onScanSuccess: (code: string) => void }) => (
-    <div className="p-8 border-2 border-dashed border-white/10 rounded-3xl text-center">
-        <QrCode className="w-12 h-12 text-slate-700 mx-auto mb-2" />
-        <p className="text-[10px] font-black text-slate-500 uppercase">Scanner habilitado (Usa el botón manual para pruebas)</p>
-    </div>
-);
+// QR scanner component removed - now using imported QRScanner
 
 interface CouponManagerModalProps {
     isOpen: boolean;
@@ -57,8 +52,12 @@ const CouponManagerModal: React.FC<CouponManagerModalProps> = ({ isOpen, onClose
 
     useEffect(() => {
         if (!isOpen || !business?.id) return;
-        const unsubCoupons = subscribeToBusinessCoupons(business.id, setCoupons);
-        const unsubRedemptions = subscribeToCouponRedemptions(business.id, setRedemptions);
+        
+        // Initial cleanup of expired redemptions
+        cleanupExpiredRedemptions(business.id).catch(console.error);
+
+        const unsubCoupons = subscribeToBusinessCoupons(business.id, setCoupons, business.ownerId);
+        const unsubRedemptions = subscribeToCouponRedemptions(business.id, setRedemptions, business.ownerId);
         return () => {
             unsubCoupons();
             unsubRedemptions();
@@ -99,6 +98,7 @@ const CouponManagerModal: React.FC<CouponManagerModalProps> = ({ isOpen, onClose
                 ...form,
                 businessId: business.id,
                 businessName: business.name,
+                ownerId: business.ownerId || user?.id || '',
                 isActive: true,
                 expiresAt: form.expiresAt ? new Date(form.expiresAt).getTime() : null,
             };
@@ -380,7 +380,26 @@ const CouponManagerModal: React.FC<CouponManagerModalProps> = ({ isOpen, onClose
                             <div className="max-w-xs mx-auto space-y-4">
                                 <input type="text" value={validationCode} onChange={e => setValidationCode(e.target.value.toUpperCase())} placeholder="MT-XXXXX"
                                     className="w-full bg-white/5 border-2 border-emerald-500/20 rounded-3xl px-6 py-6 text-white font-mono text-3xl font-black text-center outline-none" />
-                                <PlaceholderScanner onScanSuccess={handleValidateCode} />
+                                
+                                <div className="py-4">
+                                    <div className="flex items-center gap-2 mb-4 justify-center">
+                                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                                        <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Escaneo en Vivo</p>
+                                    </div>
+                                    <QRScanner onScanSuccess={(text) => {
+                                        try {
+                                            const data = JSON.parse(text);
+                                            if (data.reservationCode) {
+                                                setValidationCode(data.reservationCode);
+                                                handleValidateCode(data.reservationCode);
+                                            }
+                                        } catch (e) {
+                                            // Maybe it's just the raw code
+                                            setValidationCode(text);
+                                            handleValidateCode(text);
+                                        }
+                                    }} />
+                                </div>
                                 <button onClick={() => handleValidateCode()} disabled={isLoading || !validationCode.trim()} className="w-full py-4 bg-emerald-500 text-black font-black uppercase rounded-2xl flex items-center justify-center gap-2">
                                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Validar
                                 </button>
@@ -388,15 +407,50 @@ const CouponManagerModal: React.FC<CouponManagerModalProps> = ({ isOpen, onClose
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            <h3 className="text-lg font-black text-white italic">Métricas</h3>
+                            <h3 className="text-lg font-black text-white italic">Métricas de Rendimiento</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="p-6 bg-emerald-500/5 rounded-[2rem] border border-emerald-500/10">
                                     <p className="text-[10px] font-black text-emerald-500 uppercase mb-2">Canjes Reales</p>
                                     <p className="text-3xl font-black text-white italic">{totalRedeemed}</p>
                                 </div>
                                 <div className="p-6 bg-sky-500/5 rounded-[2rem] border border-sky-500/10">
-                                    <p className="text-[10px] font-black text-sky-400 uppercase mb-2">Impacto</p>
-                                    <p className="text-3xl font-black text-white italic">${redemptions.filter(r => r.status === 'redeemed').reduce((acc, r) => acc + (r.couponType === 'fixed_amount' ? r.couponValue : 0), 0).toFixed(0)}</p>
+                                    <p className="text-[10px] font-black text-sky-400 uppercase mb-2">Tasa de Canje</p>
+                                    <p className="text-3xl font-black text-white italic">
+                                        {redemptions.length > 0 
+                                            ? Math.round((totalRedeemed / redemptions.length) * 100) 
+                                            : 0}%
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Rendimiento por Cupón</h4>
+                                <div className="space-y-2">
+                                    {coupons.map(coupon => {
+                                        const cRedemptions = redemptions.filter(r => r.couponId === coupon.id);
+                                        const cRedeemed = cRedemptions.filter(r => r.status === 'redeemed').length;
+                                        if (cRedemptions.length === 0) return null;
+
+                                        return (
+                                            <div key={coupon.id} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-xs font-bold text-white">{coupon.description || 'Sin título'}</p>
+                                                    <p className="text-[8px] text-slate-500 uppercase tracking-tighter">{coupon.code}</p>
+                                                </div>
+                                                <div className="flex gap-4 items-center">
+                                                    <div className="text-right">
+                                                        <p className="text-[10px] font-black text-white">{cRedeemed}</p>
+                                                        <p className="text-[7px] text-emerald-500 font-bold uppercase">Canjes</p>
+                                                    </div>
+                                                    <div className="w-px h-6 bg-white/10" />
+                                                    <div className="text-right">
+                                                        <p className="text-[10px] font-black text-white">{cRedemptions.length}</p>
+                                                        <p className="text-[7px] text-orange-500 font-bold uppercase">Reservas</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    }).filter(Boolean).slice(0, 5)}
                                 </div>
                             </div>
                         </div>

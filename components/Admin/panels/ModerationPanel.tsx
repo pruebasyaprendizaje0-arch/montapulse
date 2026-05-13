@@ -2,10 +2,9 @@ import React from 'react';
 import { Trash2, ShieldAlert, Clock, User } from 'lucide-react';
 import { useData } from '../../../context/DataContext';
 import { useToast } from '../../../context/ToastContext';
-import { deletePost } from '../../../services/firestoreService';
 
 export const ModerationPanel: React.FC = () => {
-    const { posts } = useData();
+    const { posts, handleDeletePost } = useData();
     const { showToast, showConfirm } = useToast();
 
     return (
@@ -41,7 +40,7 @@ export const ModerationPanel: React.FC = () => {
                                         </div>
                                         <div className="flex items-center gap-1.5 text-[9px] text-slate-500 font-black uppercase tracking-widest">
                                             <Clock className="w-3 h-3" />
-                                            <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                                            <span>{post.timestamp ? new Date(post.timestamp).toLocaleDateString() : 'N/A'}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -49,8 +48,7 @@ export const ModerationPanel: React.FC = () => {
                             <button 
                                 onClick={async () => {
                                     if (await showConfirm("¿Eliminar este post definitivamente?", "Moderación")) {
-                                        await deletePost(post.id);
-                                        showToast("Post eliminado", "success");
+                                        await handleDeletePost(post.id);
                                     }
                                 }}
                                 className="p-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 rounded-2xl border border-rose-500/20 transition-all shadow-lg shadow-rose-500/5"

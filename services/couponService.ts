@@ -50,11 +50,11 @@ export const generateCouponCode = (): string => {
 /**
  * Subscribe to all coupons for a specific business (real-time)
  */
-export const subscribeToBusinessCoupons = (businessId: string, callback: (coupons: Coupon[]) => void) => {
-    const q = query(
-        collection(db, 'coupons'),
-        where('businessId', '==', businessId)
-    );
+export const subscribeToBusinessCoupons = (businessId: string, callback: (coupons: Coupon[]) => void, ownerId?: string) => {
+    const constraints = [where('businessId', '==', businessId)];
+    if (ownerId) constraints.push(where('ownerId', '==', ownerId));
+    
+    const q = query(collection(db, 'coupons'), ...constraints);
     return onSnapshot(q, (snapshot) => {
         const items = snapshot.docs.map(doc => ({ 
             id: doc.id, 
@@ -103,11 +103,11 @@ export const subscribeToPublicCoupons = (callback: (coupons: Coupon[]) => void) 
 /**
  * Subscribe to redemptions for a specific business
  */
-export const subscribeToCouponRedemptions = (businessId: string, callback: (redemptions: CouponRedemption[]) => void) => {
-    const q = query(
-        collection(db, 'couponRedemptions'),
-        where('businessId', '==', businessId)
-    );
+export const subscribeToCouponRedemptions = (businessId: string, callback: (redemptions: CouponRedemption[]) => void, ownerId?: string) => {
+    const constraints = [where('businessId', '==', businessId)];
+    if (ownerId) constraints.push(where('ownerId', '==', ownerId));
+
+    const q = query(collection(db, 'couponRedemptions'), ...constraints);
     return onSnapshot(q, (snapshot) => {
         const items = snapshot.docs.map(doc => ({ 
             id: doc.id, 
@@ -184,9 +184,11 @@ export const createCoupon = async (data: Omit<Coupon, 'id' | 'createdAt' | 'curr
         const docRef = await addDoc(colRef, {
             ...sanitizeData(data),
             code: data.code.toUpperCase().trim(),
+            ownerId: data.ownerId, // Asegurar que se guarde el ownerId para las reglas de seguridad
             currentUses: 0,
             createdAt: serverTimestamp(),
         });
+
 
         // Async: Notify followers
         try {
@@ -402,6 +404,7 @@ export const obtainCoupon = async (
             businessId,
             businessName: business?.name || 'Negocio',
             businessLogo: business?.imageUrl || '',
+            ownerId: business?.ownerId || '',
             status: 'reserved',
             reservationCode,
             reservedAt: serverTimestamp(),
@@ -497,14 +500,29 @@ export const confirmRedemption = async (
  */
 export const cleanupExpiredRedemptions = async (userId?: string, businessId?: string): Promise<number> => {
     try {
-        let q = query(
-            collection(db, 'couponRedemptions'),
-            where('status', '==', 'reserved'),
-            where('expiresAt', '<=', Timestamp.now())
-        );
+        let q;
+        if (userId) {
+            q = query(
+                collection(db, 'couponRedemptions'),
+                where('status', '==', 'reserved'),
+                where('userId', '==', userId),
+                where('expiresAt', '<=', Timestamp.now())
+            );
+        } else if (businessId) {
+            q = query(
+                collection(db, 'couponRedemptions'),
+                where('status', '==', 'reserved'),
+                where('businessId', '==', businessId),
+                where('expiresAt', '<=', Timestamp.now())
+            );
+        } else {
+            q = query(
+                collection(db, 'couponRedemptions'),
+                where('status', '==', 'reserved'),
+                where('expiresAt', '<=', Timestamp.now())
+            );
+        }
 
-        if (userId) q = query(q, where('userId', '==', userId));
-        if (businessId) q = query(q, where('businessId', '==', businessId));
 
         const snap = await getDocs(q);
         if (snap.empty) return 0;

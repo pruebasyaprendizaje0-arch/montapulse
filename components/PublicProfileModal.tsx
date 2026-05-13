@@ -27,13 +27,15 @@ interface PublicProfileModalProps {
     onClose: () => void;
     businessId?: string;
     userId?: string;
+    dataLoading?: boolean;
 }
 
-export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
+export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
     isOpen,
     onClose,
     businessId,
-    userId
+    userId,
+    dataLoading
 }) => {
     const { businesses, events, allUsers, handleToggleFollow, isBusinessFollowed, setPublicProfileId, setPublicProfileType, setShowPublicProfile } = useData();
     const { user: currentUser } = useAuthContext();
@@ -41,6 +43,16 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     const [reviews, setReviews] = useState<ProfileReview[]>([]);
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    const isMountedRef = React.useRef(false);
+    const lastOpenTimeRef = React.useRef(0);
+    
+    React.useEffect(() => {
+        if (isOpen && !isMountedRef.current) {
+            isMountedRef.current = true;
+            lastOpenTimeRef.current = Date.now();
+        }
+    }, [isOpen]);
 
     const [fetchedUser, setFetchedUser] = useState<UserProfile | null>(null);
     const [isLoadingUser, setIsLoadingUser] = useState(false);
@@ -61,67 +73,60 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
         ? (allUsers.find(u => u.businessId === business.id || u.id === business.ownerId) || fetchedUser)
         : userProfile;
 
+    const businessIdRef = React.useRef(businessId);
+    const userIdRef = React.useRef(userId);
+    const isOpenRef = React.useRef(isOpen);
+    
+    React.useEffect(() => {
+        businessIdRef.current = businessId;
+        userIdRef.current = userId;
+        isOpenRef.current = isOpen;
+    }, [businessId, userId, isOpen]);
+    
     useEffect(() => {
-        const fetchTargetUser = async () => {
-            const targetId = userId || business?.ownerId;
-            if (!targetId || !isOpen) return;
+        const targetId = userIdRef.current || business?.ownerId;
+        if (!targetId || !isOpenRef.current) return;
 
-            // If we already have it in allUsers, don't fetch
-            if (allUsers.find(u => u.id === targetId)) {
-                setFetchedUser(null);
-                return;
-            }
+        if (allUsers.find(u => u.id === targetId)) {
+            setFetchedUser(null);
+            return;
+        }
 
-            setIsLoadingUser(true);
-            try {
-                const fetched = await getUser(targetId);
-                setFetchedUser(fetched);
-            } catch (error) {
-                console.error("Error fetching user for modal:", error);
-            } finally {
-                setIsLoadingUser(false);
-            }
-        };
+        setIsLoadingUser(true);
+        getUser(targetId).then(fetched => {
+            if (isOpenRef.current) setFetchedUser(fetched);
+        }).catch(err => console.error("Error fetching user:", err))
+          .finally(() => { if (isOpenRef.current) setIsLoadingUser(false); });
+    }, []);
 
-        fetchTargetUser();
-
-        if ((businessId || userId) && isOpen) {
-            // Determine the business ID to fetch coupons for
-            const effectiveBusinessId = businessId || userProfile?.businessId;
-            
-            if (effectiveBusinessId) {
-                incrementBusinessViewCount(effectiveBusinessId);
-                // Subscribe to coupons if we have a business ID
-                const unsubCoupons = subscribeToBusinessCoupons(effectiveBusinessId, (businessCoupons) => {
-                    const active = businessCoupons.filter(c => {
-                        const expirationDate = c.expiresAt?.toDate ? c.expiresAt.toDate() : new Date(c.expiresAt);
-                        
-                        // Set to end of day to be generous with expiration
-                        const endOfExpirationDay = new Date(expirationDate);
-                        if (!isNaN(endOfExpirationDay.getTime())) {
-                            endOfExpirationDay.setHours(23, 59, 59, 999);
-                        }
-                        
-                        const isExpired = !isNaN(endOfExpirationDay.getTime()) ? endOfExpirationDay.getTime() < Date.now() : false;
-                        const isFull = c.maxUses > 0 ? c.currentUses >= c.maxUses : false;
+    useEffect(() => {
+        if (!(businessIdRef.current || userIdRef.current) || !isOpenRef.current) return;
+        
+        const effectiveBusinessId = businessIdRef.current || userProfile?.businessId;
+        
+        if (effectiveBusinessId) {
+            const unsubCoupons = subscribeToBusinessCoupons(effectiveBusinessId, (coupons) => {
+                if (isOpenRef.current) {
+                    const active = coupons.filter(c => {
+                        const expDate = c.expiresAt?.toDate ? c.expiresAt.toDate() : new Date(c.expiresAt);
+                        expDate.setHours(23, 59, 59, 999);
+                        const isExpired = expDate.getTime() < Date.now();
+                        const isFull = c.maxUses > 0 && c.currentUses >= c.maxUses;
                         return !isExpired && !isFull && c.isActive;
                     });
                     setCoupons(active);
-                });
-                
-                const targetIdForReviews = userId || business?.ownerId || (businessId as string);
-                const unsubReviews = subscribeToProfileReviews(targetIdForReviews, setReviews);
-                
-                return () => {
-                    unsubCoupons();
-                    unsubReviews();
-                };
-            } else if (userId) {
-                // If it's just a user profile (no business), only subscribe to reviews
-                return subscribeToProfileReviews(userId, setReviews);
-            }
+                }
+            });
+            
+            const targetIdForReviews = userIdRef.current || business?.ownerId || businessIdRef.current;
+            const unsubReviews = subscribeToProfileReviews(targetIdForReviews, setReviews);
+            
+            return () => {
+                unsubCoupons();
+                unsubReviews();
+            };
         }
-    }, [businessId, userId, business?.ownerId, isOpen, allUsers, fetchedUser]);
+    }, []);
 
     const handleSubmitReview = async () => {
         const targetId = businessId || userId;
@@ -188,19 +193,11 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
         setShowPublicProfile(true);
     };
 
-    if (!isOpen || (!business && !owner)) return null;
 
-    // Filter public pulses for this business/user
-    const publicPulses = events.filter(e =>
-        (businessId && e.businessId === businessId) ||
-        (userId && e.ownerId === userId)
-    ).slice(0, 3);
-
-    const displayName = business?.name || `${owner?.name || ''} ${owner?.surname || ''}`.trim();
-    const avatar = business?.imageUrl || owner?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=4f46e5&color=fff`;
-    const bio = business?.description || "Miembro activo de la comunidad. ¡Nos vemos en el próximo pulso!";
-
-    // Email to display: for businesses prioritise business.email, fallback to owner's email
+    // ── ALL HOOKS MUST BE ABOVE ANY EARLY RETURNS ──────────────────────────────
+    const displayName = business?.name || `${owner?.name || ''} ${owner?.surname || ''}`.trim() || 'Cargando...';
+    const avatar = business?.imageUrl || owner?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName || 'U')}&background=4f46e5&color=fff`;
+    const bio = business?.description || 'Miembro activo de la comunidad. ¡Nos vemos en el próximo pulso!';
     const contactEmail = business?.email || owner?.email || null;
 
     const businessStatus = useMemo(() => isBusinessOpen(business?.openingHours), [business?.openingHours]);
@@ -211,10 +208,66 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
       image: avatar,
       url: BASE_URL + window.location.pathname
     });
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    // Early returns AFTER all hooks
+    if (!isOpen) return null;
+
+    const isDataLoading = isLoadingUser || (!business && !owner) || dataLoading;
+
+    if (isDataLoading) {
+        return (
+            <div className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl animate-in zoom-in duration-300">
+                    {/* Close button */}
+                    <div className="absolute top-6 right-6 z-10">
+                        <button onClick={onClose} className="p-2 bg-black/20 hover:bg-black/40 rounded-full text-white/80 hover:text-white transition-all">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                    {/* Skeleton Header */}
+                    <div className="relative h-48 bg-slate-800/50 animate-pulse">
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent" />
+                    </div>
+                    <div className="px-8 pb-10 -mt-12 space-y-6">
+                        {/* Avatar skeleton */}
+                        <div className="flex items-end gap-6">
+                            <div className="w-24 h-24 rounded-[1.8rem] bg-slate-700/80 border-4 border-slate-900 animate-pulse shrink-0" />
+                            <div className="pb-2 flex-1 space-y-3">
+                                <div className="h-6 w-48 bg-slate-700/80 rounded-xl animate-pulse" />
+                                <div className="h-4 w-32 bg-slate-800/80 rounded-lg animate-pulse" />
+                            </div>
+                        </div>
+                        {/* Stats skeleton */}
+                        <div className="grid grid-cols-3 gap-4">
+                            {[1,2,3].map(i => (
+                                <div key={i} className="bg-slate-800/50 rounded-2xl p-4 space-y-2 animate-pulse">
+                                    <div className="h-6 w-12 bg-slate-700/80 rounded mx-auto" />
+                                    <div className="h-3 w-16 bg-slate-700/60 rounded mx-auto" />
+                                </div>
+                            ))}
+                        </div>
+                        {/* Content skeleton */}
+                        <div className="space-y-3">
+                            <div className="h-4 w-full bg-slate-800/60 rounded-lg animate-pulse" />
+                            <div className="h-4 w-5/6 bg-slate-800/60 rounded-lg animate-pulse" />
+                            <div className="h-4 w-4/6 bg-slate-800/60 rounded-lg animate-pulse" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Filter public pulses for this business/user
+    const publicPulses = events.filter(e =>
+        (businessId && e.businessId === businessId) ||
+        (userId && e.ownerId === userId)
+    ).slice(0, 3);
 
     return (
         <div
-            className="fixed inset-0 z-[2500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300"
+            className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300"
             onClick={onClose}
         >
             <div
@@ -232,12 +285,16 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
 
                     {/* Floating Avatar */}
                     <div className="absolute -bottom-12 left-8 p-1.5 bg-slate-900 rounded-[2rem]">
-                        <img
-                            src={avatar}
-                            alt={displayName}
-                            className="w-24 h-24 rounded-[1.8rem] object-cover border-4 border-slate-900 shadow-xl"
-                            loading="lazy"
-                        />
+                        <div className="w-24 h-24 rounded-[1.8rem] bg-slate-700 animate-pulse border-4 border-slate-900 shadow-xl overflow-hidden">
+                            <img
+                                src={avatar}
+                                alt={displayName}
+                                className="w-full h-full object-cover transition-opacity duration-500"
+                                loading="lazy"
+                                onLoad={e => (e.currentTarget.style.opacity = '1')}
+                                style={{ opacity: 0 }}
+                            />
+                        </div>
                     </div>
 
                     {/* Business / User badge top right */}
@@ -564,4 +621,4 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
             </div>
         </div>
     );
-};
+});

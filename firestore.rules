@@ -30,11 +30,6 @@ service cloud.firestore {
         (exists(/databases/$(database)/documents/users_v2/$(request.auth.uid)) && getUserData().plan == 'Expert')
       );
     }
-    
-    function isBusinessOwner(businessId) {
-      return isAuthenticated() && 
-        get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid;
-    }
 
     // ========== REGLAS DE COLECCIONES ==========
 
@@ -48,6 +43,7 @@ service cloud.firestore {
     match /businesses/{businessId} {
       allow read: if true;
       allow create: if isAuthenticated() && 
+                    request.resource.data.ownerId == request.auth.uid &&
                     request.resource.data.keys().hasAll(['name', 'category']) &&
                     request.resource.data.name is string;
       allow update: if 
@@ -60,6 +56,7 @@ service cloud.firestore {
     match /events/{eventId} {
       allow read: if true;
       allow create: if isAuthenticated() && 
+                    request.resource.data.ownerId == request.auth.uid &&
                     request.resource.data.keys().hasAll(['title', 'date']) &&
                     request.resource.data.title is string;
       allow update: if 
@@ -71,9 +68,9 @@ service cloud.firestore {
     // Comunidad: Público read, creación auth
     match /posts/{postId} {
       allow read: if true;
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
       allow update: if 
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'commentCount'])) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'commentCount', 'likesCount', 'commentsCount'])) ||
         (isAuthenticated() && (resource.data.authorId == request.auth.uid || isAdmin()));
       allow delete: if isAdmin() || (isAuthenticated() && resource.data.authorId == request.auth.uid);
     }
@@ -81,39 +78,41 @@ service cloud.firestore {
     // Anuncios: Público read
     match /announcements/{announcementId} {
       allow read: if true;
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
       allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.senderId == request.auth.uid);
     }
 
     // RSVPs: Público read para conteos, Auth write
     match /rsvps/{rsvpId} {
       allow read: if true;
-      allow create, delete: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     // Chat Global (Pulso Global): Público read
     match /pulso_global/{msgId} {
       allow read: if true;
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
 
     // Chat Privado: Solo participantes o admin
     match /chatRooms/{roomId} {
       allow read: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid in request.resource.data.participants;
       allow update: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
       
       match /messages/{messageId} {
         allow read: if isAuthenticated() && (get(/databases/$(database)/documents/chatRooms/$(roomId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
-        allow create: if isAuthenticated();
+        allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+        allow delete: if isAdmin() || (isAuthenticated() && resource.data.senderId == request.auth.uid);
       }
     }
 
     // Reseñas: Público read
     match /businessReviews/{reviewId} {
       allow read: if true;
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
     }
 
@@ -126,29 +125,35 @@ service cloud.firestore {
     // Seguidores: Público read
     match /follows/{followId} {
       allow read: if true;
-      allow create, delete: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     // Favoritos: Privado
     match /favorites/{favId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create, delete: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     // Notificaciones: Privado
     match /notifications/{notifId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allowed for system/other users to notify
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
     }
 
     // Puntos y Vales: Privado
     match /points/{pointId} {
-      allow read, write: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
     match /vouchers/{voucherId} {
-      allow read, write: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     // Ajustes: Público read
@@ -157,22 +162,38 @@ service cloud.firestore {
       allow write: if isAdmin() || isExpert();
     }
 
-    // Cupones: Público read, auth create, owner/admin update/delete
+    // Cupones: Público read, owner/admin manage
     match /coupons/{couponId} {
       allow read: if true;
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && (request.resource.data.ownerId == request.auth.uid || isAdmin());
       allow update: if isAuthenticated() && (
         // Allow incrementing currentUses for redemption
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentUses', 'updatedAt'])) ||
-        isAdmin() || isExpert()
+        resource.data.ownerId == request.auth.uid || 
+        isAdmin()
       );
-      allow delete: if isAdmin() || isExpert();
+      allow delete: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin());
     }
 
-    // Redenciones de cupones: Auth read/create, admin manage
+    // Redenciones de cupones: Auth read/create, owner/admin manage
     match /couponRedemptions/{redemptionId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.ownerId == request.auth.uid || 
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid || 
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+    
+    // Boosts: Privado read/create
+    match /boosts/{boostId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
     

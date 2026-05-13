@@ -293,8 +293,12 @@ export const PulseModal: React.FC = () => {
 
     const handleItemClick = (item: PulseItem) => {
         if (item.type === 'event' && item.data) {
-            setSelectedEvent(item.data);
+            // Cerrar primero el PulseModal y luego abrir el evento
+            // (evita conflicto de renderizado en móviles)
             onClose();
+            setTimeout(() => {
+                setSelectedEvent(item.data);
+            }, 150);
         } else if (item.type === 'post') {
             navigate('/community');
             onClose();
@@ -312,13 +316,13 @@ export const PulseModal: React.FC = () => {
 
     return (
         <>
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 pb-24 md:pb-6">
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 sm:p-6 pb-24 md:pb-6">
             <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+                className="absolute inset-0 bg-black/60 animate-in fade-in duration-300"
                 onClick={onClose}
             />
 
-            <div className="relative w-full max-w-lg bg-slate-900/40 backdrop-blur-3xl border border-white/20 rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] overflow-hidden animate-in zoom-in-95 duration-500 flex flex-col max-h-[90vh]">
+            <div className="relative w-full max-w-lg bg-slate-900/40 border border-white/20 rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] overflow-y-auto fade-in duration-500 flex flex-col max-h-[90vh]">
                 <div className="absolute inset-0 rounded-[3rem] border border-violet-500/20 pointer-events-none" />
 
                 <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
@@ -423,6 +427,7 @@ export const PulseModal: React.FC = () => {
                                     setPublicProfileType('business');
                                     setPublicProfileId(biz.id);
                                     setShowPublicProfile(true);
+                                    onClose();
                                 }}
                             >
                                 <div className="w-16 h-16 rounded-xl overflow-hidden border border-white/10 shrink-0">
@@ -460,6 +465,7 @@ export const PulseModal: React.FC = () => {
                                     setPublicProfileType('business');
                                     setPublicProfileId(biz.id);
                                     setShowPublicProfile(true);
+                                    onClose();
                                 }}
                             >
                                 <div className="w-16 h-16 rounded-xl overflow-hidden border border-white/10 shrink-0">
@@ -506,7 +512,10 @@ export const PulseModal: React.FC = () => {
                             <div
                                 key={event.id}
                                 className="relative group rounded-3xl overflow-hidden bg-gradient-to-br from-[#FF6A00] to-[#EE0979] p-[1px] shadow-xl cursor-pointer hover:scale-[1.02] transition-all"
-                                onClick={() => setSelectedEvent(event)}
+                                onClick={() => {
+                                    setSelectedEvent(event);
+                                    onClose();
+                                }}
                             >
                                 <div className="bg-[#121212] rounded-[23px] h-full overflow-hidden flex flex-col">
                                     <div className="absolute top-4 right-4 z-10 bg-white text-[#FF6A00] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-lg flex items-center gap-1">
@@ -818,7 +827,7 @@ export const PulseModal: React.FC = () => {
                                                     <div className="absolute inset-0 border border-white/10 rounded-[2rem] pointer-events-none" />
                                                     <div className="absolute top-3 right-3 flex flex-col gap-2">
                                                         {biz.hasMilitaryBenefit && (
-                                                            <div className="bg-indigo-600/90 text-white text-[8px] font-black px-2 py-1 rounded-lg backdrop-blur-md border border-indigo-400/50 flex items-center gap-1 shadow-lg animate-in zoom-in-50 duration-300">
+                                                            <div className="bg-indigo-600/90 text-white text-[8px] font-black px-2 py-1 rounded-lg  border border-indigo-400/50 flex items-center gap-1 shadow-lg animate-in zoom-in-50 duration-300">
                                                                 <ShieldCheck className="w-2.5 h-2.5" />
                                                                 MILITAR
                                                             </div>

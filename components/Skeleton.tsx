@@ -7,6 +7,8 @@ interface SkeletonProps {
 
 export const Skeleton: React.FC<SkeletonProps> = ({ className }) => {
   return (
-    <div className={`animate-pulse bg-slate-700/50 rounded-xl ${className}`}></div>
+    <div className={`relative overflow-hidden bg-slate-800/40 rounded-xl ${className}`}>
+      <div className="absolute inset-0 glass-shimmer" />
+    </div>
   );
 };

@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext';
 import { useNavigate } from 'react-router-dom';
 import { SubscriptionPlan, BusinessCategory } from '../types';
 import { LOCALITIES } from '../constants';
+import { PageLoader } from '../components/common/PageLoader';
 
 const REFERENCE_CATEGORIES = [
     BusinessCategory.REFERENCIA,
@@ -29,10 +30,15 @@ export const InfoPage: React.FC = () => {
         customLocalities,
         setShowPublicProfile,
         setPublicProfileId,
-        setPublicProfileType
+        setPublicProfileType,
+        loading
     } = useData();
 
     const [searchQuery, setSearchQuery] = useState('');
+
+    if (loading) {
+        return <PageLoader message="Cargando información local..." />;
+    }
 
     const localityName = currentLocality?.name || 'Montañita';
 
@@ -84,11 +90,11 @@ export const InfoPage: React.FC = () => {
         return allBusinesses.filter((b: any) => b.category === BusinessCategory.HOSPITAL);
     }, [allBusinesses]);
 
-    const handleBusinessClick = (id: string) => {
+    const handleBusinessClick = React.useCallback((id: string) => {
         setPublicProfileId(id);
         setPublicProfileType('business');
         setShowPublicProfile(true);
-    };
+    }, [setShowPublicProfile]);
 
     const getCategoryIcon = (category: string) => {
         if (category === BusinessCategory.PLAYA || category === 'Playa') return <Waves className="w-5 h-5 text-sky-400" />;
@@ -117,9 +123,17 @@ export const InfoPage: React.FC = () => {
                             }}
                             className="bg-white/5 border border-white/10 text-white text-xs font-black uppercase tracking-widest px-3 py-2 rounded-xl cursor-pointer hover:bg-white/10 transition-all max-w-[150px]"
                         >
-                            {[...LOCALITIES, ...customLocalities].map(l => (
-                                <option key={l.name} value={l.name} className="bg-slate-900">{l.name}</option>
-                            ))}
+                            {(() => {
+                                // Deduplicate: customLocalities may duplicate hardcoded LOCALITIES
+                                const seen = new Set<string>();
+                                return [...LOCALITIES, ...customLocalities].filter(l => {
+                                    if (seen.has(l.name)) return false;
+                                    seen.add(l.name);
+                                    return true;
+                                }).map(l => (
+                                    <option key={(l as any).id || l.name} value={l.name} className="bg-slate-900">{l.name}</option>
+                                ));
+                            })()}
                         </select>
                         <button
                             onClick={() => navigate('/explore')}

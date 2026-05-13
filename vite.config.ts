@@ -25,7 +25,15 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       }
     },
+    optimizeDeps: {
+      esbuildOptions: {
+        supported: {
+          'import-meta': true
+        }
+      }
+    },
     build: {
+      target: 'esnext',
       rollupOptions: {
         output: {
           manualChunks: {

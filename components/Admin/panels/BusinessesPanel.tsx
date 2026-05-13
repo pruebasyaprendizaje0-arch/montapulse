@@ -1,20 +1,27 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, Trash2, CheckCircle } from 'lucide-react';
+import { Search, ShieldCheck, Trash2, CheckCircle, Edit3 } from 'lucide-react';
 import { useData } from '../../../context/DataContext';
 import { useToast } from '../../../context/ToastContext';
 import { updateBusiness, deleteBusiness } from '../../../services/firestoreService';
 
 export const BusinessesPanel: React.FC = () => {
-    const { businesses, deletedBusinesses, handleRestoreBusiness } = useData();
+    const { 
+        businesses, deletedBusinesses, handleRestoreBusiness,
+        setEditingBusinessId, setShowBusinessEdit 
+    } = useData();
     const { showToast, showConfirm } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
-    const [showRecycleBin, setShowRecycleBin] = useState(false);
+    const [viewMode, setViewMode] = useState<'all' | 'reference' | 'deleted'>('all');
 
     const filteredBusinesses = businesses.filter(b => {
         const q = (searchQuery || '').toLowerCase();
         const name = String(b.name || '').toLowerCase();
         const cat = String(b.category || '').toLowerCase();
-        return name.includes(q) || cat.includes(q);
+        
+        const matchesSearch = name.includes(q) || cat.includes(q);
+        const matchesView = viewMode === 'reference' ? b.isReference : !b.isReference;
+        
+        return matchesSearch && matchesView;
     });
 
     const filteredDeleted = deletedBusinesses.filter(b => {
@@ -23,14 +30,14 @@ export const BusinessesPanel: React.FC = () => {
     });
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-            <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-4 bg-neutral-900/50 p-6 rounded-[2rem] border border-white/5 shadow-xl">
-                    <Search className="w-5 h-5 text-slate-500" />
+        <div className="space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+            <div className="flex flex-col gap-3 sm:gap-4 px-1">
+                <div className="flex items-center gap-3 sm:gap-4 bg-neutral-900/50 p-3.5 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-white/5 shadow-xl">
+                    <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
                     <input 
                         type="text" 
-                        placeholder="Buscar negocios por nombre, dueño o categoría..." 
-                        className="bg-transparent border-none text-white text-sm w-full focus:outline-none"
+                        placeholder="Buscar por nombre o categoría..." 
+                        className="bg-transparent border-none text-white text-xs sm:text-sm w-full focus:outline-none"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                     />
@@ -38,49 +45,58 @@ export const BusinessesPanel: React.FC = () => {
 
                 <div className="flex gap-2">
                     <button
-                        onClick={() => setShowRecycleBin(false)}
-                        className={`flex-1 py-3 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${!showRecycleBin ? 'bg-orange-500 text-black border-orange-500' : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'}`}
+                        onClick={() => setViewMode('all')}
+                        className={`flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all ${viewMode === 'all' ? 'bg-orange-500 text-black border-orange-500' : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'}`}
                     >
-                        Activos ({businesses.length})
+                        Negocios ({businesses.filter(b => !b.isReference).length})
                     </button>
                     <button
-                        onClick={() => setShowRecycleBin(true)}
-                        className={`flex-1 py-3 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${showRecycleBin ? 'bg-orange-500 text-black border-orange-500' : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'}`}
+                        onClick={() => setViewMode('reference')}
+                        className={`flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all ${viewMode === 'reference' ? 'bg-sky-500 text-black border-sky-500' : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'}`}
+                    >
+                        Referencias ({businesses.filter(b => b.isReference).length})
+                    </button>
+                    <button
+                        onClick={() => setViewMode('deleted')}
+                        className={`flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all ${viewMode === 'deleted' ? 'bg-rose-500 text-black border-rose-500' : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'}`}
                     >
                         Papelera ({deletedBusinesses.length})
                     </button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-                {(!showRecycleBin ? filteredBusinesses : filteredDeleted).map(biz => (
-                    <div key={biz.id} className="bg-neutral-900/50 border border-white/5 rounded-[2rem] p-6 hover:bg-neutral-900/80 transition-all group shadow-lg">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4">
+                {(viewMode === 'deleted' ? filteredDeleted : filteredBusinesses).map(biz => (
+                    <div key={biz.id} className="bg-neutral-900/50 border border-white/5 rounded-2xl sm:rounded-[2rem] p-3.5 sm:p-6 hover:bg-neutral-900/80 transition-all group shadow-lg">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <div className={`w-14 h-14 rounded-2xl bg-black overflow-hidden border border-white/10 relative ${showRecycleBin ? 'grayscale opacity-50' : ''}`}>
+                            <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
+                                <div className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-black overflow-hidden border border-white/10 relative shrink-0 ${viewMode === 'deleted' ? 'grayscale opacity-50' : ''}`}>
                                     <img src={biz.imageUrl} className="w-full h-full object-cover" alt={biz.name} />
-                                    {biz.isVerified && !showRecycleBin && (
-                                        <div className="absolute -top-1 -right-1 bg-sky-500 p-1 rounded-lg border-2 border-black">
-                                            <CheckCircle className="w-2 h-2 text-white" />
+                                    {biz.isVerified && viewMode !== 'deleted' && (
+                                        <div className="absolute -top-1 -right-1 bg-sky-500 p-0.5 sm:p-1 rounded-md sm:rounded-lg border border-black">
+                                            <CheckCircle className="w-1.5 h-1.5 sm:w-2 sm:h-2 text-white" />
                                         </div>
                                     )}
                                 </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h5 className="text-sm font-black text-white">{biz.name}</h5>
-                                        {!showRecycleBin && (
-                                            <span className="text-[9px] px-2 py-0.5 bg-white/5 rounded-md text-slate-500 uppercase font-black">{biz.category}</span>
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <h5 className="text-xs sm:text-sm font-black text-white truncate">{biz.name}</h5>
+                                        {viewMode !== 'deleted' && (
+                                            <span className="text-[7px] sm:text-[9px] px-1.5 py-0.5 bg-white/5 rounded-md text-slate-500 uppercase font-black">{biz.category}</span>
                                         )}
                                     </div>
-                                    <p className="text-[10px] text-slate-400 mt-1">Dueño ID: {biz.ownerId?.slice(0, 8)}...</p>
-                                    {!showRecycleBin && (
-                                        <p className="text-[10px] text-orange-500 font-black uppercase tracking-widest mt-0.5">{biz.plan}</p>
+                                    <p className="text-[8px] sm:text-[10px] text-slate-400 mt-0.5 truncate">Dueño ID: {biz.ownerId?.slice(0, 8)}...</p>
+                                    {viewMode !== 'deleted' && !biz.isReference && (
+                                        <p className="text-[8px] sm:text-[10px] text-orange-500 font-black uppercase tracking-widest mt-0.5">{biz.plan}</p>
+                                    )}
+                                    {biz.isReference && (
+                                        <p className="text-[8px] sm:text-[10px] text-sky-400 font-black uppercase tracking-widest mt-0.5">Punto de Referencia</p>
                                     )}
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                                {!showRecycleBin ? (
+                            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                {viewMode !== 'deleted' ? (
                                     <>
                                         <button 
                                             onClick={async () => {
@@ -88,10 +104,20 @@ export const BusinessesPanel: React.FC = () => {
                                                 await updateBusiness(biz.id, { isVerified: v });
                                                 showToast(v ? "Negocio verificado" : "Verificación removida", "success");
                                             }}
-                                            className={`p-3 rounded-xl border transition-all ${biz.isVerified ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-black/40 text-slate-500 border-white/5 hover:bg-black/60'}`}
+                                            className={`p-2.5 sm:p-3 rounded-xl border transition-all ${biz.isVerified ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-black/40 text-slate-500 border-white/5 hover:bg-black/60'}`}
                                             title={biz.isVerified ? "Desverificar" : "Verificar"}
                                         >
-                                            <ShieldCheck className="w-4 h-4" />
+                                            <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                setEditingBusinessId(biz.id);
+                                                setShowBusinessEdit(true);
+                                            }}
+                                            className="p-2.5 sm:p-3 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl border border-white/10 transition-all"
+                                            title="Editar Negocio"
+                                        >
+                                            <Edit3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                         </button>
                                         <button 
                                             onClick={async () => {
@@ -100,10 +126,10 @@ export const BusinessesPanel: React.FC = () => {
                                                     showToast("Negocio movido a la papelera", "success");
                                                 }
                                             }}
-                                            className="p-3 bg-white/5 hover:bg-rose-500/10 text-rose-500 rounded-xl border border-white/10 transition-all"
+                                            className="p-2.5 sm:p-3 bg-white/5 hover:bg-rose-500/10 text-rose-500 rounded-xl border border-white/10 transition-all"
                                             title="Mover a papelera"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                         </button>
                                     </>
                                 ) : (
@@ -113,7 +139,7 @@ export const BusinessesPanel: React.FC = () => {
                                                 await handleRestoreBusiness(biz.id);
                                                 showToast("Negocio restaurado", "success");
                                             }}
-                                            className="px-4 py-2 bg-orange-500 text-black text-[10px] font-black uppercase rounded-xl hover:scale-105 transition-all"
+                                            className="px-3 sm:px-4 py-1.5 sm:py-2 bg-orange-500 text-black text-[8px] sm:text-[10px] font-black uppercase rounded-lg sm:rounded-xl hover:scale-105 transition-all"
                                         >
                                             Restaurar
                                         </button>
@@ -124,10 +150,10 @@ export const BusinessesPanel: React.FC = () => {
                                                     showToast("Negocio eliminado permanentemente", "error");
                                                 }
                                             }}
-                                            className="p-3 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-500 hover:text-white transition-all"
+                                            className="p-2.5 sm:p-3 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-500 hover:text-white transition-all"
                                             title="Eliminar permanentemente"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                         </button>
                                     </>
                                 )}
@@ -135,9 +161,9 @@ export const BusinessesPanel: React.FC = () => {
                         </div>
                     </div>
                 ))}
-                {(!showRecycleBin ? filteredBusinesses : filteredDeleted).length === 0 && (
+                {(viewMode === 'deleted' ? filteredDeleted : filteredBusinesses).length === 0 && (
                     <div className="text-center py-20 opacity-30">
-                        <p className="text-sm font-bold uppercase tracking-[0.2em]">No se encontraron negocios</p>
+                        <p className="text-xs sm:text-sm font-bold uppercase tracking-[0.2em]">No se encontraron negocios</p>
                     </div>
                 )}
             </div>

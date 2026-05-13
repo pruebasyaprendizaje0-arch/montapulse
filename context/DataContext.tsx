@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef } from 'react';
-import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings } from '../types';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef, useCallback } from 'react';
+import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings, Announcement } from '../types';
 import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition } from '../constants';
 import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAllSettings,
     incrementViewCount, updateAppSettings, subscribeToUsers,
     getUserByEmail, getBusinessById, createUser, createBusiness, updateBusiness, deleteBusiness, updateUser,
     toggleRSVP, deleteEvent, updateEvent, createEvent, subscribeToRSVPCounts,
-    subscribeToPosts, createPost, toggleLikePost, addCommentToPost,
+    subscribeToPosts, createPost, toggleLikePost, addCommentToPost, deletePost,
     subscribeToMessages, sendMessage,
     addPoints, redeemPoints, togglePulsePass, incrementPulseCount,
     toggleFollowBusiness, getFollowedBusinessIds, subscribeToUserFollows, subscribeToBusinessFollowers,
@@ -15,10 +15,16 @@ import {
     restoreBusiness,
     getCustomLocalities, subscribeToCustomLocalities, createCustomLocality, deleteCustomLocality, updateCustomLocality,
     subscribeToNotifications, createNotification, markNotificationRead, markAllNotificationsRead,
-    subscribeToAnnouncements, deleteAnnouncement,
+    subscribeToAnnouncements, createAnnouncement, deleteAnnouncement,
     incrementEventViewCount, incrementEventClickCount as serviceIncrementClick,
     subscribeToChatRooms, markRoomAsRead, subscribeToMasterData
 } from '../services/firestoreService';
+import { 
+    subscribeToPublicCoupons, 
+    subscribeToUserWallet,
+    obtainCoupon
+} from '../services/couponService';
+import { Coupon, CouponRedemption } from '../types';
 
 export type CommunityTab = 'chats' | 'updates' | 'communities' | 'calls' | 'notifications' | 'profile';
 import { generateEventDescription } from '../services/geminiService';
@@ -137,11 +143,12 @@ interface DataContextType {
     isAdmin: boolean;
     isSuperUser: boolean;
     isSuperAdmin: boolean;
-    customLocalities: { id?: string; name: string; coords: [number, number]; zoom: number; sectors?: Sector[] }[];
+    customLocalities: { id?: string; name: string; coords: [number, number]; zoom: number; sectors?: Sector[]; hasBeach?: boolean }[];
     customLocalitySectors: Record<string, Sector[]>;
     handleAddCustomLocality: (name: string, coords: [number, number], hasBeach: boolean) => Promise<void>;
     handleUpdateCustomLocality: (id: string, name: string, coords: [number, number], hasBeach: boolean) => Promise<void>;
     handleDeleteCustomLocality: (id: string, name: string) => Promise<void>;
+    setCustomLocalities: React.Dispatch<React.SetStateAction<{ id?: string; name: string; coords: [number, number]; zoom: number; sectors?: Sector[]; hasBeach?: boolean }[]>>;
     filteredEvents: MontanitaEvent[];
     filteredBusinesses: Business[];
     pastEvents: MontanitaEvent[];
@@ -248,6 +255,13 @@ interface DataContextType {
     unreadChatCount: number;
     markRoomAsRead: (roomId: string, userId: string) => Promise<void>;
     markAllRoomsAsRead: () => Promise<void>;
+    handleDeletePost: (postId: string) => Promise<void>;
+    createAnnouncement: (announcement: Omit<Announcement, 'id' | 'timestamp'>) => Promise<void>;
+    
+    // Coupons
+    publicCoupons: Coupon[];
+    userActiveCoupons: CouponRedemption[];
+    handleObtainCoupon: (couponId: string, couponCode: string, userId: string, userName: string, businessId: string) => Promise<{ success: boolean; error?: string; reservationCode?: string }>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -349,6 +363,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isPanelMinimized, setIsPanelMinimized] = useState(false);
     const [isNearbyMinimized, setIsNearbyMinimized] = useState(true);
     const [isEditorFocus, setIsEditorFocus] = useState(false);
+
+    // Coupons State
+    const [publicCoupons, setPublicCoupons] = useState<Coupon[]>([]);
+    const [userActiveCoupons, setUserActiveCoupons] = useState<CouponRedemption[]>([]);
     const [editingEventId, setEditingEventId] = useState<string | null>(null);
     const [newEvent, setNewEvent] = useState({
         title: '',
@@ -371,8 +389,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMood, setSelectedMood] = useState<Vibe | null>(null);
     
-    const [customLocalities, setCustomLocalities] = useState<{ id?: string; name: string; coords: [number, number]; zoom: number; sectors?: Sector[] }[]>([]);
-    const [customLocalitySectors, setCustomLocalitySectors] = useState<Record<string, Sector[]>>({});
+    const [customLocalities, setCustomLocalities] = useState<{ id?: string; name: string; coords: [number, number]; zoom: number; sectors?: Sector[]; hasBeach?: boolean }[]>([]);
 
     // Handle Firestore Internal Assertion Failures
     useEffect(() => {
@@ -542,32 +559,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return defaults;
     });
 
-    useEffect(() => {
-        if (!authUser) {
-            const saved = localStorage.getItem('montapulse_favorites');
-            if (saved) setFavorites(JSON.parse(saved));
-            return;
-        }
-
-        const unsubscribe = subscribeToUserFavorites(authUser.uid, (eventIds) => {
-            setFavorites(eventIds);
-        });
-
-        return () => unsubscribe();
-    }, [authUser]);
-
-    useEffect(() => {
-        if (!authUser) {
-            setFollowedBusinessIds([]);
-            return;
-        }
-
-        const unsubscribe = subscribeToUserFollows(authUser.uid, (businessIds) => {
-            setFollowedBusinessIds(businessIds);
-        });
-
-        return () => unsubscribe();
-    }, [authUser]);
+    // Removed separate useEffects for favorites and follows. 
+    // They are now consolidated into the staggered block below to avoid SDK race conditions.
 
     useEffect(() => {
         if (!user?.businessId) return;
@@ -645,36 +638,153 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
 
         // 1. Core Data (Priority 1) - Staggered minimally
-        const tEvents = addStaggeredUnsub(50, () => subscribeToEvents((data) => {
-            if (active) setEvents(data);
-        }));
+        let eventsLoaded = false;
+        let bizLoaded = false;
+        let masterDataLoaded = false;
+        let favoritesLoaded = !authUser; // Already loaded from localStorage if no user
+        let followsLoaded = !authUser;   // Already loaded from localStorage if no user
+        let publicCouponsLoaded = false;
+        let userWalletLoaded = !authUser;
 
-        const tBiz = addStaggeredUnsub(250, () => subscribeToBusinesses((data) => {
-            if (!active) return;
-            rawBusinessesRef.current = data;
-            const unique: Business[] = [];
-            const seen = new Set<string>();
+        const checkInitialLoad = () => {
+            if (active) {
+                const status = {
+                    events: eventsLoaded,
+                    businesses: bizLoaded,
+                    master: masterDataLoaded,
+                    favorites: favoritesLoaded,
+                    follows: followsLoaded,
+                    coupons: publicCouponsLoaded,
+                    wallet: userWalletLoaded
+                };
+                
+                console.log('[DataContext] Hydration Status:', status);
 
-            data.forEach(b => {
-                const locality = b.locality || 'Montañita';
-                const lat = (b.location?.lat || b.coordinates?.[0] || 0).toFixed(3);
-                const lng = (b.location?.lng || b.coordinates?.[1] || 0).toFixed(3);
-                const normalizedPrefix = (b.name?.trim() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 5);
-                const key = `${normalizedPrefix}_${lat}_${lng}_${locality.toLowerCase()}`;
+                if (eventsLoaded && bizLoaded && masterDataLoaded && favoritesLoaded && followsLoaded && publicCouponsLoaded && userWalletLoaded) {
+                    console.log('[DataContext] All core data loaded. Setting loading=false.');
+                    setLoading(false);
+                }
+            }
+        };
 
-                if (!seen.has(key)) {
-                    seen.add(key);
-                    unique.push(b);
+        // Safety Timeout: Force loading to false after 6 seconds to prevent blank screens on slow mobile networks
+        const safetyTimeoutId = setTimeout(() => {
+            if (active && loading) {
+                console.warn('[DataContext] Safety timeout reached. Forcing loading=false.');
+                setLoading(false);
+            }
+        }, 6000);
+
+        const tCore = addStaggeredUnsub(50, () => {
+            const unsubEvents = subscribeToEvents((data) => {
+                if (active) {
+                    setEvents(data);
+                    eventsLoaded = true;
+                    checkInitialLoad();
                 }
             });
 
-            setBusinesses(unique);
-            setLoading(false);
-            
-            if (data.length > unique.length && isSuperUser) {
-                console.log(`[Data] Found ${data.length - unique.length} hidden clones in businesses collection.`);
+            const unsubBiz = subscribeToBusinesses((data) => {
+                if (!active) return;
+                rawBusinessesRef.current = data;
+                const unique: Business[] = [];
+                const seen = new Set<string>();
+
+                data.forEach(b => {
+                    const locality = b.locality || 'Montañita';
+                    const lat = (b.location?.lat || b.coordinates?.[0] || 0).toFixed(3);
+                    const lng = (b.location?.lng || b.coordinates?.[1] || 0).toFixed(3);
+                    const normalizedPrefix = (b.name?.trim() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 5);
+                    const key = `${normalizedPrefix}_${lat}_${lng}_${locality.toLowerCase()}`;
+
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        unique.push(b);
+                    }
+                });
+
+                setBusinesses(unique);
+                bizLoaded = true;
+                checkInitialLoad();
+            });
+
+            const unsubCategories = subscribeToMasterData('categories', setMasterCategories);
+            const unsubTags = subscribeToMasterData('tags', setMasterTags);
+            const unsubVibes = subscribeToMasterData('vibes', (data) => {
+                if (active) {
+                    setMasterVibes(data);
+                    masterDataLoaded = true;
+                    checkInitialLoad();
+                }
+            });
+
+            const unsubPublicCoupons = subscribeToPublicCoupons((data) => {
+                if (active) {
+                    setPublicCoupons(data);
+                    publicCouponsLoaded = true;
+                    checkInitialLoad();
+                }
+            });
+
+            let unsubFavs = () => {};
+            if (authUser) {
+                unsubFavs = subscribeToUserFavorites(authUser.uid, (ids) => {
+                    if (active) {
+                        setFavorites(ids);
+                        favoritesLoaded = true;
+                        checkInitialLoad();
+                    }
+                });
+            } else {
+                const saved = localStorage.getItem('montapulse_favorites');
+                if (saved) setFavorites(JSON.parse(saved));
+                favoritesLoaded = true;
+                checkInitialLoad();
             }
-        }));
+
+            let unsubFollows = () => {};
+            if (authUser) {
+                unsubFollows = subscribeToUserFollows(authUser.uid, (ids) => {
+                    if (active) {
+                        setFollowedBusinessIds(ids);
+                        followsLoaded = true;
+                        checkInitialLoad();
+                    }
+                });
+            } else {
+                setFollowedBusinessIds([]);
+                followsLoaded = true;
+                checkInitialLoad();
+            }
+
+            let unsubWallet = () => {};
+            if (authUser) {
+                unsubWallet = subscribeToUserWallet(authUser.uid, (data) => {
+                    if (active) {
+                        setUserActiveCoupons(data.filter(r => r.status === 'reserved'));
+                        userWalletLoaded = true;
+                        checkInitialLoad();
+                    }
+                });
+            } else {
+                setUserActiveCoupons([]);
+                userWalletLoaded = true;
+                checkInitialLoad();
+            }
+
+            return () => {
+                unsubEvents();
+                unsubBiz();
+                unsubCategories();
+                unsubTags();
+                unsubVibes();
+                unsubFavs();
+                unsubFollows();
+                unsubPublicCoupons();
+                unsubWallet();
+                clearTimeout(safetyTimeoutId);
+            };
+        });
 
 
         // 2. Consolidated Config/Settings Listener (Replaces 8 individual listeners)
@@ -740,55 +850,42 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         }));
 
-        // 3. Social & Community (Lower Priority, longer stagger)
-        const t5 = addStaggeredUnsub(3500, () => subscribeToPosts((data) => {
-            if (active) setPosts(data);
-        }));
+        // 3. Social & MasterData (Secondary priority)
+        const tSocial = addStaggeredUnsub(2500, () => {
+            const unsubPosts = subscribeToPosts((data) => {
+                if (active) setPosts(data);
+            });
 
-        const t6 = addStaggeredUnsub(4000, () => subscribeToMessages(50, (data) => {
-            if (active) setMessages(data);
-        }));
+            const unsubMessages = subscribeToMessages(50, (data) => {
+                if (active) setMessages(data);
+            });
 
-        const tMaster = addStaggeredUnsub(4500, () => {
-            const unsubCategories = subscribeToMasterData('categories', setMasterCategories);
-            const unsubTags = subscribeToMasterData('tags', setMasterTags);
             const unsubSectors = subscribeToMasterData('sectors', setMasterSectors);
-            const unsubVibes = subscribeToMasterData('vibes', setMasterVibes);
+
+            const unsubCustomLocs = subscribeToCustomLocalities((customs) => {
+                if (!active) return;
+                setCustomLocalities(customs.map(c => ({ 
+                    id: c.id, 
+                    name: c.name, 
+                    coords: c.coords, 
+                    zoom: c.zoom, 
+                    sectors: (c.sectors || [Sector.CENTRO, Sector.PLAYA, Sector.MONTANA]) as Sector[] 
+                })));
+            });
+
             return () => {
-                unsubCategories();
-                unsubTags();
+                unsubPosts();
+                unsubMessages();
                 unsubSectors();
-                unsubVibes();
+                unsubCustomLocs();
             };
         });
 
-        // 4. User Data (Staggered - moved to separate effect for stability)
-
-        // 5. One-off Loads
-        const loadCustomLocalities = async () => {
-            try {
-                const customs = await getCustomLocalities();
-                if (!active) return;
-                setCustomLocalities(customs.map(c => ({ id: c.id, name: c.name, coords: c.coords, zoom: c.zoom, sectors: c.sectors as Sector[] })));
-                const sectorsMap: Record<string, Sector[]> = {};
-                customs.forEach(c => {
-                    sectorsMap[c.name] = (c.sectors || [Sector.CENTRO, Sector.PLAYA, Sector.MONTANA]) as Sector[];
-                });
-                setCustomLocalitySectors(sectorsMap);
-            } catch (error) {
-                // Silently handled by firestoreService
-            }
-        };
-        loadCustomLocalities();
-
         return () => {
             active = false;
-            clearTimeout(tEvents);
-            clearTimeout(tBiz);
+            clearTimeout(tCore);
             clearTimeout(t2);
-            clearTimeout(t5);
-            clearTimeout(t6);
-            clearTimeout(tMaster);
+            clearTimeout(tSocial);
             unsubs.forEach(unsub => {
                 try {
                     unsub();
@@ -800,7 +897,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [authLoading, isAdmin, isSuperUser, user?.businessId]);
     
     // 6. Dynamic Sectors & Localities Mapping
-    useEffect(() => {
+    const customLocalitySectors = useMemo(() => {
         const sectorsMap: Record<string, Sector[]> = {};
         
         // 1. Initialize with defaults from constants
@@ -828,7 +925,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         });
 
-        setCustomLocalitySectors(sectorsMap);
+        return sectorsMap;
     }, [masterSectors, customLocalities]);
     
     // 7. User Data Subscription (Separate for stability & plan-reactivity)
@@ -1019,31 +1116,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     }, [activeView, events, favoritedEvents, filteredEvents, agendaRange, calendarBaseDate]);
 
-    const navigateToNextEvent = () => {
-        if (!selectedEvent) return;
+    const navigateToNextEvent = useCallback(() => {
+        if (!selectedEvent || navigationEvents.length === 0) return;
         const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
-        if (currentIndex < navigationEvents.length - 1) {
+        if (currentIndex >= 0 && currentIndex < navigationEvents.length - 1) {
             setSelectedEvent(navigationEvents[currentIndex + 1]);
         }
-    };
+    }, [selectedEvent, navigationEvents]);
 
-    const navigateToPreviousEvent = () => {
-        if (!selectedEvent) return;
+    const navigateToPreviousEvent = useCallback(() => {
+        if (!selectedEvent || navigationEvents.length === 0) return;
         const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
         if (currentIndex > 0) {
             setSelectedEvent(navigationEvents[currentIndex - 1]);
         }
-    };
+    }, [selectedEvent, navigationEvents]);
 
     const hasNextEvent = useMemo(() => {
-        if (!selectedEvent) return false;
+        if (!selectedEvent || navigationEvents.length === 0) return false;
         const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
+        if (currentIndex < 0) return false;
         return currentIndex < navigationEvents.length - 1;
     }, [selectedEvent, navigationEvents]);
 
     const hasPreviousEvent = useMemo(() => {
-        if (!selectedEvent) return false;
+        if (!selectedEvent || navigationEvents.length === 0) return false;
         const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
+        if (currentIndex < 0) return false;
         return currentIndex > 0;
     }, [selectedEvent, navigationEvents]);
 
@@ -2187,8 +2286,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         createdBy: authUser?.uid || 'admin',
                         hasBeach
                     });
-                    setCustomLocalities(prev => [...prev, { id: newId, name, coords, zoom: 15, sectors }]);
-                    setCustomLocalitySectors(prev => ({ ...prev, [name]: sectors }));
+                    setCustomLocalities(prev => [...prev, { id: newId, name, coords, zoom: 15, sectors, hasBeach }]);
                     showToast(`Localidad "${name}" creada exitosamente`, 'success');
                 } catch (error) {
                     showToast('Error al crear localidad', 'error');
@@ -2206,8 +2304,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         hasBeach
                     });
                     
-                    setCustomLocalities(prev => prev.map(c => c.id === id ? { ...c, name, coords, sectors } : c));
-                    setCustomLocalitySectors(prev => ({ ...prev, [name]: sectors }));
+                    setCustomLocalities(prev => prev.map(c => c.id === id ? { ...c, name, coords, sectors, hasBeach } : c));
                     showToast(`Localidad "${name}" actualizada exitosamente`, 'success');
                 } catch (error) {
                     showToast('Error al actualizar localidad', 'error');
@@ -2217,15 +2314,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     await deleteCustomLocality(id);
                     setCustomLocalities(prev => prev.filter(l => l.id !== id));
-                    setCustomLocalitySectors(prev => {
-                        const newSectors = { ...prev };
-                        delete newSectors[name];
-                        return newSectors;
-                    });
                     showToast(`Localidad "${name}" eliminada`, 'success');
                 } catch (error) {
                     showToast('Error al eliminar localidad', 'error');
                 }
+            },
+            handleDeletePost: async (postId: string) => {
+                try {
+                    await deletePost(postId);
+                    showToast("Post eliminado", "success");
+                } catch (error) {
+                    console.error("Error deleting post:", error);
+                    showToast("Error al eliminar el post", "error");
+                }
+            },
+            createAnnouncement: async (announcement: Omit<Announcement, 'id' | 'timestamp'>) => {
+                await createAnnouncement(announcement);
+            },
+            handleObtainCoupon: async (couponId: string, couponCode: string, userId: string, userName: string, businessId: string) => {
+                return obtainCoupon(couponId, couponCode, userId, userName, businessId);
             },
             setActiveView: (view: ViewType) => {
                 const paths: Record<string, string> = {
@@ -2247,6 +2354,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             isSuperUser,
             isSuperAdmin,
             showToast,
+            setCustomLocalities,
+            publicCoupons,
+            userActiveCoupons,
         }}>
             {children}
         </DataContext.Provider>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Wallet, Ticket, Clock, CheckCircle, AlertCircle, QrCode, Tag, Loader2, Calendar, Store } from 'lucide-react';
+import { X, Wallet, Ticket, Clock, CheckCircle, AlertCircle, QrCode, Tag, Loader2, Calendar, Store, Copy, Check } from 'lucide-react';
 import { subscribeToUserWallet } from '../../services/couponService';
 import { CouponRedemption } from '../../types';
+import { ensureDate } from '../../services/dateUtils';
 
 // Conditional QR import
 import { QRCodeSVG } from 'qrcode.react';
@@ -19,6 +20,13 @@ export const UserWalletModal: React.FC<UserWalletModalProps> = ({ isOpen, onClos
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'reserved' | 'redeemed' | 'expired' | 'cancelled'>('reserved');
     const [selectedRedemption, setSelectedRedemption] = useState<CouponRedemption | null>(null);
+    const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+    const handleCopyCode = (code: string) => {
+        navigator.clipboard.writeText(code);
+        setCopiedCode(code);
+        setTimeout(() => setCopiedCode(null), 2000);
+    };
 
     useEffect(() => {
         if (isOpen && userId) {
@@ -117,39 +125,38 @@ export const UserWalletModal: React.FC<UserWalletModalProps> = ({ isOpen, onClos
                                         : 'bg-white/5 border-white/5 hover:border-white/10 hover:bg-white/[0.07]'
                                     }`}
                                 >
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div>
-                                            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1">
-                                                {redemption.couponCode}
-                                            </p>
-                                            <h4 className="text-sm font-black text-white leading-tight">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex flex-col justify-center">
+                                            <h4 className="text-sm font-black text-white leading-tight mb-1">
                                                 {redemption.couponValue}{redemption.couponType === 'percentage' ? '% OFF' : '$ OFF'}
                                             </h4>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                                                {redemption.couponCode}
+                                            </p>
                                         </div>
-                                        <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter ${
-                                            redemption.status === 'reserved' ? 'bg-emerald-500/20 text-emerald-400' :
-                                            redemption.status === 'redeemed' ? 'bg-sky-500/20 text-sky-400' :
-                                            'bg-rose-500/20 text-rose-400'
-                                        }`}>
-                                            {redemption.status === 'reserved' ? 'Listo para usar' : 
-                                             redemption.status === 'redeemed' ? 'Canjeado' : 'Expirado'}
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-3 mt-4 text-slate-500">
-                                        <div className="flex items-center gap-1.5 bg-black/20 px-2.5 py-1 rounded-lg">
-                                            {redemption.businessLogo ? (
-                                                <img src={redemption.businessLogo} className="w-3 h-3 rounded-full object-cover" alt="" />
-                                            ) : (
-                                                <Store className="w-3 h-3" />
-                                            )}
-                                            <span className="text-[9px] font-bold truncate max-w-[100px]">{redemption.businessName || 'Negocio'}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 bg-black/20 px-2.5 py-1 rounded-lg">
-                                            <Clock className="w-3 h-3" />
-                                            <span className="text-[9px] font-bold">
-                                                {redemption.expiresAt ? new Date(redemption.expiresAt.seconds * 1000).toLocaleDateString() : 'Hoy'}
-                                            </span>
+                                        <div className="flex flex-col items-end gap-2 text-slate-500">
+                                            <div className="flex items-center gap-1.5 bg-black/20 px-2.5 py-1 rounded-lg">
+                                                {redemption.businessLogo ? (
+                                                    <img src={redemption.businessLogo} alt="" className="w-3 h-3 rounded-full object-cover" />
+                                                ) : (
+                                                    <Store className="w-3 h-3" />
+                                                )}
+                                                <span className="text-[9px] font-bold truncate max-w-[100px]">{redemption.businessName || 'Negocio'}</span>
+                                            </div>
+                                            <div className={`flex items-center gap-1.5 bg-black/20 px-2.5 py-1 rounded-lg ${
+                                                redemption.status === 'reserved' && 
+                                                (ensureDate(redemption.expiresAt).getTime() - Date.now() < 6 * 60 * 60 * 1000)
+                                                ? 'text-rose-400'
+                                                : ''
+                                            }`}>
+                                                <Clock className="w-3 h-3" />
+                                                <span className="text-[9px] font-bold">
+                                                    {redemption.status === 'reserved' && 
+                                                     (ensureDate(redemption.expiresAt).getTime() - Date.now() < 6 * 60 * 60 * 1000)
+                                                     ? '¡Pronto!'
+                                                     : ensureDate(redemption.expiresAt).toLocaleDateString()}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -203,12 +210,25 @@ export const UserWalletModal: React.FC<UserWalletModalProps> = ({ isOpen, onClos
                                             </div>
                                         </div>
 
-                                        <div className="bg-white/5 rounded-[2rem] p-6 border border-white/5 text-center relative overflow-hidden">
+                                        <div 
+                                            className="bg-white/5 rounded-[2rem] p-6 border border-white/5 text-center relative overflow-hidden cursor-pointer hover:bg-white/10 transition-all group/code"
+                                            onClick={() => handleCopyCode(selectedRedemption.reservationCode)}
+                                        >
                                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-amber-500" />
-                                            <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Código de Validación</p>
+                                            <div className="flex items-center justify-center gap-2 mb-2">
+                                                <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.3em]">Código de Validación</p>
+                                                {copiedCode === selectedRedemption.reservationCode ? (
+                                                    <Check className="w-3 h-3 text-emerald-500" />
+                                                ) : (
+                                                    <Copy className="w-3 h-3 text-slate-600 group-hover/code:text-orange-500 transition-colors" />
+                                                )}
+                                            </div>
                                             <p className="text-3xl font-black text-white font-mono tracking-[0.25em]">
                                                 {selectedRedemption.reservationCode}
                                             </p>
+                                            {copiedCode === selectedRedemption.reservationCode && (
+                                                <p className="text-[8px] font-black text-emerald-500 uppercase mt-2 animate-bounce">¡Copiado!</p>
+                                            )}
                                         </div>
 
                                         <div className="space-y-4">
@@ -218,7 +238,7 @@ export const UserWalletModal: React.FC<UserWalletModalProps> = ({ isOpen, onClos
                                                     <span className="text-[10px] font-bold text-slate-400 uppercase">Obtenido el</span>
                                                 </div>
                                                 <span className="text-[10px] font-black text-white">
-                                                    {selectedRedemption.reservedAt ? new Date(selectedRedemption.reservedAt.seconds * 1000).toLocaleDateString() : 'Hoy'}
+                                                    {selectedRedemption.reservedAt ? ensureDate(selectedRedemption.reservedAt).toLocaleDateString() : 'Hoy'}
                                                 </span>
                                             </div>
                                             <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
@@ -227,7 +247,7 @@ export const UserWalletModal: React.FC<UserWalletModalProps> = ({ isOpen, onClos
                                                     <span className="text-[10px] font-bold text-slate-400 uppercase">Expira el</span>
                                                 </div>
                                                 <span className="text-[10px] font-black text-rose-400">
-                                                    {selectedRedemption.expiresAt ? new Date(selectedRedemption.expiresAt.seconds * 1000).toLocaleDateString() : 'N/A'}
+                                                    {selectedRedemption.expiresAt ? ensureDate(selectedRedemption.expiresAt).toLocaleDateString() : 'N/A'}
                                                 </span>
                                             </div>
                                         </div>
@@ -244,9 +264,10 @@ export const UserWalletModal: React.FC<UserWalletModalProps> = ({ isOpen, onClos
                                             <CheckCircle className="w-10 h-10 text-emerald-400" />
                                         </div>
                                         <h3 className="text-xl font-black text-white mb-2">¡Canjeado Exitosamente!</h3>
-                                        <p className="text-xs text-slate-500 px-12">
-                                            Este cupón ya fue utilizado.
-                                        </p>
+                                        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                                            <CheckCircle className="w-4 h-4" />
+                                            <span className="text-xs font-bold uppercase">Canjeado el {ensureDate(selectedRedemption.redeemedAt).toLocaleDateString()}</span>
+                                        </div>
                                     </div>
                                 )}
 
@@ -256,9 +277,10 @@ export const UserWalletModal: React.FC<UserWalletModalProps> = ({ isOpen, onClos
                                             <AlertCircle className="w-10 h-10 text-rose-400" />
                                         </div>
                                         <h3 className="text-xl font-black text-white mb-2">Cupón Expirado</h3>
-                                        <p className="text-xs text-slate-500 px-12">
-                                            El plazo para utilizar este cupón ha vencido.
-                                        </p>
+                                        <div className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400">
+                                            <AlertCircle className="w-4 h-4" />
+                                            <span className="text-xs font-bold uppercase">Expirado el {ensureDate(selectedRedemption.expiresAt).toLocaleDateString()}</span>
+                                        </div>
                                     </div>
                                 )}
                             </div>

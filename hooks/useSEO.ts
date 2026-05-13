@@ -59,5 +59,8 @@ export const useSEO = ({ title, description, image, url }: SEOProps) => {
       }
     }
 
+    return () => {
+      document.title = 'MontaPulse - Descubre Montañita y la Costa en Tiempo Real';
+    };
   }, [title, description, image, url]);
 };

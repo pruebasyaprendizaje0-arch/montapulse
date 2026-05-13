@@ -1121,8 +1121,8 @@ export function Community() {
                                                 className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-[10px] font-bold text-white uppercase mt-1 focus:ring-1 focus:ring-cyan-500 outline-none"
                                             >
                                                 <option value="">Seleccionar Localidad</option>
-                                                {[...LOCALITIES, ...customLocalities].map(loc => (
-                                                    <option key={loc.name} value={loc.name}>{loc.name}</option>
+                                                {[...LOCALITIES, ...customLocalities].filter((l, i, arr) => arr.findIndex(x => x.name === l.name) === i).map(loc => (
+                                                    <option key={(loc as any).id || loc.name} value={loc.name}>{loc.name}</option>
                                                 ))}
                                             </select>
                                         )}
@@ -1462,8 +1462,8 @@ export function Community() {
                                     className="bg-transparent border-none text-[10px] font-black text-orange-500 uppercase focus:outline-none cursor-pointer"
                                 >
                                     <option value="" className="bg-slate-900 text-white">TODAS LAS ZONAS</option>
-                                    {[...LOCALITIES, ...customLocalities].map(loc => (
-                                        <option key={loc.name} value={loc.name} className="bg-slate-900 text-white">{loc.name.toUpperCase()}</option>
+                                    {[...LOCALITIES, ...customLocalities].filter((l, i, arr) => arr.findIndex(x => x.name === l.name) === i).map(loc => (
+                                        <option key={(loc as any).id || loc.name} value={loc.name} className="bg-slate-900 text-white">{loc.name.toUpperCase()}</option>
                                     ))}
                                 </select>
                             </div>

@@ -111,6 +111,7 @@ export interface UserProfile {
   monthlyAnnouncementCount?: number;
   lastEventResetDate?: number;
   lastAnnouncementResetDate?: number;
+  isBanned?: boolean;
 }
 
 export interface Business {
@@ -155,6 +156,7 @@ export interface Business {
   openingHours?: {
     [key: string]: { open: string; close: string; closed?: boolean } | null;
   };
+  moods?: Vibe[];
 }
 
 export interface ProfileReview {
@@ -174,6 +176,7 @@ export interface MontanitaEvent {
   slug?: string;
   businessId: string;
   title: string;
+  name?: string; // For compatibility
   locality?: string;
   description: string;
   startAt: any; // Using any to handle Firestore Timestamp vs Date
@@ -232,7 +235,7 @@ export interface PulseNotification {
   title: string;
   message?: string;
   body?: string;
-  type: 'system' | 'community' | 'offer' | 'alert';
+  type: 'system' | 'community' | 'offer' | 'alert' | 'evento' | 'coupon';
   priority?: 'normal' | 'urgent';
   read: boolean;
   createdAt: any;
@@ -319,4 +322,50 @@ export interface AppSettings {
   minVersion: string;
   updatedAt: any;
   updatedBy: string;
+  allowLocalityCreation?: boolean;
+}
+
+// ==================== COUPONS ====================
+
+export type CouponType = 'percentage' | 'fixed_amount';
+
+export interface Coupon {
+  id: string;
+  businessId: string;
+  ownerId: string;             // UID del dueño del negocio
+  businessName?: string;
+  code: string;                // Slug único uppercase (ej: "SURF20")
+  type: CouponType;            // 'percentage' | 'fixed_amount'
+  value: number;               // 20 (para 20%) o 5.00 (para $5)
+  description?: string;
+  expiresAt: any;              // Firestore Timestamp
+  maxUses: number;             // Límite total de usos (0 = ilimitado)
+  currentUses: number;         // Contador de redenciones
+  minPurchase: number;         // Monto mínimo de compra ($)
+  isActive: boolean;
+  requiresProximity: boolean;  // Geovallado activo
+  proximityRadius: number;     // Radio en metros (default 500)
+  createdAt: any;
+  updatedAt?: any;
+}
+
+
+export interface CouponRedemption {
+  id: string;
+  couponId: string;
+  ownerId: string;             // UID del dueño del negocio (para reglas de seguridad)
+  couponCode: string;      // El código base del cupón (ej: "SURF20")
+  couponValue: number;     // Valor denormalizado (ej: 20)
+  couponType: CouponType;  // Tipo denormalizado (ej: 'percentage')
+  userId: string;
+  userName?: string;
+  businessId: string;
+  businessName?: string;
+  businessLogo?: string;
+  status: 'reserved' | 'redeemed' | 'expired' | 'cancelled';
+  reservationCode: string; // El código único generado para el canje (ej: "MT-452")
+  reservedAt: any;         // Fecha de obtención/reserva
+  expiresAt: any;          // Fecha límite para canjear en el local
+  redeemedAt?: any;        // Fecha de "quema" en el local
+  validatedBy?: string;    // ID del negocio/encargado que validó
 }

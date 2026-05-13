@@ -29,6 +29,7 @@ const isExpired = (expiresAt: any): boolean => {
 };
 
 export const CouponCard: React.FC<CouponCardProps> = ({ coupon, onRedeem, isOwner = false, compact = false, pendingCount = 0, onShowStats }) => {
+    const [copied, setCopied] = React.useState(false);
     const expired = isExpired(coupon.expiresAt);
     const exhausted = coupon.maxUses > 0 && coupon.currentUses >= coupon.maxUses;
     const available = coupon.isActive && !expired && !exhausted;
@@ -36,6 +37,8 @@ export const CouponCard: React.FC<CouponCardProps> = ({ coupon, onRedeem, isOwne
     const handleCopy = (e: React.MouseEvent) => {
         e.stopPropagation();
         navigator.clipboard.writeText(coupon.code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
     };
 
     if (compact) {
@@ -134,10 +137,13 @@ export const CouponCard: React.FC<CouponCardProps> = ({ coupon, onRedeem, isOwne
                     </div>
                     <button
                         onClick={handleCopy}
-                        className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 hover:text-white transition-all active:scale-90"
+                        className={`p-2.5 rounded-xl transition-all active:scale-90 flex items-center gap-2 ${
+                            copied ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white'
+                        }`}
                         title="Copiar código"
                     >
-                        <Copy className="w-4 h-4" />
+                        {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        {copied && <span className="text-[8px] font-black uppercase">¡Copiado!</span>}
                     </button>
                 </div>
 

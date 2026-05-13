@@ -16,6 +16,7 @@ import { logout, updateUserProfile as updateAuthProfile } from '../services/auth
 import { LOCALITY_SECTORS, MAP_ICONS, LOCALITIES, PLAN_LIMITS, SECTOR_INFO, BASE_URL } from '../constants';
 import { compressImage } from '../utils/imageUtils';
 import { uploadBase64Image } from '../services/storageService';
+import { PageLoader } from '../components/common/PageLoader';
 
 
 import { useAuthContext } from '../context/AuthContext';
@@ -60,6 +61,9 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         setPublicProfileId,
         setPublicProfileType,
         loading: dataLoading,
+        publicCoupons,
+        userActiveCoupons,
+        handleObtainCoupon,
         showHostWizard,
         handleOpenNewEventWizard,
         showPulseModal,
@@ -112,9 +116,19 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
             setTimeout(() => setShowCopied(false), 2000);
         }
     };
-    const [publicCoupons, setPublicCoupons] = useState<any[]>([]);
-    const [userActiveCoupons, setUserActiveCoupons] = useState<CouponRedemption[]>([]);
     const [secretClickCount, setSecretClickCount] = useState(0);
+
+    const handleTitleClick = () => {
+        if (!user || user.role !== 'admin') return;
+        setSecretClickCount(prev => {
+            const next = prev + 1;
+            if (next >= 7) {
+                setShowAdminCenter(true);
+                return 0;
+            }
+            return next;
+        });
+    };
     const [aboutContent, setAboutContent] = useState({
         description: 'Tu guía definitiva para no perderte nada en la costa. Descubre eventos, conecta con la comunidad y vive el pulso real de Montañita.',
         feature1: 'Ver eventos',
@@ -148,15 +162,6 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const creditsRemaining = isPremium ? null : availableCredits;
 
     useEffect(() => {
-        if (user) {
-            const unsubscribe = subscribeToUserWallet(user.id, (data) => {
-                setUserActiveCoupons(data.filter(r => r.status === 'reserved'));
-            });
-            return () => unsubscribe();
-        }
-    }, [user]);
-
-    useEffect(() => {
         const loadSettings = async () => {
             const data = await getAppSettings('about_info');
             if (data) {
@@ -164,13 +169,6 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
             }
         };
         loadSettings();
-
-        // Subscribe to public coupons
-        const unsubscribe = subscribeToPublicCoupons((data) => {
-            setPublicCoupons(data);
-        });
-
-        return () => unsubscribe();
     }, []);
 
     const getCategoryEmoji = (category: string) => {
@@ -330,13 +328,17 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         );
     }
 
+    if (authLoading || dataLoading) {
+        return <PageLoader message="Abriendo tu Passport..." />;
+    }
+
     return (
         <>
-            <div className="min-h-screen bg-[#000000] text-white pb-24 overflow-y-auto no-scrollbar">
+            <div className="min-h-screen bg-[#000000] text-white pb-24">
                 {/* Header */}
-                <div className="pt-12 px-8 flex items-center justify-between mb-10">
+                <div className="pt-8 sm:pt-12 px-6 sm:px-8 flex items-center justify-between mb-8 sm:mb-10">
                     <div 
-                        className="flex flex-col cursor-default select-none"
+                        className="flex flex-col cursor-pointer select-none p-4 -m-4 active:opacity-70 transition-opacity"
                         onClick={() => {
                             if (isSuperAdmin) {
                                 setSecretClickCount(prev => prev + 1);
@@ -348,9 +350,10 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             }
                         }}
                     >
-                        <h1 className="text-3xl font-black tracking-tight text-white">Mi Passport</h1>
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-1">Centro de Control</span>
+                        <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">Mi Passport</h1>
+                        <span className="text-[8px] sm:text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-0.5 sm:mt-1">Centro de Control</span>
                     </div>
+
                     <div className="flex items-center gap-3">
                         <button
                             onClick={onEditProfile}
@@ -369,7 +372,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                         {/* Interactive Card Background */}
                         <div className="absolute inset-0 bg-gradient-to-br from-orange-600/30 via-transparent to-amber-600/30 rounded-[3rem] blur-3xl opacity-30 group-hover:opacity-50 transition-opacity duration-1000" />
 
-                        <div className="relative glass-panel rounded-[3rem] p-8 overflow-hidden border border-white/10 shadow-3xl">
+                        <div className="relative glass-panel rounded-3xl sm:rounded-[3rem] p-6 sm:p-8 overflow-hidden border border-white/10 shadow-3xl">
                             {/* Card Decorative Elements */}
                             <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl -mr-32 -mt-32 animate-pulse" />
                             <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-500/5 rounded-full blur-3xl -ml-24 -mb-24" />
@@ -403,7 +406,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
                                 {/* Identity */}
                                 <div className="text-center mb-10">
-                                    <h2 className="text-3xl font-black text-white tracking-tight mb-3 flex items-center justify-center gap-2">
+                                    <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-3 flex items-center justify-center gap-2">
                                         {user.name} <span className="text-orange-500">{user.surname}</span>
                                     </h2>
                                     <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -620,7 +623,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                             
                                             if (confirmed) {
                                                 try {
-                                                    const result = await obtainCoupon(
+                                                    const result = await handleObtainCoupon(
                                                         c.id,
                                                         c.code,
                                                         user.id,
@@ -693,7 +696,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                 )}
 
                 {/* Mi Negocio Section */}
-                <div className="px-8 mb-12">
+                <div className="px-6 sm:px-8 mb-12">
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-lg font-black tracking-tight">Mi Negocio</h3>
                         {user?.businessId && (
@@ -729,7 +732,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/20" />
                                 </div>
-                                <div className="relative p-6 flex flex-col gap-4">
+                                <div className="relative p-5 sm:p-8 flex flex-col gap-4">
                                     <div className="flex items-center gap-4">
                                         <div className="w-16 h-16 rounded-2xl bg-black/50 backdrop-blur-md p-1 border border-white/10 shadow-2xl overflow-hidden shrink-0 flex items-center justify-center">
                                             {biz.icon ? (
@@ -795,17 +798,22 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center justify-between mt-2 pt-4 border-t border-white/10">
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-xs font-black text-orange-500 uppercase tracking-widest">Gestionar Negocio</span>
+                                    <div className="flex flex-col gap-3 mt-2 pt-4 border-t border-white/10">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em]">Gestionar Negocio</span>
+                                            <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/5 group-hover:bg-orange-500 group-hover:border-orange-400 transition-colors">
+                                                <Edit3 className="w-4 h-4 text-white" />
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 overflow-x-auto pb-4 -mx-5 px-5 touch-pan-x no-scrollbar">
                                             <button
                                                  onClick={(e) => {
                                                     e.stopPropagation();
                                                     onNavigate?.('plans');
                                                 }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-amber-500/10 flex items-center gap-1.5"
+                                                className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-amber-500/10 flex items-center gap-1.5 shrink-0"
                                             >
-                                                <Zap className="w-3 h-3 fill-current" />
+                                                <Zap className="w-3.5 h-3.5 fill-current" />
                                                 Mejorar Plan
                                             </button>
                                             <button
@@ -813,9 +821,9 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                     e.stopPropagation();
                                                     setShowAIMarketing(true);
                                                 }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-indigo-500/10 flex items-center gap-1.5"
+                                                className="px-4 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-indigo-500/10 flex items-center gap-1.5 shrink-0"
                                             >
-                                                <Sparkles className="w-3 h-3 fill-current" />
+                                                <Sparkles className="w-3.5 h-3.5 fill-current" />
                                                 Asistente IA
                                             </button>
                                             <button
@@ -823,9 +831,9 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                     e.stopPropagation();
                                                     setShowCouponManager(true);
                                                 }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-emerald-500/10 flex items-center gap-1.5"
+                                                className="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-emerald-500/10 flex items-center gap-1.5 shrink-0"
                                             >
-                                                <Ticket className="w-3 h-3" />
+                                                <Ticket className="w-3.5 h-3.5" />
                                                 Cupones
                                             </button>
                                             <button
@@ -835,9 +843,9 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                     setPublicProfileType('business');
                                                     setShowPublicProfile(true);
                                                 }}
-                                                className="px-4 py-1.5 bg-white/10 border border-white/20 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:bg-white/20 active:scale-95 transition-all flex items-center gap-1.5 shadow-lg"
+                                                className="px-4 py-1.5 bg-white/10 border border-white/20 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:bg-white/20 active:scale-95 transition-all flex items-center gap-1.5 shadow-lg shrink-0"
                                             >
-                                                <Eye className="w-3 h-3" />
+                                                <Eye className="w-3.5 h-3.5" />
                                                 Vista Previa
                                             </button>
                                             <button
@@ -845,23 +853,20 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                     e.stopPropagation();
                                                     handleShareBusiness(biz);
                                                 }}
-                                                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shadow-lg ${showCopied ? 'bg-emerald-500 text-white shadow-emerald-500/10' : 'bg-white/10 border border-white/20 text-white hover:bg-white/20 shadow-white/5'}`}
+                                                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shadow-lg shrink-0 ${showCopied ? 'bg-emerald-500 text-white shadow-emerald-500/10' : 'bg-white/10 border border-white/20 text-white hover:bg-white/20 shadow-white/5'}`}
                                             >
                                                 {showCopied ? (
                                                     <>
-                                                        <CheckCircle className="w-3 h-3" />
-                                                        ¡Copiado!
+                                                        <CheckCircle className="w-3.5 h-3.5" />
+                                                        ¡COPIADO!
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Link className="w-3 h-3" />
-                                                        Enlace
+                                                        <Link className="w-3.5 h-3.5" />
+                                                        ENLACE
                                                     </>
                                                 )}
                                             </button>
-                                        </div>
-                                        <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/5 group-hover:bg-orange-500 group-hover:border-orange-400 transition-colors">
-                                            <Edit3 className="w-4 h-4 text-white" />
                                         </div>
                                     </div>
                                 </div>
@@ -882,7 +887,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
                 {/* Me Siguen Section */}
                 {userBusiness && (
-                    <div className="px-8 mb-12">
+                    <div className="px-6 sm:px-8 mb-12">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-black tracking-tight">Me Siguen</h3>
                             {businessFollowers.length > 0 && (

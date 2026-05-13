@@ -75,14 +75,26 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({ stats, appConfig
                                 {appConfig.maintenanceMode ? 'Solo administradores tienen acceso completo.' : 'No se han detectado problemas en las últimas 24 horas.'}
                             </p>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button onClick={() => setActiveTab('moderation')} className="p-4 bg-black/40 hover:bg-black/60 rounded-2xl border border-white/5 text-center transition-all">
-                                <p className="text-xs font-black text-white">{posts.length}</p>
+                        <div className="grid grid-cols-2 xs:grid-cols-3 gap-3">
+                            <button onClick={() => setActiveTab('moderation')} className="p-4 bg-black/40 hover:bg-black/60 rounded-2xl border border-white/5 text-center transition-all group">
+                                <p className="text-sm font-black text-white group-hover:text-orange-500">{posts.length}</p>
                                 <p className="text-[9px] text-slate-500 uppercase font-black">Posts</p>
                             </button>
-                            <button onClick={() => setActiveTab('businesses')} className="p-4 bg-black/40 hover:bg-black/60 rounded-2xl border border-white/5 text-center transition-all">
-                                <p className="text-xs font-black text-white">{businesses.filter(b => !b.isVerified).length}</p>
-                                <p className="text-[9px] text-slate-500 uppercase font-black">Pendientes</p>
+                            <button onClick={() => setActiveTab('businesses')} className="p-4 bg-black/40 hover:bg-black/60 rounded-2xl border border-white/5 text-center transition-all group">
+                                <p className="text-sm font-black text-white group-hover:text-orange-500">{businesses.filter(b => !b.isVerified).length}</p>
+                                <p className="text-[9px] text-slate-500 uppercase font-black">Verificar</p>
+                            </button>
+                            <button onClick={() => setActiveTab('masterData')} className="p-4 bg-black/40 hover:bg-black/60 rounded-2xl border border-white/5 text-center transition-all group">
+                                <Activity className="w-4 h-4 text-orange-500 mx-auto mb-1" />
+                                <p className="text-[9px] text-slate-500 uppercase font-black">Datos</p>
+                            </button>
+                            <button onClick={() => setActiveTab('users')} className="p-4 bg-black/40 hover:bg-black/60 rounded-2xl border border-white/5 text-center transition-all group">
+                                <Users className="w-4 h-4 text-sky-500 mx-auto mb-1" />
+                                <p className="text-[9px] text-slate-500 uppercase font-black">Usuarios</p>
+                            </button>
+                            <button onClick={() => setActiveTab('ai')} className="p-4 bg-black/40 hover:bg-black/60 rounded-2xl border border-white/5 text-center transition-all group">
+                                <Lock className="w-4 h-4 text-rose-500 mx-auto mb-1" />
+                                <p className="text-[9px] text-slate-500 uppercase font-black">Sistema</p>
                             </button>
                         </div>
                     </div>

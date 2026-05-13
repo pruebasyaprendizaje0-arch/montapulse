@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, memo } from 'react';
 import L from 'leaflet';
 import { Navigation, Layers, Plus, Minus, X, CheckCircle, MapPin, Zap, Flame, Info, Crosshair } from 'lucide-react';
-import { Business, Sector, MontanitaEvent, SubscriptionPlan, BusinessCategory, CommunityPost, AppSettings } from '../../types.ts';
-import { SECTOR_INFO, LOCALITIES, MAP_ICONS } from '../../constants.ts';
+import { Business, Sector, MontanitaEvent, SubscriptionPlan, BusinessCategory, CommunityPost, AppSettings } from '../../types';
+import { SECTOR_INFO, LOCALITIES, MAP_ICONS } from '../../constants';
 import { useToast } from '../../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 
@@ -101,7 +101,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   location: '📍',
 };
 
-export const MapView: React.FC<MapViewProps> = ({
+export const MapView: React.FC<MapViewProps> = memo(({
   onBusinessSelect,
   selectedSector,
   searchQuery,
@@ -162,7 +162,7 @@ export const MapView: React.FC<MapViewProps> = ({
   const [addingPointType, setAddingPointType] = useState<'business' | 'reference'>('business');
   const previewPolylineRef = useRef<L.Polyline | null>(null);
 
-const currentTileModeRef = useRef<'dark' | 'satellite' | 'google' | null>(null);
+  const currentTileModeRef = useRef<'dark' | 'satellite' | 'google' | null>(null);
   const currentZoomRef = useRef<number>(15);
   // Stable refs for callbacks so they never trigger the big effect
   const onBusinessSelectRef = useRef(onBusinessSelect);
@@ -254,7 +254,7 @@ const currentTileModeRef = useRef<'dark' | 'satellite' | 'google' | null>(null);
     onEditBusiness?.(business.id);
   };
 
-useEffect(() => {
+  useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const center: L.LatLngExpression = [-1.825, -80.753];
     const map = L.map(containerRef.current, {
@@ -280,7 +280,7 @@ useEffect(() => {
     // Listen for zoom changes to switch to Google Maps at high zoom
     map.on('zoomend', () => handleZoomChange(map));
     
-// Inject global fixes for Leaflet rendering glitches
+    // Inject global fixes for Leaflet rendering glitches
     const style = document.createElement('style');
     style.id = 'map-bg-style';
     style.innerHTML = `
@@ -314,9 +314,31 @@ useEffect(() => {
     if (mapRef.current) updateTiles(mapRef.current, mapMode);
   }, [mapMode]);
 
+  // 1. Data Signature for Draw calls
+  const dataSignature = useMemo(() => {
+      return [
+          businesses.length,
+          events.length,
+          posts.length,
+          selectedSector,
+          activeTab,
+          searchQuery,
+          activeFilter,
+          localityName,
+          isPanelMinimized
+      ].join('|');
+  }, [businesses, events, posts, selectedSector, activeTab, searchQuery, activeFilter, localityName, isPanelMinimized]);
+
+  const lastSignatureRef = useRef<string>('');
+
+  // 2. Main Draw Effect with Signature Gate
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !markersLayerRef.current || !polygonsLayerRef.current || !heatmapLayerRef.current) return;
+    
+    // Skip if data hasn't changed meaningfully
+    if (lastSignatureRef.current === dataSignature) return;
+    lastSignatureRef.current = dataSignature;
 
     markersLayerRef.current.clearLayers();
     polygonsLayerRef.current.clearLayers();
@@ -618,15 +640,18 @@ useEffect(() => {
     }
   }, [mousePos, editingSector, tempCoords]);
 
+  const prevFocusedIdRef = React.useRef<string | null>(null);
+  
   useEffect(() => {
-    if (focusedBusinessId && mapRef.current) {
+    if (focusedBusinessId && focusedBusinessId !== prevFocusedIdRef.current && mapRef.current) {
+      prevFocusedIdRef.current = focusedBusinessId;
       const business = businesses.find(b => b.id === focusedBusinessId);
       if (business?.coordinates) {
         mapRef.current.flyTo([business.coordinates[0], business.coordinates[1]], 16, { duration: 1 });
-        onBusinessSelect(business);
+        onBusinessSelectRef.current(business);
       }
     }
-  }, [focusedBusinessId, businesses, onBusinessSelect]);
+  }, [focusedBusinessId, businesses]);
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
@@ -955,6 +980,6 @@ useEffect(() => {
       </div>
     </div>
   );
-};
+});
 
 

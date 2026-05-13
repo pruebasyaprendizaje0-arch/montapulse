@@ -9,6 +9,7 @@ import {
 import { PublicProfileModal } from '../components/PublicProfileModal';
 import { useData } from '../context/DataContext';
 import { Business, BusinessCategory, SubscriptionPlan } from '../types';
+import { Skeleton } from '../components/Skeleton';
 
 // ── Plan badge config ──────────────────────────────────
 const PLAN_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode; gradient: string }> = {
@@ -260,11 +261,12 @@ const BusinessCard: React.FC<BusinessCardProps> = ({ business, onOpenProfile, on
 
 // ── Main Services Page ─────────────────────────────────
 export const Services: React.FC = () => {
-    const { businesses, masterCategories = [] } = useData();
+    const { businesses, masterCategories = [], customLocalities = [], loading } = useData();
     const navigate = useNavigate();
 
     const [search, setSearch] = useState('');
-    const [activeCategory, setActiveCategory] = useState<BusinessCategory | 'all'>('all');
+    const [activeCategory, setActiveCategory] = useState<BusinessCategory | 'all' | string>('all');
+    const [activeLocality, setActiveLocality] = useState<string>('all');
     const [showFilters, setShowFilters] = useState(false);
     const [activePlan, setActivePlan] = useState<SubscriptionPlan | 'all'>('all');
     const [onlyMilitary, setOnlyMilitary] = useState(false);
@@ -305,8 +307,9 @@ export const Services: React.FC = () => {
             const matchesCategory = activeCategory === 'all' || b.category === activeCategory;
             const matchesPlan = activePlan === 'all' || b.plan === activePlan;
             const matchesMilitary = !onlyMilitary || b.hasMilitaryBenefit;
+            const matchesLocality = activeLocality === 'all' || b.locality === activeLocality;
 
-            return matchesSearch && matchesCategory && matchesPlan && matchesMilitary;
+            return matchesSearch && matchesCategory && matchesPlan && matchesMilitary && matchesLocality;
         });
     }, [premiumBusinesses, search, activeCategory, activePlan, onlyMilitary]);
 
@@ -320,8 +323,14 @@ export const Services: React.FC = () => {
         return [...filtered].sort((a, b) => (order[a.plan] ?? 9) - (order[b.plan] ?? 9));
     }, [filtered]);
 
-    const clearAll = () => { setSearch(''); setActiveCategory('all'); setActivePlan('all'); setOnlyMilitary(false); };
-    const hasActiveFilter = search || activeCategory !== 'all' || activePlan !== 'all' || onlyMilitary;
+    const clearAll = () => { 
+        setSearch(''); 
+        setActiveCategory('all'); 
+        setActiveLocality('all');
+        setActivePlan('all'); 
+        setOnlyMilitary(false); 
+    };
+    const hasActiveFilter = search || activeCategory !== 'all' || activeLocality !== 'all' || activePlan !== 'all' || onlyMilitary;
 
     return (
         <div className="min-h-screen bg-[#020617] pb-32 pt-4">
@@ -387,6 +396,32 @@ export const Services: React.FC = () => {
                         >
                             <span>{cat.emoji}</span>
                             <span>{cat.label}</span>
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar mb-4 -mx-1 px-1">
+                    <button
+                        onClick={() => setActiveLocality('all')}
+                        className={`shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${activeLocality === 'all'
+                            ? 'bg-orange-500 border-orange-400 text-black shadow-lg shadow-orange-500/20'
+                            : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
+                        }`}
+                    >
+                        <MapPin className="w-3.5 h-3.5" />
+                        Todas las zonas
+                    </button>
+                    {customLocalities.map(loc => (
+                        <button
+                            key={loc.id}
+                            onClick={() => setActiveLocality(loc.name)}
+                            className={`shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${activeLocality === loc.name
+                                ? 'bg-sky-500 border-sky-400 text-black shadow-lg shadow-sky-500/20'
+                                : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
+                            }`}
+                        >
+                            {loc.hasBeach ? <span>🏖️</span> : <MapPin className="w-3.5 h-3.5" />}
+                            {loc.name}
                         </button>
                     ))}
                 </div>
@@ -462,7 +497,13 @@ export const Services: React.FC = () => {
                 </div>
 
                 {/* ── Business Cards ── */}
-                {sorted.length > 0 ? (
+                {loading ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {[1, 2, 3, 4, 5, 6].map(i => (
+                            <Skeleton key={`svc-skeleton-${i}`} className="w-full h-[400px] rounded-[2.5rem]" />
+                        ))}
+                    </div>
+                ) : sorted.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                         {sorted.map(business => (
                             <BusinessCard

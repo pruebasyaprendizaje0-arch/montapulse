@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useDeferredValue, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, ShieldCheck, Flame, Star, Search, Filter, Layers, ChevronDown, ChevronUp, TrendingUp, Clock, Trash2, ArrowRight, Radio, Navigation, Route, Compass } from 'lucide-react';
-import { MapView } from '../components/Map/MapView';
+const MapView = lazy(() => import('../components/Map/MapView').then(m => ({ default: m.MapView })));
 import { EventCard } from '../components/EventCard';
 import { Sector, MontanitaEvent, Business, BusinessCategory, Vibe, SubscriptionPlan } from '../types';
 import { LOCALITIES, LOCALITY_SECTORS, SECTOR_INFO, LOCALITY_POLYGONS, BASE_URL } from '../constants';
@@ -9,6 +9,7 @@ import { getPlannerRecommendations, PlannerSection, getRecommendationForUser } f
 import { deleteBusiness, createBusiness, updateBusiness, incrementBusinessViewCount } from '../services/firestoreService';
 import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
+import { PageLoader } from '../components/common/PageLoader';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { ItineraryModal } from '../components/Modals/ItineraryModal';
@@ -17,6 +18,7 @@ import { PlannerChatModal } from '../components/Modals/PlannerChatModal';
 import { isBusinessOpen } from '../utils/timeUtils';
 import { LocalityManagerModal } from '../components/Modals/LocalityManagerModal';
 import { useSEO } from '../hooks/useSEO';
+import { Skeleton } from '../components/Skeleton';
 
 interface ExploreProps {
     onEditBusiness?: (id: string) => void;
@@ -27,24 +29,6 @@ export const Explore: React.FC<ExploreProps> = ({
     onEditBusiness,
     userBusinessId
 }) => {
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { user, authUser, isAdmin, isSuperAdmin, isSuperUser } = useAuthContext();
-    
-    // Unified State
-    const [activeTab, setActiveTab] = useState<'events' | 'directory' | 'landmarks' | null>('events');
-    const [isGridView, setIsGridView] = useState(false);
-    const isSpecialUser = user?.email === 'ubicameinformacion@gmail.com' || user?.role === 'admin';
-    const isPremiumUser = user?.plan && [
-        SubscriptionPlan.PRO,
-        SubscriptionPlan.ELITE,
-        SubscriptionPlan.EXPERT
-    ].includes(user.plan as SubscriptionPlan) || isSpecialUser;
-
-    const isEliteUser = user?.plan && [
-        SubscriptionPlan.ELITE,
-        SubscriptionPlan.EXPERT
-    ].includes(user.plan as SubscriptionPlan) || isSpecialUser;
     const {
         events,
         businesses,
@@ -67,7 +51,6 @@ export const Explore: React.FC<ExploreProps> = ({
         setSearchQuery,
         selectedMood,
         setSelectedMood,
-        // filteredEvents, // This is now calculated locally
         toggleSector,
         isPanelMinimized,
         setIsPanelMinimized,
@@ -80,25 +63,31 @@ export const Explore: React.FC<ExploreProps> = ({
         setBizForm,
         bizForm,
         posts,
-        eventsWithLiveCounts, // Assuming this comes from useData now
+        eventsWithLiveCounts,
         handlePurgeAllReferences,
         customLocalities,
         handleAddCustomLocality,
         showLocalityManager,
         setShowLocalityManager,
-        appSettings
+        showPulseModal,
+        setShowPulseModal,
+        appSettings,
+        loading
     } = useData();
-    const userBusinessIdResolved = userBusinessId || businesses.find(b => b.ownerId === authUser?.uid)?.id;
+
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { user, authUser, isAdmin, isSuperAdmin, isSuperUser } = useAuthContext();
     const { t } = useTranslation();
     const { showToast, showConfirm, showPrompt } = useToast();
 
-    // Local state for AI only (if not moved to context)
+    // 1. Unified State
+    const [activeTab, setActiveTab] = useState<'events' | 'directory' | 'landmarks' | null>('events');
+    const [isGridView, setIsGridView] = useState(false);
     const [aiRecData, setAiRecData] = useState<PlannerSection[] | null>(null);
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [showItinerary, setShowItinerary] = useState(false);
     const [showPlannerChat, setShowPlannerChat] = useState(false);
-
-    // Ask Anything State
     const [askRecData, setAskRecData] = useState<PlannerSection[] | null>(null);
     const [isAskLoading, setIsAskLoading] = useState(false);
     const [showAskModal, setShowAskModal] = useState(false);
@@ -107,13 +96,32 @@ export const Explore: React.FC<ExploreProps> = ({
     const [focusedBusinessId, setFocusedBusinessId] = useState<string | null>(null);
     const [showingDirections, setShowingDirections] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
-    const mapRef = useRef<any>(null);
 
+    // SEO Hook
     useSEO({
         title: activeTab === 'events' ? 'Explora Eventos' : activeTab === 'landmarks' ? 'Puntos de Interés' : 'Directorio Local',
         description: `Encuentra los mejores lugares y eventos en ${currentLocality.name} con ubicame.info PULSE.`,
         url: BASE_URL + window.location.pathname
     });
+    
+    // 2. Refs
+    const mapRef = useRef<any>(null);
+
+    // 3. Derived State
+    const isSpecialUser = user?.email === 'ubicameinformacion@gmail.com' || user?.role === 'admin';
+    const isPremiumUser = user?.plan && [
+        SubscriptionPlan.PRO,
+        SubscriptionPlan.ELITE,
+        SubscriptionPlan.EXPERT
+    ].includes(user.plan as SubscriptionPlan) || isSpecialUser;
+
+    const isEliteUser = user?.plan && [
+        SubscriptionPlan.ELITE,
+        SubscriptionPlan.EXPERT
+    ].includes(user.plan as SubscriptionPlan) || isSpecialUser;
+
+    const userBusinessIdResolved = userBusinessId || businesses.find(b => b.ownerId === authUser?.uid)?.id;
+
 
     useEffect(() => {
         const state = location.state as { focusBusiness?: string } | null;
@@ -236,61 +244,50 @@ export const Explore: React.FC<ExploreProps> = ({
     };
 
     const filteredEvents = useMemo(() => {
-        const now = new Date();
-        let result = eventsWithLiveCounts.filter(e => e.endAt > now && e.status !== 'deactivated'); 
+        let result = [...eventsWithLiveCounts];
         if (activeFilter !== 'All') {
-            result = result.filter(e => e.category === activeFilter);
+            result = result.filter(e => e.vibe === activeFilter);
         }
         if (searchQuery) {
-            const q = (searchQuery || '').toLowerCase();
-            result = result.filter(e =>
-                (e.title || '').toLowerCase().includes(q) ||
-                (e.description || '').toLowerCase().includes(q)
+            const q = searchQuery.toLowerCase();
+            result = result.filter(e => 
+                e.name.toLowerCase().includes(q) || 
+                e.description.toLowerCase().includes(q) ||
+                e.vibe.toLowerCase().includes(q)
             );
         }
-        return result.sort((a, b) => {
-            if (a.isFeatured && !b.isFeatured) return -1;
-            if (!a.isFeatured && b.isFeatured) return 1;
-            return 0;
-        });
+        return result;
     }, [eventsWithLiveCounts, activeFilter, searchQuery]);
 
+    const deferredFilteredEvents = useDeferredValue(filteredEvents);
+
     const filteredBusinesses = useMemo(() => {
-        if (activeTab === 'landmarks') {
-            return businesses.filter(b => b.isReference);
+        let result = [...businesses];
+        if (activeFilter !== 'All') {
+            result = result.filter(b => b.category === activeFilter);
         }
-
-        let result = businesses.filter(b => !b.isReference);
-
-        if (activeTab === 'directory') {
-            if (activeFilter !== 'All') {
-                result = result.filter(b => b.category === activeFilter);
-            }
-            if (selectedSector) {
-                result = result.filter(b => b.sector === selectedSector);
-            }
-        }
-
-        if (activeTab === 'events') {
-            if (selectedSector) {
-                result = result.filter(b => b.sector === selectedSector);
-            }
-        }
-
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             result = result.filter(b => 
-                (b.name || '').toLowerCase().includes(q) || 
-                (b.description || '').toLowerCase().includes(q) ||
-                (b.category || '').toLowerCase().includes(q)
+                b.name.toLowerCase().includes(q) || 
+                b.description.toLowerCase().includes(q) ||
+                b.category.toLowerCase().includes(q)
             );
         }
-        
-        return result.sort((a, b) => {
-            const planOrder = { [SubscriptionPlan.EXPERT]: 0, [SubscriptionPlan.ELITE]: 1, [SubscriptionPlan.PRO]: 2, [SubscriptionPlan.FREE]: 3 };
-            return (planOrder[a.plan] ?? 4) - (planOrder[b.plan] ?? 4);
-        });
+        if (selectedMood) {
+            result = result.filter(b => b.moods?.includes(selectedMood));
+        }
+        if (selectedSector) {
+            result = result.filter(b => b.sector === selectedSector);
+        }
+        // Always show landmarks if landmarks tab is active
+        if (activeTab === 'landmarks') {
+            result = result.filter(b => b.category === BusinessCategory.REFERENCIA);
+        }
+        return result;
     }, [businesses, activeFilter, searchQuery, selectedMood, selectedSector, activeTab]);
+
+    const deferredFilteredBusinesses = useDeferredValue(filteredBusinesses);
 
     // Eventos futuros para el mapa
     const upcomingEvents = useMemo(() => {
@@ -307,10 +304,12 @@ export const Explore: React.FC<ExploreProps> = ({
         return sorted[0]?.[0];
     }, [filteredEvents]);
 
-
     return (
         <>
-            <div className="h-full relative flex flex-col lg:flex-row bg-[#020617] overflow-hidden">
+            {loading ? (
+                <PageLoader />
+            ) : (
+                <div className="h-full relative flex flex-col lg:flex-row bg-[#020617] overflow-hidden">
                 {/* Search Bar & Admin Tools */}
                 <div className="absolute top-6 inset-x-0 lg:left-0 lg:right-[450px] z-50 flex flex-col items-center gap-4 pointer-events-none px-6 transition-all duration-500">
                     <div className="w-full max-w-xl pointer-events-auto relative group">
@@ -566,12 +565,16 @@ export const Explore: React.FC<ExploreProps> = ({
                 </div>
 
                 <div className="flex-1 relative h-full min-h-0 z-10">
+                    <Suspense fallback={<div className="w-full h-full bg-slate-900 animate-pulse flex items-center justify-center text-slate-500 uppercase font-black text-[10px] tracking-widest">Cargando Mapa...</div>}>
                     <MapView
                         onBusinessSelect={(b) => {
-                            incrementBusinessViewCount(b.id);
-                            setPublicProfileId(b.id);
-                            setPublicProfileType('business');
-                            setShowPublicProfile(true);
+                            setTimeout(() => {
+                                requestAnimationFrame(() => {
+                                    setPublicProfileId(b.id);
+                                    setPublicProfileType('business');
+                                    setShowPublicProfile(true);
+                                });
+                            }, 0);
                         }}
                         selectedSector={selectedSector}
                         searchQuery={searchQuery}
@@ -618,6 +621,7 @@ export const Explore: React.FC<ExploreProps> = ({
                         activeTab={activeTab}
                         focusedBusinessId={focusedBusinessId}
                     />
+                    </Suspense>
                 </div>
 
                 {/* Sliding Panel - Hidden in Editor Focus mode */}
@@ -698,7 +702,7 @@ export const Explore: React.FC<ExploreProps> = ({
                         )}
 
                         {/* Flash Offers Carousel */}
-                        {filteredEvents.some(e => e.isFlashOffer) && (
+                        {(loading || deferredFilteredEvents.some(e => e.isFlashOffer)) && (
                             <div className="mb-8">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-2">
@@ -708,11 +712,17 @@ export const Explore: React.FC<ExploreProps> = ({
                                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t('explore.flashHeader')}</span>
                                 </div>
                                 <div className="flex gap-4 overflow-x-auto no-scrollbar -mx-6 px-6">
-                                    {filteredEvents.filter(e => e.isFlashOffer).map(event => (
-                                        <div key={event.id} className="min-w-[280px] w-[280px] shrink-0">
-                                            <EventCard event={event} onClick={setSelectedEvent} />
-                                        </div>
-                                    ))}
+                                    {loading ? (
+                                        [1, 2, 3].map(i => (
+                                            <Skeleton key={`flash-skeleton-${i}`} className="min-w-[280px] h-[350px]" />
+                                        ))
+                                    ) : (
+                                        deferredFilteredEvents.filter(e => e.isFlashOffer).map(event => (
+                                            <div key={event.id} className="min-w-[280px] w-[280px] shrink-0">
+                                                <EventCard event={event} onClick={setSelectedEvent} />
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -943,18 +953,22 @@ export const Explore: React.FC<ExploreProps> = ({
                                     </div>
                                 </div>
                                 <div className="flex gap-4 overflow-x-auto no-scrollbar -mx-6 px-6">
-                                    {businesses.filter(b => b.plan === SubscriptionPlan.EXPERT).map(business => (
-                                        <div
-                                            key={`featured-${business.id}`}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setPublicProfileId(business.id);
-                                                setPublicProfileType('business');
-                                                setShowPublicProfile(true);
-                                                incrementBusinessViewCount(business.id);
-                                            }}
-                                            className="min-w-[130px] w-[130px] shrink-0 group cursor-pointer"
-                                        >
+                                    {loading ? (
+                                        [1, 2, 3, 4].map(i => (
+                                            <Skeleton key={`featured-skeleton-${i}`} className="min-w-[130px] w-[130px] h-[130px] rounded-[2rem] shrink-0" />
+                                        ))
+                                    ) : (
+                                        businesses.filter(b => b.plan === SubscriptionPlan.EXPERT).map(business => (
+                                            <div
+                                                key={`featured-${business.id}`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setPublicProfileId(business.id);
+                                                    setPublicProfileType('business');
+                                                    setShowPublicProfile(true);
+                                                }}
+                                                className="min-w-[130px] w-[130px] shrink-0 group cursor-pointer"
+                                            >
                                             <div className="relative aspect-square rounded-[2rem] overflow-hidden border-2 border-amber-500/20 group-hover:border-amber-500 transition-all shadow-xl shadow-black/20">
                                                 <img src={business.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={business.name} loading="lazy" />
                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent group-hover:from-black/70 transition-colors" />
@@ -968,7 +982,7 @@ export const Explore: React.FC<ExploreProps> = ({
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
+                                    )))}
                                 </div>
                             </div>
                         )}
@@ -988,177 +1002,208 @@ export const Explore: React.FC<ExploreProps> = ({
                                     </div>
                                 </div>
                                 <div className="flex gap-4 overflow-x-auto no-scrollbar -mx-2 px-2 relative z-10">
-                                    {filteredEvents.filter(e => e.vibe === user.preferredVibe).map(event => (
-                                        <div key={`foryou-${event.id}`} className="min-w-[280px] w-[280px] shrink-0 px-2 transform transition-all hover:scale-[1.02]">
-                                            <EventCard event={event} onClick={setSelectedEvent} />
-                                        </div>
-                                    ))}
+                                    {loading ? (
+                                        [1, 2, 3].map(i => (
+                                            <Skeleton key={`foryou-skeleton-${i}`} className="min-w-[280px] h-[350px]" />
+                                        ))
+                                    ) : (
+                                        deferredFilteredEvents.filter(e => e.vibe === user.preferredVibe).map(event => (
+                                            <div key={`foryou-${event.id}`} className="min-w-[280px] w-[280px] shrink-0 px-2 transform transition-all hover:scale-[1.02]">
+                                                <EventCard event={event} onClick={setSelectedEvent} />
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         )}
 
                         <div className="space-y-6">
                             {activeTab === 'events' ? (
-                                filteredEvents.map(event => (
-                                    <div key={event.id} className="relative">
-                                        <EventCard event={event} onClick={setSelectedEvent} />
-                                        <button
-                                            onClick={(e) => toggleFavorite(event.id, e)}
-                                            className="absolute top-6 right-6 z-10 p-3 bg-black/30 backdrop-blur-xl rounded-full border border-white/10 hover:scale-110 active:scale-95 transition-all group"
-                                        >
-                                            <Heart className={`w-5 h-5 transition-colors ${favorites.includes(event.id) ? 'fill-rose-500 text-rose-500' : 'text-white'}`} />
-                                        </button>
-                                    </div>
-                                ))
+                                loading ? (
+                                    [1, 2, 3, 4].map(i => (
+                                        <Skeleton key={`event-skeleton-${i}`} className="w-full h-48 rounded-[2.5rem]" />
+                                    ))
+                                ) : (
+                                    deferredFilteredEvents.map(event => (
+                                        <div key={event.id} className="relative">
+                                            <EventCard event={event} onClick={setSelectedEvent} />
+                                            <button
+                                                onClick={(e) => toggleFavorite(event.id, e)}
+                                                className="absolute top-6 right-6 z-10 p-3 bg-black/30 backdrop-blur-xl rounded-full border border-white/10 hover:scale-110 active:scale-95 transition-all group"
+                                            >
+                                                <Heart className={`w-5 h-5 transition-colors ${favorites.includes(event.id) ? 'fill-rose-500 text-rose-500' : 'text-white'}`} />
+                                            </button>
+                                        </div>
+                                    ))
+                                )
                             ) : (
                                 <div className={`${isGridView ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' : 'flex flex-col gap-6'} pb-10`}>
-                                    {filteredBusinesses.map(business => {
-                                        const status = business.openingHours ? isBusinessOpen(business.openingHours) : null;
-                                        return (
-                                            <div
-                                                key={business.id}
-                                                onClick={() => {
-                                                    incrementBusinessViewCount(business.id);
-                                                    setPublicProfileId(business.id);
-                                                    setPublicProfileType('business');
-                                                    setShowPublicProfile(true);
-                                                }}
-                                                className={`relative group cursor-pointer transition-all duration-700 hover:-translate-y-2 ${isGridView ? 'h-[300px]' : ''}`}
-                                            >
-                                                <div className={`absolute inset-0 bg-gradient-to-br transition-all duration-700 opacity-10 blur-3xl group-hover:opacity-40 rounded-[3rem] ${
-                                                    business.plan === SubscriptionPlan.EXPERT ? 'from-amber-400 via-orange-500 to-rose-600' :
-                                                    business.plan === SubscriptionPlan.ELITE ? 'from-sky-400 via-indigo-500 to-purple-600' :
-                                                    business.plan === SubscriptionPlan.PRO ? 'from-emerald-400 via-teal-500 to-cyan-600' :
-                                                    'from-slate-400 to-slate-600'
-                                                }`} />
+                                    {loading ? (
+                                        [1, 2, 3, 4, 5, 6].map(i => (
+                                            <Skeleton key={`biz-skeleton-${i}`} className={`w-full ${isGridView ? 'h-[300px]' : 'h-48'} rounded-[2.5rem]`} />
+                                        ))
+                                    ) : (
+                                        deferredFilteredBusinesses.map(business => {
+                                            const status = business.openingHours ? isBusinessOpen(business.openingHours) : null;
+                                            return (
+                                                <div
+                                                    key={business.id}
+                                                    onClick={() => {
+                                                        setPublicProfileId(business.id);
+                                                        setPublicProfileType('business');
+                                                        setShowPublicProfile(true);
+                                                    }}
+                                                    className={`relative group cursor-pointer transition-all duration-700 hover:-translate-y-2 ${isGridView ? 'h-[350px]' : ''}`}
+                                                >
+                                                    {/* Background Glow */}
+                                                    <div className={`absolute inset-0 bg-gradient-to-br transition-all duration-700 opacity-10 blur-3xl group-hover:opacity-40 rounded-[3rem] ${
+                                                        business.plan === SubscriptionPlan.EXPERT ? 'from-amber-400 via-orange-500 to-rose-600' :
+                                                        business.plan === SubscriptionPlan.ELITE ? 'from-sky-400 via-indigo-500 to-purple-600' :
+                                                        business.plan === SubscriptionPlan.PRO ? 'from-emerald-400 via-teal-500 to-cyan-600' :
+                                                        'from-slate-400 to-slate-600'
+                                                    }`} />
                                                 
-                                                <div className={`h-full relative overflow-hidden rounded-[2.5rem] border backdrop-blur-3xl transition-all duration-500 flex flex-col ${
-                                                    business.plan === SubscriptionPlan.EXPERT ? 'glass-expert expert-glow' :
-                                                    business.plan === SubscriptionPlan.ELITE ? 'glass-premium premium-glow' :
-                                                    business.plan === SubscriptionPlan.PRO ? 'glass-pro pro-glow' :
-                                                    'bg-[#0f172a]/40 border-white/5'
-                                                }`}>
-                                                    <div className={`${isGridView ? 'h-32' : 'h-40'} relative overflow-hidden group-hover:h-32 transition-all duration-700`}>
-                                                        <img src={business.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" alt={business.name} />
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent opacity-80" />
-                                                        {business.plan !== SubscriptionPlan.FREE && (
-                                                            <div className="absolute top-4 right-4 animate-in zoom-in duration-500">
-                                                                <div className={`px-4 py-1.5 rounded-full border backdrop-blur-2xl flex items-center gap-2.5 ${
-                                                                    business.plan === SubscriptionPlan.EXPERT ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' : 
-                                                                    business.plan === SubscriptionPlan.ELITE ? 'bg-sky-500/20 border-sky-500/30 text-sky-400' :
-                                                                    'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                                                    {/* Main Container */}
+                                                    <div className={`h-full relative overflow-hidden rounded-[2.5rem] border backdrop-blur-3xl transition-all duration-500 flex flex-col ${
+                                                        business.plan === SubscriptionPlan.EXPERT ? 'glass-expert expert-glow' :
+                                                        business.plan === SubscriptionPlan.ELITE ? 'glass-premium premium-glow' :
+                                                        business.plan === SubscriptionPlan.PRO ? 'glass-pro pro-glow' :
+                                                        'bg-[#0f172a]/40 border-white/5'
+                                                    }`}>
+                                                        {/* Business Image */}
+                                                        <div className={`${isGridView ? 'h-32' : 'h-40'} relative overflow-hidden shrink-0 transition-all duration-700`}>
+                                                            <img src={business.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" alt={business.name} />
+                                                            <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent opacity-80" />
+                                                            
+                                                            {/* Plan Badge */}
+                                                            {business.plan !== SubscriptionPlan.FREE && (
+                                                                <div className="absolute top-4 right-4 z-10">
+                                                                    <div className={`px-4 py-1.5 rounded-full border backdrop-blur-2xl flex items-center gap-2.5 ${
+                                                                        business.plan === SubscriptionPlan.EXPERT ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' : 
+                                                                        business.plan === SubscriptionPlan.ELITE ? 'bg-sky-500/20 border-sky-500/30 text-sky-400' :
+                                                                        'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                                                                    }`}>
+                                                                        <Star className={`w-3.5 h-3.5 ${
+                                                                            business.plan === SubscriptionPlan.EXPERT ? 'fill-amber-400' : 
+                                                                            business.plan === SubscriptionPlan.ELITE ? 'fill-sky-400' :
+                                                                            'fill-emerald-400'
+                                                                        }`} />
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest italic">{business.plan}</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Content Area */}
+                                                        <div className="p-6 flex flex-col flex-1 gap-4">
+                                                            <div className="flex flex-col gap-2">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[10px] font-black text-sky-400 uppercase tracking-[0.3em]">{business.category}</span>
+                                                                        {status && (
+                                                                            <div className="flex items-center gap-1.5 mt-1">
+                                                                                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${status.isOpen ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                                                                                <span className={`text-[9px] font-bold uppercase tracking-wider ${status.isOpen ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                                    {status.message}
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                                                        <span className="text-[10px] font-black text-white italic">{(business as any).rating || '5.0'}</span>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <h3 className={`text-xl font-black uppercase tracking-tight transition-colors line-clamp-1 ${
+                                                                    business.plan === SubscriptionPlan.EXPERT ? 'text-pulsar-expert' :
+                                                                    business.plan === SubscriptionPlan.ELITE ? 'text-pulsar-premium' :
+                                                                    'text-white group-hover:text-sky-400'
                                                                 }`}>
-                                                                    <Star className={`w-3.5 h-3.5 ${
-                                                                        business.plan === SubscriptionPlan.EXPERT ? 'fill-amber-400' : 
-                                                                        business.plan === SubscriptionPlan.ELITE ? 'fill-sky-400' :
-                                                                        'fill-emerald-400'
-                                                                    }`} />
-                                                                    <span className="text-[10px] font-black uppercase tracking-widest italic">{business.plan}</span>
+                                                                    {business.name}
+                                                                </h3>
+                                                                <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{business.description}</p>
+                                                            </div>
+
+                                                            {/* Services */}
+                                                            {business.services && business.services.length > 0 && (
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {business.services.slice(0, 3).map((service, idx) => (
+                                                                        <span key={idx} className="px-2 py-0.5 bg-sky-500/10 border border-sky-500/20 rounded-md text-[9px] font-bold text-sky-400 uppercase">
+                                                                            {service}
+                                                                        </span>
+                                                                    ))}
                                                                 </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                            )}
 
-                                                    <div className="p-6 flex flex-col flex-1 justify-between gap-4">
-                                                        <div>
-                                                            <div className="flex items-center justify-between mb-2">
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[10px] font-black text-sky-400 uppercase tracking-[0.3em]">{business.category}</span>
-                                                                    {status && (
-                                                                        <div className="flex items-center gap-1.5 mt-1">
-                                                                            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${status.isOpen ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]'}`} />
-                                                                            <span className={`text-[9px] font-bold uppercase tracking-wider ${status.isOpen ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                                                {status.message}
-                                                                            </span>
-                                                                        </div>
-                                                                    )}
+                                                            {/* Footer Info */}
+                                                            <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="p-2 rounded-xl bg-slate-800/50">
+                                                                        <MapPin className="w-4 h-4 text-slate-400" />
+                                                                    </div>
+                                                                    <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{business.sector}</span>
                                                                 </div>
-                                                                <div className="flex items-center gap-1">
-                                                                    <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-
-                                                                <span className="text-[10px] font-black text-white italic">{(business as any).rating || '5.0'}</span>
-                                                            </div>
-                                                        </div>
-                                                        <h3 className={`text-xl font-black uppercase tracking-tight transition-colors mb-2 ${
-                                                            business.plan === SubscriptionPlan.EXPERT ? 'text-pulsar-expert' :
-                                                            business.plan === SubscriptionPlan.ELITE ? 'text-pulsar-premium' :
-                                                            'text-white grow-hover:text-sky-400'
-                                                        }`}>
-                                                            {business.name}
-                                                        </h3>
-                                                        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{business.description}</p>
-                                                        {business.services && business.services.length > 0 && (
-                                                            <div className="flex flex-wrap gap-1 mt-3">
-                                                                {business.services.slice(0, 3).map((service, idx) => (
-                                                                    <span key={idx} className="px-2 py-0.5 bg-sky-500/10 border border-sky-500/20 rounded-md text-[9px] font-bold text-sky-400 uppercase">
-                                                                        {service}
-                                                                    </span>
-                                                                ))}
-                                                                {business.services.length > 3 && (
-                                                                    <span className="text-[9px] font-bold text-slate-500 self-center ml-1">
-                                                                        +{business.services.length - 3} more
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="p-2 rounded-xl bg-slate-800/50">
-                                                                <MapPin className="w-4 h-4 text-slate-400" />
-                                                            </div>
-                                                            <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{business.sector}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    window.open(`https://wa.me/${business.whatsapp}`, '_blank');
-                                                                }}
-                                                                className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all duration-300"
-                                                                title="WhatsApp"
-                                                            >
-                                                                <Waves className="w-4 h-4" />
-                                                            </button>
-                                                            <div className="w-10 h-10 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-500 group-hover:bg-sky-500 group-hover:text-white transition-all duration-500">
-                                                                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                                                
+                                                                <div className="flex items-center gap-3">
+                                                                    <button 
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            window.open(`https://wa.me/${business.whatsapp}`, '_blank');
+                                                                        }}
+                                                                        className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all duration-300"
+                                                                    >
+                                                                        <Waves className="w-4 h-4" />
+                                                                    </button>
+                                                                    <div className="w-10 h-10 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-500 group-hover:bg-sky-500 group-hover:text-white transition-all duration-500">
+                                                                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        </div>
+                    )}
                 </div>
             )}
-        </div>
 
             {/* Quick Sector Nav - Only show in Explore */}
-            {
-                (isPanelMinimized || isEditorFocus) && (
-                    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-bottom duration-500">
-                        <button
-                            onClick={() => {
-                                setSelectedSector(null);
-                                setActiveFilter('All');
-                                setSearchQuery('');
-                                setIsPanelMinimized(false);
-                                setIsEditorFocus(false);
-                            }}
-                            className="flex items-center gap-2.5 px-6 py-3.5 bg-rose-500 hover:bg-rose-400 active:scale-95 text-white font-black text-sm uppercase tracking-widest rounded-full shadow-2xl shadow-rose-500/40 transition-all border border-rose-400/30"
-                        >
-                            <span className="animate-pulse w-2 h-2 rounded-full bg-white inline-block" />
-                            Pulse of Today
-                            <span className="text-base">⚡</span>
-                        </button>
-                    </div>
-                )
-            }
+            {(isPanelMinimized || isEditorFocus) && (
+                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[1100] animate-in fade-in slide-in-from-bottom duration-500">
+                    <button
+                        onClick={() => {
+                            setSelectedSector(null);
+                            setActiveFilter('All');
+                            setSearchQuery('');
+                            setIsPanelMinimized(false);
+                            setIsEditorFocus(false);
+                            setShowPulseModal(true);
+                        }}
+                        onTouchEnd={(e) => {
+                            e.preventDefault();
+                            setSelectedSector(null);
+                            setActiveFilter('All');
+                            setSearchQuery('');
+                            setIsPanelMinimized(false);
+                            setIsEditorFocus(false);
+                            setShowPulseModal(true);
+                        }}
+                        className="flex items-center gap-2.5 px-6 py-3.5 bg-rose-500 hover:bg-rose-400 active:scale-95 text-white font-black text-sm uppercase tracking-widest rounded-full shadow-2xl shadow-rose-500/40 transition-all border border-rose-400/30 cursor-pointer"
+                    >
+                        <span className="animate-pulse w-2 h-2 rounded-full bg-white inline-block" />
+                        Pulse of Today
+                        <span className="text-base">⚡</span>
+                    </button>
+                </div>
+            )}
+            
             <ItineraryModal
                 isOpen={showItinerary}
                 onClose={() => setShowItinerary(false)}
