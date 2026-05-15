@@ -123,6 +123,16 @@ body {
     animation: like-particle 0.8s ease-out forwards;
 }
 
+@keyframes rsvp-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); filter: brightness(1.1); }
+    100% { transform: scale(1); }
+}
+
+.animate-rsvp-pulse {
+    animation: rsvp-pulse 0.4s ease-in-out;
+}
+
 .text-gradient {
     background: linear-gradient(to right, #fff, #94a3b8);
     -webkit-background-clip: text;

@@ -344,9 +344,11 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                     <div className="pt-4">
                         <button
                             onClick={onRsvp}
-                            className={`w-full py-5 font-black rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 uppercase tracking-wider relative overflow-hidden group ${(event as any).isPulsing || isRsvp
-                                ? 'bg-emerald-500 text-white shadow-emerald-500/40'
-                                : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-orange-500/30'
+                            className={`w-full py-5 font-black rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 uppercase tracking-wider relative overflow-hidden transition-all active:scale-95 group ${(event as any).isPulsing
+                                ? 'bg-emerald-500 text-white shadow-emerald-500/40 animate-rsvp-pulse'
+                                : isRsvp
+                                    ? 'bg-emerald-500 text-white shadow-emerald-500/40'
+                                    : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-orange-500/30'
                                 }`}
                         >
                             {(event as any).isPulsing || isRsvp ? (

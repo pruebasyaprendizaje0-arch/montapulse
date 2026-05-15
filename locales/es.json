@@ -45,7 +45,8 @@
         "searchPlaceholder": "Buscar locales, eventos...",
         "trendingTitle": "Siéntelo",
         "directory": "Ubicame Socios",
-        "town": "Ubicame Socio"
+        "town": "Ubicame Socio",
+        "noResults": "No se encontraron resultados en esta localidad"
     },
     "history": {
         "title": "Nosotros",

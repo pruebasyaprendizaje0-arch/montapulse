@@ -400,7 +400,8 @@ export const MapView: React.FC<MapViewProps> = memo(({
         tabMatch = isReference;
       }
 
-      const isActuallyVisible = isVisible && matchesSearch && tabMatch;
+      const matchesLocality = (business.locality || 'Montañita') === localityName;
+      const isActuallyVisible = isVisible && matchesSearch && tabMatch && matchesLocality;
 
       if (isActuallyVisible) {
         const isPremium = business.plan === SubscriptionPlan.EXPERT;
@@ -509,7 +510,8 @@ export const MapView: React.FC<MapViewProps> = memo(({
     if (showEvents) {
       events.forEach(event => {
         const matchesEventSearch = !sq || event.title.toLowerCase().includes(sq.toLowerCase());
-        if (!event.coordinates || !matchesEventSearch) return;
+        const matchesEventLocality = (event.locality || 'Montañita') === localityName;
+        if (!event.coordinates || !matchesEventSearch || !matchesEventLocality) return;
         const isFlash = event.isFlashOffer;
       const icon = L.divIcon({
         html: `

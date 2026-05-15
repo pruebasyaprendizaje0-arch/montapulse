@@ -3,8 +3,21 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, ChevronRight, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck, Palmtree, Mountain, Activity, Users, Sun, Moon } from 'lucide-react';
 import { getToken } from 'firebase/messaging';
 import { messaging } from './firebase.config';
-import { saveFCMToken } from './services/firestoreService';
+import { saveFCMToken, getUser, createUser, updateUser, createBusiness, updateBusiness, deleteBusiness, subscribeToEvents, createEvent, updateEvent, deleteEvent, subscribeToBusinesses, updateAppSettings, toggleRSVP, subscribeToUserRSVPs } from './services/firestoreService';
 import { PageLoader as PremiumLoader } from './components/common/PageLoader';
+import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan, BusinessCategory } from './types';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS, DEFAULT_NEW_LOCALITY_SECTORS } from './constants';
+import { getSmartRecommendations, generateEventDescription } from './services/geminiService';
+import { useAuthContext } from './context/AuthContext';
+import { logout, isSuperAdmin as checkSuperAdmin, updateUserProfile } from './services/authService';
+import { compressImage } from './utils/imageUtils';
+import { BottomNav } from './components/Layout/BottomNav';
+import { Sidebar } from './components/Layout/Sidebar';
+import { useToast } from './context/ToastContext';
+import { useData } from './context/DataContext';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from './hooks/useTheme';
 
 // Lazy load heavy components
 const EventCard = lazy(() => import('./components/EventCard').then(m => ({ default: m.EventCard })));
@@ -25,29 +38,9 @@ const InfoPage = lazy(() => import('./pages/InfoPage').then(m => ({ default: m.I
 const CalendarPage = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })));
 const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })));
 const Plans = lazy(() => import('./pages/Plans').then(m => ({ default: m.Plans })));
-
 const Policies = lazy(() => import('./pages/Policies').then(m => ({ default: m.Policies })));
 
 const PageLoader = () => <PremiumLoader message="Iniciando MontaPulse..." />;
-import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan, BusinessCategory } from './types';
-import { ErrorBoundary } from './components/common/ErrorBoundary';
-import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS, DEFAULT_NEW_LOCALITY_SECTORS } from './constants';
-import { getSmartRecommendations, generateEventDescription } from './services/geminiService';
-import { useAuthContext } from './context/AuthContext';
-import { logout, isSuperAdmin as checkSuperAdmin, updateUserProfile } from './services/authService';
-import {
-  getUser, createUser, updateUser, createBusiness, updateBusiness, deleteBusiness,
-  subscribeToEvents, createEvent, updateEvent, deleteEvent,
-  subscribeToBusinesses, updateAppSettings,
-  toggleRSVP, subscribeToUserRSVPs
-} from './services/firestoreService';
-import { compressImage } from './utils/imageUtils';
-import { BottomNav } from './components/Layout/BottomNav';
-import { Sidebar } from './components/Layout/Sidebar';
-import { useToast } from './context/ToastContext';
-import { useData } from './context/DataContext';
-import { useTranslation } from 'react-i18next';
-import { useTheme } from './hooks/useTheme';
 
 export const suggestIconFromDescription = (description: string): string => {
   const desc = (description || '').toLowerCase();

@@ -26,7 +26,6 @@ import {
 } from '../services/couponService';
 import { Coupon, CouponRedemption } from '../types';
 
-export type CommunityTab = 'chats' | 'updates' | 'communities' | 'calls' | 'notifications' | 'profile';
 import { generateEventDescription } from '../services/geminiService';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from './AuthContext';
@@ -34,6 +33,8 @@ import { useToast } from './ToastContext';
 import { resetFirestoreCache } from '../firebase.config';
 import { compressImage } from '../utils/imageUtils';
 import { getDefaultOpeningHours, getEcuadorDate } from '../utils/timeUtils';
+
+export type CommunityTab = 'chats' | 'updates' | 'communities' | 'calls' | 'notifications' | 'profile';
 
 interface DataContextType {
     events: MontanitaEvent[];
@@ -290,8 +291,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         [SubscriptionPlan.PRO]: '5 Pulsos activos/mes',
         [SubscriptionPlan.ELITE]: '10 Pulsos activos/mes',
         [SubscriptionPlan.EXPERT]: 'Soporte VIP 24/7'
-    });
-    const [selectedEvent, setSelectedEvent] = useState<MontanitaEvent | null>(null);
+    });    const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
     const [posts, setPosts] = useState<CommunityPost[]>([]);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [services, setServices] = useState<ServiceCategory[]>([]);
@@ -359,7 +359,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [followedBusinessIds, setFollowedBusinessIds] = useState<string[]>([]);
     const [businessFollowers, setBusinessFollowers] = useState<string[]>([]);
     const [rsvpStatus, setRsvpStatus] = useState<Record<string, boolean>>({});
-    const [pulsingEvents, setPulsingEvents] = useState<Record<string, boolean>>({});
+    const [pulsingEvents, setPulsingEvents] = useState<Record<string, 'adding' | 'removing' | null>>({});
     const [isPanelMinimized, setIsPanelMinimized] = useState(false);
     const [isNearbyMinimized, setIsNearbyMinimized] = useState(true);
     const [isEditorFocus, setIsEditorFocus] = useState(false);
@@ -381,7 +381,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
     const [generatedDesc, setGeneratedDesc] = useState('');
-
+    
     const [currentLocality, setCurrentLocality] = useState(LOCALITIES[0]);
     const [selectedSector, setSelectedSector] = useState<Sector | null>(null);
     const [sectorFocusCoords, setSectorFocusCoords] = useState<[number, number] | null>(null);
@@ -646,22 +646,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         let publicCouponsLoaded = false;
         let userWalletLoaded = !authUser;
 
-        const checkInitialLoad = () => {
-            if (active) {
-                const status = {
-                    events: eventsLoaded,
-                    businesses: bizLoaded,
-                    master: masterDataLoaded,
-                    favorites: favoritesLoaded,
-                    follows: followsLoaded,
-                    coupons: publicCouponsLoaded,
-                    wallet: userWalletLoaded
-                };
-                
-                console.log('[DataContext] Hydration Status:', status);
+        let isLoading = true;
 
+        const checkInitialLoad = () => {
+            if (active && isLoading) {
                 if (eventsLoaded && bizLoaded && masterDataLoaded && favoritesLoaded && followsLoaded && publicCouponsLoaded && userWalletLoaded) {
                     console.log('[DataContext] All core data loaded. Setting loading=false.');
+                    isLoading = false;
                     setLoading(false);
                 }
             }
@@ -669,8 +660,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Safety Timeout: Force loading to false after 6 seconds to prevent blank screens on slow mobile networks
         const safetyTimeoutId = setTimeout(() => {
-            if (active && loading) {
+            if (active && isLoading) {
                 console.warn('[DataContext] Safety timeout reached. Forcing loading=false.');
+                isLoading = false;
                 setLoading(false);
             }
         }, 6000);
@@ -1004,28 +996,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // subscribeToUsers moved to staggered block above
 
 
-
-    useEffect(() => {
-        if (selectedEvent) {
-            incrementEventViewCount(selectedEvent.id);
-        }
-    }, [selectedEvent?.id]);
-
     const eventsWithLiveCounts = useMemo(() => {
         return events.map(event => {
-            const isPulsing = pulsingEvents[event.id];
-            const baseCount = event.interestedCount || 0;
-            // When pulsing, we show +1 as feedback. 
-            // Note: If user was already interested, they are 'pulsing' to confirm? 
-            // The request says "suma arriba ... vuelve al inicial". 
-            // This suggests the +1 is always a temporary feedback pulse.
+            const rsvp = !!rsvpStatus[event.id];
+            const pulse = pulsingEvents[event.id];
+            let count = event.interestedCount || 0;
+            
+            // Apply optimistic UI adjustments based on transient pulsing state
+            if (pulse === 'adding' && !rsvp) count += 1;
+            else if (pulse === 'removing' && rsvp) count = Math.max(0, count - 1);
+            
             return {
                 ...event,
-                interestedCount: isPulsing ? baseCount + 1 : baseCount,
-                isPulsing
+                interestedCount: count,
+                isInterested: rsvp,
+                isPulsing: !!pulse
             };
         });
-    }, [events, pulsingEvents]);
+    }, [events, rsvpStatus, pulsingEvents]);
+
+    // Define selectedEvent and setSelectedEvent derived from ID
+    // This ensures selectedEvent always has the latest "live" data from eventsWithLiveCounts
+    const selectedEvent = useMemo(() => {
+        if (!selectedEventId) return null;
+        return eventsWithLiveCounts.find(e => e.id === selectedEventId) || null;
+    }, [selectedEventId, eventsWithLiveCounts]);
+
+    const setSelectedEvent = useCallback((event: MontanitaEvent | null) => {
+        setSelectedEventId(event?.id || null);
+    }, []);
 
     const favoritedEvents = useMemo(() => {
         const now = new Date();
@@ -1171,34 +1170,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [activeView, events, favoritedEvents, filteredEvents, agendaRange, calendarBaseDate]);
 
     const navigateToNextEvent = useCallback(() => {
-        if (!selectedEvent || navigationEvents.length === 0) return;
-        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
+        if (!selectedEventId || navigationEvents.length === 0) return;
+        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEventId);
         if (currentIndex >= 0 && currentIndex < navigationEvents.length - 1) {
             setSelectedEvent(navigationEvents[currentIndex + 1]);
         }
-    }, [selectedEvent, navigationEvents]);
+    }, [selectedEventId, navigationEvents, setSelectedEvent]);
 
     const navigateToPreviousEvent = useCallback(() => {
-        if (!selectedEvent || navigationEvents.length === 0) return;
-        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
+        if (!selectedEventId || navigationEvents.length === 0) return;
+        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEventId);
         if (currentIndex > 0) {
             setSelectedEvent(navigationEvents[currentIndex - 1]);
         }
-    }, [selectedEvent, navigationEvents]);
+    }, [selectedEventId, navigationEvents, setSelectedEvent]);
 
     const hasNextEvent = useMemo(() => {
-        if (!selectedEvent || navigationEvents.length === 0) return false;
-        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
+        if (!selectedEventId || navigationEvents.length === 0) return false;
+        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEventId);
         if (currentIndex < 0) return false;
         return currentIndex < navigationEvents.length - 1;
-    }, [selectedEvent, navigationEvents]);
+    }, [selectedEventId, navigationEvents]);
 
     const hasPreviousEvent = useMemo(() => {
-        if (!selectedEvent || navigationEvents.length === 0) return false;
-        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
+        if (!selectedEventId || navigationEvents.length === 0) return false;
+        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEventId);
         if (currentIndex < 0) return false;
         return currentIndex > 0;
-    }, [selectedEvent, navigationEvents]);
+    }, [selectedEventId, navigationEvents]);
 
     const toggleSector = (sector: Sector) => {
         setSelectedSector(prev => {
@@ -1842,40 +1841,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     return;
                 }
                 
-                // Transient feedback state
-                setPulsingEvents(prev => ({ ...prev, [id]: true }));
-                
-                // The actual RSVP logic (toggle)
-                const isCurrentlyRsvp = !!rsvpStatus[id];
+                // Transient feedback state: Trigger the pulse with direction
+                const direction = rsvpStatus[id] ? 'removing' : 'adding';
+                setPulsingEvents(prev => ({ ...prev, [id]: direction }));
                 
                 try {
-                    // Update state permanently (optimistic)
-                    setRsvpStatus(prev => ({ ...prev, [id]: !prev[id] }));
-                    setEvents(prev => prev.map(e =>
-                        e.id === id
-                            ? { ...e, interestedCount: Math.max(0, (e.interestedCount || 0) + (isCurrentlyRsvp ? -1 : 1)) }
-                            : e
-                    ));
-                    
-                    // Transaction call
                     await toggleRSVP(authUser.uid, id);
-                    
-                    // Note: No specific toast here as we have transient UI feedback now, 
-                    // or we can keep it for success confirmation.
                 } catch (error) {
-                    // Revert optimistic update on error
-                    setRsvpStatus(prev => ({ ...prev, [id]: isCurrentlyRsvp }));
-                    setEvents(prev => prev.map(e =>
-                        e.id === id
-                            ? { ...e, interestedCount: Math.max(0, (e.interestedCount || 0)) }
-                            : e
-                    ));
-                    showToast("No se pudo registrar tu asistencia. Intenta de nuevo.", "error");
+                    console.error("[DataContext] RSVP Error:", error);
+                    showToast("No se pudo registrar tu pulso. Intenta de nuevo.", "error");
                 } finally {
-                    // Revert feedback after 1 second
+                    // Revert visual pulse feedback after 2 seconds
                     setTimeout(() => {
-                        setPulsingEvents(prev => ({ ...prev, [id]: false }));
-                    }, 1000);
+                        setPulsingEvents(prev => ({ ...prev, [id]: null }));
+                    }, 2000);
                 }
             },
             handleDeleteEvent: async (id: string) => {

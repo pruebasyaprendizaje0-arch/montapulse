@@ -142,12 +142,14 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp 
               e.stopPropagation();
               onRsvp?.(event.id, e);
             }}
-            className={`px-5 py-2 text-[10px] font-black uppercase rounded-full shadow-lg transition-all active:scale-95 ${(event as any).isPulsing || isRsvp
-              ? 'bg-emerald-500 text-white shadow-emerald-500/20'
-              : 'bg-orange-500 text-white shadow-orange-500/20 hover:bg-orange-400'
+            className={`px-5 py-2 text-[10px] font-black uppercase rounded-full shadow-lg transition-all active:scale-95 ${(event as any).isPulsing
+              ? 'bg-emerald-500 text-white shadow-emerald-500/20 animate-rsvp-pulse'
+              : isRsvp
+                ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30'
+                : 'bg-orange-500 text-white shadow-orange-500/20 hover:bg-orange-400'
               }`}
           >
-            {(event as any).isPulsing || isRsvp ? '¡Pulso Sentido!' : 'Sentir el Pulso'}
+            {(event as any).isPulsing ? '¡Pulso Sentido!' : 'Sentir el Pulso'}
           </button>
         </div>
       </div>
