@@ -113,7 +113,14 @@ export const InfoPage: React.FC = () => {
                         <h1 className="text-3xl font-black text-amber-400 uppercase tracking-tight">📱 INFO {localityName}</h1>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Puntos de Referencia y Negocios Premium</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => navigate('/history')}
+                            className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 border border-violet-500/20 rounded-xl transition-all group shrink-0 shadow-lg shadow-violet-500/5"
+                        >
+                            <Users className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Nosotros</span>
+                        </button>
                         <select
                             value={currentLocality?.name || 'Montañita'}
                             onChange={(e) => {

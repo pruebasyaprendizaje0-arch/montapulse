@@ -148,7 +148,11 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ isSearchVisible = false })
 
         // Add RSVPs (simulated from event interestedCount for now, 
         // in a real app we'd subscribe to the rsvps collection)
-        events.filter(e => e.interestedCount > 0).slice(0, 3).forEach(event => {
+        const now = new Date();
+        events.filter(e => {
+            const eventEnd = e.endAt ? new Date(e.endAt) : new Date(new Date(e.startAt).getTime() + 4 * 3600000);
+            return e.interestedCount > 0 && eventEnd > now;
+        }).slice(0, 3).forEach(event => {
             items.push({
                 id: `rsvp-${event.id}`,
                 realId: event.id,

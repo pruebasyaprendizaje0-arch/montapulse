@@ -20,7 +20,8 @@ Reglas:
 6. Si no estás seguro de algo, sé honesto pero da tu mejor recomendación
 7. Prioriza experiencias auténticas y locales sobre turísticas genéricas`;
 
-export async function sendChatMessage(messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
+
+export async function sendChatMessage(messages: ChatMessage[], model?: string, signal?: AbortSignal): Promise<string> {
   if (!OPENROUTER_API_KEY) {
     throw new Error('OpenRouter API key not configured');
   }
@@ -34,7 +35,7 @@ export async function sendChatMessage(messages: ChatMessage[], signal?: AbortSig
       'X-Title': 'Montapulse Planner',
     },
     body: JSON.stringify({
-      model: 'minimax/minimax-m2.5:free',
+      model: model || 'minimax/minimax-m2.5:free',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...messages,
@@ -57,6 +58,7 @@ export async function sendChatMessage(messages: ChatMessage[], signal?: AbortSig
 export async function sendChatMessageStream(
   messages: ChatMessage[],
   onChunk: (chunk: string) => void,
+  model?: string,
   signal?: AbortSignal,
 ): Promise<void> {
   if (!OPENROUTER_API_KEY) {
@@ -72,7 +74,7 @@ export async function sendChatMessageStream(
       'X-Title': 'Montapulse Planner',
     },
     body: JSON.stringify({
-      model: 'minimax/minimax-m2.5:free',
+      model: model || 'minimax/minimax-m2.5:free',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...messages,
@@ -118,3 +120,4 @@ export async function sendChatMessageStream(
     }
   }
 }
+

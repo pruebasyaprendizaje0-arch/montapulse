@@ -20,7 +20,7 @@ export const Sidebar: React.FC = () => {
         { id: 'events', icon: Calendar, label: 'EVENTOS', path: '/calendar', action: null },
         { id: 'favorites', icon: Heart, label: 'PASSPORT', path: '/passport', action: 'favorites' },
         { id: 'notifications', icon: Bell, label: 'NOTIFICACIONES', path: '/community', action: null },
-        { id: 'history', icon: History, label: 'HISTORIAL', path: '/history', action: null },
+        { id: 'history', icon: History, label: 'NOSOTROS', path: '/history', action: null },
         { id: 'plans', icon: Star, label: 'SUSCRIPCIONES', path: '/plans', action: null },
         { id: 'info', icon: Info, label: 'AYUDA / INFO', path: '/info', action: null },
     ] as const;

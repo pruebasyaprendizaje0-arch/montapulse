@@ -1,9 +1,10 @@
 import React from 'react';
 import { 
     Users, Building2, Activity, Coins, TrendingUp, ShieldCheck, 
-    Lock, CheckCircle, ArrowUpRight 
+    Lock, CheckCircle, ArrowUpRight, Zap
 } from 'lucide-react';
 import { useData } from '../../../context/DataContext';
+import { useAuthContext } from '../../../context/AuthContext';
 import { SubscriptionPlan } from '../../../types';
 
 interface DashboardPanelProps {
@@ -24,9 +25,33 @@ interface DashboardPanelProps {
 
 export const DashboardPanel: React.FC<DashboardPanelProps> = ({ stats, appConfig, setActiveTab }) => {
     const { allUsers, businesses, posts } = useData();
+    const { isSuperUser, toggleSuperUser } = useAuthContext();
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Super User Toggle */}
+            <div className="bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-500/20 rounded-[2rem] p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl ${isSuperUser ? 'bg-emerald-500' : 'bg-slate-700'}`}>
+                        <Zap className={`w-5 h-5 ${isSuperUser ? 'text-black' : 'text-slate-400'}`} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-black text-white uppercase tracking-wider">Modo Super User</p>
+                        <p className="text-[10px] text-slate-500">Acceso completo a gestión de pueblos y localidades</p>
+                    </div>
+                </div>
+                <button
+                    onClick={toggleSuperUser}
+                    className={`px-6 py-3 rounded-[1.5rem] font-black text-xs uppercase tracking-widest transition-all ${
+                        isSuperUser 
+                            ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/30 hover:bg-emerald-400' 
+                            : 'bg-white/10 text-slate-400 hover:bg-white/20 border border-white/10'
+                    }`}
+                >
+                    {isSuperUser ? 'Activo' : 'Activar'}
+                </button>
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <StatCard label="Usuarios" value={stats.users} icon={Users} color="text-sky-400" bg="bg-sky-400/10" />
                 <StatCard label="Negocios" value={stats.businesses} icon={Building2} color="text-amber-400" bg="bg-amber-400/10" />

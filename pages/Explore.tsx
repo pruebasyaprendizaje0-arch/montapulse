@@ -250,11 +250,14 @@ export const Explore: React.FC<ExploreProps> = ({
         }
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            result = result.filter(e => 
-                e.name.toLowerCase().includes(q) || 
-                e.description.toLowerCase().includes(q) ||
-                e.vibe.toLowerCase().includes(q)
-            );
+            result = result.filter(e => {
+                const name = e.name || e.title || '';
+                const desc = e.description || '';
+                const vibe = e.vibe || '';
+                return name.toLowerCase().includes(q) || 
+                       desc.toLowerCase().includes(q) ||
+                       vibe.toLowerCase().includes(q);
+            });
         }
         return result;
     }, [eventsWithLiveCounts, activeFilter, searchQuery]);
@@ -268,11 +271,14 @@ export const Explore: React.FC<ExploreProps> = ({
         }
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            result = result.filter(b => 
-                b.name.toLowerCase().includes(q) || 
-                b.description.toLowerCase().includes(q) ||
-                b.category.toLowerCase().includes(q)
-            );
+            result = result.filter(b => {
+                const name = b.name || '';
+                const desc = b.description || '';
+                const cat = b.category || '';
+                return name.toLowerCase().includes(q) || 
+                       desc.toLowerCase().includes(q) ||
+                       cat.toLowerCase().includes(q);
+            });
         }
         if (selectedMood) {
             result = result.filter(b => b.moods?.includes(selectedMood));
@@ -292,7 +298,10 @@ export const Explore: React.FC<ExploreProps> = ({
     // Eventos futuros para el mapa
     const upcomingEvents = useMemo(() => {
         const now = new Date();
-        return eventsWithLiveCounts.filter(e => e.endAt > now && e.status !== 'deactivated');
+        return eventsWithLiveCounts.filter(e => {
+            const eventEnd = e.endAt ? new Date(e.endAt) : new Date(new Date(e.startAt).getTime() + 4 * 3600000);
+            return eventEnd > now && e.status !== 'deactivated';
+        });
     }, [eventsWithLiveCounts]);
 
     const popularVibe = useMemo(() => {
@@ -424,7 +433,7 @@ export const Explore: React.FC<ExploreProps> = ({
 
                         {/* Search Results Dropdown */}
                         {searchQuery.length > 2 && (
-                            <div className="absolute top-full left-0 right-0 mt-3 bg-[#020617]/95 backdrop-blur-3xl border border-white/10 rounded-[2rem] overflow-hidden shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300 z-[3000]">
+                            <div className="antigravity absolute top-full left-0 right-0 mt-3 bg-[#020617]/95 backdrop-blur-xl border border-white/10 rounded-[2rem] overflow-hidden shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300 z-[3000]">
                                 <div className="p-2 max-h-[500px] overflow-y-auto no-scrollbar">
                                     <div className="space-y-1">
                                         {/* Localities / Pueblos Results */}
@@ -564,7 +573,7 @@ export const Explore: React.FC<ExploreProps> = ({
                     </div>
                 </div>
 
-                <div className="flex-1 relative h-full min-h-0 z-10">
+                <div className={`flex-1 relative h-full min-h-0 z-10 ${showPulseModal ? 'pointer-events-none' : ''}`}>
                     <Suspense fallback={<div className="w-full h-full bg-slate-900 animate-pulse flex items-center justify-center text-slate-500 uppercase font-black text-[10px] tracking-widest">Cargando Mapa...</div>}>
                     <MapView
                         onBusinessSelect={(b) => {
@@ -617,6 +626,9 @@ export const Explore: React.FC<ExploreProps> = ({
                             setSelectedSector(null);
                             setActiveFilter('All');
                             setSearchQuery('');
+                            setIsPanelMinimized(false);
+                            setIsEditorFocus(false);
+                            setShowPulseModal(false);
                         }}
                         activeTab={activeTab}
                         focusedBusinessId={focusedBusinessId}
@@ -628,7 +640,14 @@ export const Explore: React.FC<ExploreProps> = ({
                 {!isEditorFocus && (
                     <div
                         onClick={() => isPanelMinimized && setIsPanelMinimized(false)}
-                        className={`bg-[#0f172a]/90 backdrop-blur-3xl lg:backdrop-blur-none border-t lg:border-t-0 lg:border-l border-white/5 px-6 pt-6 transition-all duration-500 ease-in-out ${isPanelMinimized ? 'max-[1023px]:max-h-[40px] max-[1023px]:pb-0 overflow-hidden cursor-pointer hover:bg-[#0f172a] lg:!w-[450px]' : (isGridView ? 'lg:w-[85vw] pb-32 overflow-y-auto w-full h-[85vh] fixed lg:absolute bottom-0 right-0' : 'max-[1023px]:max-h-[55vh] pb-32 overflow-y-auto lg:w-[450px]')} lg:max-h-full lg:h-full lg:pb-10 rounded-t-[3.5rem] lg:rounded-none -mt-10 lg:mt-0 z-20 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] lg:shadow-none no-scrollbar relative flex flex-col`}
+                        className={`antigravity bg-[#0f172a]/90 backdrop-blur-xl lg:backdrop-blur-none border-t lg:border-t-0 lg:border-l border-white/5 px-6 pt-6 transition-all duration-500 ease-in-out z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.6)] lg:shadow-none no-scrollbar flex flex-col ${
+                            isPanelMinimized 
+                            ? 'max-[1023px]:fixed max-[1023px]:bottom-0 max-[1023px]:inset-x-0 max-[1023px]:h-[60px] max-[1023px]:overflow-hidden cursor-pointer hover:bg-[#0f172a] lg:w-[450px]' 
+                            : (isGridView 
+                                ? 'lg:w-[85vw] pb-32 overflow-y-auto w-full h-[85dvh] fixed lg:absolute bottom-0 right-0' 
+                                : 'max-[1023px]:fixed max-[1023px]:bottom-0 max-[1023px]:inset-x-0 max-[1023px]:h-[70dvh] pb-32 overflow-y-auto lg:w-[450px] lg:h-full lg:relative'
+                              )
+                        } lg:max-h-full lg:pb-10 rounded-t-[3.5rem] lg:rounded-none`}
                     >
                         <div
                             onClick={(e) => {
@@ -1184,7 +1203,6 @@ export const Explore: React.FC<ExploreProps> = ({
                             setSearchQuery('');
                             setIsPanelMinimized(false);
                             setIsEditorFocus(false);
-                            setShowPulseModal(true);
                         }}
                         onTouchEnd={(e) => {
                             e.preventDefault();
@@ -1193,7 +1211,6 @@ export const Explore: React.FC<ExploreProps> = ({
                             setSearchQuery('');
                             setIsPanelMinimized(false);
                             setIsEditorFocus(false);
-                            setShowPulseModal(true);
                         }}
                         className="flex items-center gap-2.5 px-6 py-3.5 bg-rose-500 hover:bg-rose-400 active:scale-95 text-white font-black text-sm uppercase tracking-widest rounded-full shadow-2xl shadow-rose-500/40 transition-all border border-rose-400/30 cursor-pointer"
                     >

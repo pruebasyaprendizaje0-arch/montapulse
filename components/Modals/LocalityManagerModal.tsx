@@ -43,9 +43,9 @@ export const LocalityManagerModal: React.FC = () => {
         setEditingId(loc.id);
         setForm({
             name: loc.name,
-            lat: loc.coords[0],
-            lng: loc.coords[1],
-            hasBeach: true // We don't store hasBeach explicitly in state but we can assume or derive
+            lat: loc.coords?.[0] ?? -1.8253,
+            lng: loc.coords?.[1] ?? -80.7523,
+            hasBeach: loc.hasBeach ?? true
         });
         setIsAdding(false);
     };
@@ -183,7 +183,7 @@ export const LocalityManagerModal: React.FC = () => {
                                             <div>
                                                 <h4 className="text-sm font-black text-white uppercase tracking-tight">{loc.name}</h4>
                                                 <p className="text-[9px] font-bold text-slate-500 tracking-widest">
-                                                    {loc.coords[0].toFixed(4)}, {loc.coords[1].toFixed(4)}
+                                                    {loc.coords ? `${loc.coords[0].toFixed(4)}, ${loc.coords[1].toFixed(4)}` : 'Sin coordenadas'}
                                                 </p>
                                             </div>
                                         </div>

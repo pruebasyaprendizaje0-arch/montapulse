@@ -133,18 +133,14 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
 
     return (
         <div
-            className="fixed inset-0 z-[4000] bg-black/80 flex items-end justify-center"
+            className="antigravity fixed inset-0 z-[4000] bg-black/80 backdrop-blur-sm flex items-end justify-center"
             onClick={onClose}
         >
             <div
-                className="w-full max-w-2xl bg-slate-900 rounded-t-[3rem] overflow-hidden max-h-[90dvh] overflow-y-auto"
+                className="w-full max-w-2xl bg-slate-900 rounded-t-[3rem] overflow-hidden h-full max-h-[92dvh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
-                style={{
-                    willChange: 'transform',
-                    transform: 'translateZ(0)',
-                    contain: 'layout style paint'
-                }}
             >
+                <div className="flex-1 overflow-y-auto no-scrollbar">
                 {/* Header with Image */}
                 <div className="relative h-96">
                     {/* Fallback gradient - always visible */}
@@ -348,12 +344,12 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                     <div className="pt-4">
                         <button
                             onClick={onRsvp}
-                            className={`w-full py-5 font-black rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 uppercase tracking-wider relative overflow-hidden group ${isRsvp
+                            className={`w-full py-5 font-black rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 uppercase tracking-wider relative overflow-hidden group ${(event as any).isPulsing || isRsvp
                                 ? 'bg-emerald-500 text-white shadow-emerald-500/40'
                                 : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-orange-500/30'
                                 }`}
                         >
-                            {isRsvp ? (
+                            {(event as any).isPulsing || isRsvp ? (
                                 <>
                                     <Users className="w-6 h-6" />
                                     <span>¡Pulso Sentido!</span>
@@ -381,6 +377,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                             </div>
                         )}
                     </div>
+                </div>
                 </div>
             </div>
         </div>

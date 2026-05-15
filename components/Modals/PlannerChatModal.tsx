@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Zap, Sparkles, Bot } from 'lucide-react';
 import { sendChatMessageStream, ChatMessage } from '../../services/openrouterService';
+import { useData } from '../../context/DataContext';
 
 interface PlannerChatModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 export const PlannerChatModal: React.FC<PlannerChatModalProps> = ({ isOpen, onClose }) => {
+  const { appSettings } = useData();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -70,7 +72,8 @@ export const PlannerChatModal: React.FC<PlannerChatModalProps> = ({ isOpen, onCl
           fullResponse += chunk;
           setStreamingContent(fullResponse);
         },
-        abortController.signal,
+        appSettings?.openrouterModel || 'minimax/minimax-m2.5:free',
+        abortController.signal
       );
 
       setMessages(prev => [...prev, { role: 'assistant', content: fullResponse }]);

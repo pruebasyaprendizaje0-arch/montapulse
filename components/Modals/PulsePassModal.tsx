@@ -43,7 +43,7 @@ export const PulsePassModal: React.FC<PulsePassModalProps> = ({ isOpen, onClose,
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[2100] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10001] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4">
             <div 
                 className="absolute inset-0" 
                 onClick={onClose}

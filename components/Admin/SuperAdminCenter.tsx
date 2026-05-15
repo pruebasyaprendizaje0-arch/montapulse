@@ -33,14 +33,8 @@ export const SuperAdminCenter: React.FC<SuperAdminCenterProps> = ({ onClose }) =
     // --- Global Config States (passed to panels) ---
     const [appConfig, setAppConfig] = useState({
         maintenanceMode: false,
-        aiModel: 'gemini-1.5-pro',
-        claudeModel: 'claude-3-5-sonnet-20240620',
+        openrouterModel: 'minimax/minimax-m2.5:free',
         isSuperUserEnabled: false
-    });
-
-    const [aiConfig, setAiConfig] = useState({
-        gptModel: 'gpt-4o',
-        claudeModel: 'claude-3-5-sonnet-20240620'
     });
 
     // Real-time config synchronization
@@ -49,18 +43,8 @@ export const SuperAdminCenter: React.FC<SuperAdminCenterProps> = ({ onClose }) =
             if (data) setAppConfig(prev => ({ ...prev, ...data }));
         });
 
-        const unsubAi = subscribeToAppSettings('ai_config', (data) => {
-            if (data) {
-                setAiConfig({
-                    gptModel: data.gptModel || 'gpt-4o',
-                    claudeModel: data.claudeModel || 'claude-3-5-sonnet-20240620'
-                });
-            }
-        });
-
         return () => {
             unsubApp();
-            unsubAi();
         };
     }, []);
 
@@ -103,7 +87,7 @@ export const SuperAdminCenter: React.FC<SuperAdminCenterProps> = ({ onClose }) =
             case 'moderation':
                 return <ModerationPanel />;
             case 'ai':
-                return <SystemPanel appConfig={appConfig} aiConfig={aiConfig} setAiConfig={setAiConfig} />;
+                return <SystemPanel appConfig={appConfig} setAppConfig={setAppConfig} />;
             default:
                 return <DashboardPanel stats={stats} appConfig={appConfig} setActiveTab={setActiveTab} />;
         }

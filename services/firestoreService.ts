@@ -18,7 +18,8 @@ import {
     startAfter,
     arrayUnion,
     arrayRemove,
-    writeBatch
+    writeBatch,
+    runTransaction
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { getEcuadorDate } from './dateUtils';
@@ -225,6 +226,36 @@ export const deleteEvent = async (id: string) => {
     } catch (error) {
         console.error('Error deleting event:', error);
         throw error;
+    }
+};
+
+export const cleanupOldEvents = async (): Promise<number> => {
+    try {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        
+        const eventsRef = collection(db, 'events');
+        const snapshot = await getDocs(eventsRef);
+        
+        let deletedCount = 0;
+        const deletePromises: Promise<void>[] = [];
+        
+        snapshot.forEach((doc) => {
+            const eventData = doc.data();
+            const eventEnd = eventData.endAt ? new Date(eventData.endAt) : null;
+            
+            if (eventEnd && eventEnd < startOfMonth) {
+                deletePromises.push(deleteDoc(doc.ref));
+                deletedCount++;
+            }
+        });
+        
+        await Promise.all(deletePromises);
+        console.log(`Deleted ${deletedCount} old events`);
+        return deletedCount;
+    } catch (error) {
+        console.error('Error cleaning up old events:', error);
+        return 0;
     }
 };
 
@@ -712,23 +743,27 @@ export const toggleRSVP = async (userId: string, eventId: string) => {
 
         const eventRef = doc(db, 'events', eventId);
 
-        if (!snapshot.empty) {
-            await deleteDoc(snapshot.docs[0].ref);
-            await updateDoc(eventRef, {
-                interestedCount: increment(-1)
-            });
-            return false;
-        } else {
-            await addDoc(rsvpsRef, {
-                userId,
-                eventId,
-                createdAt: serverTimestamp()
-            });
-            await updateDoc(eventRef, {
-                interestedCount: increment(1)
-            });
-            return true;
-        }
+        // Usamos una transacción para asegurar que el rsvp y el conteo sean atómicos
+        return await runTransaction(db, async (transaction) => {
+            if (!snapshot.empty) {
+                transaction.delete(snapshot.docs[0].ref);
+                transaction.update(eventRef, {
+                    interestedCount: increment(-1)
+                });
+                return false;
+            } else {
+                const newRsvpRef = doc(collection(db, 'rsvps'));
+                transaction.set(newRsvpRef, {
+                    userId,
+                    eventId,
+                    createdAt: serverTimestamp()
+                });
+                transaction.update(eventRef, {
+                    interestedCount: increment(1)
+                });
+                return true;
+            }
+        });
     } catch (error) {
         console.error('Error toggling RSVP:', error);
         throw error;
@@ -745,24 +780,7 @@ export const subscribeToUserRSVPs = (userId: string, callback: (eventIds: string
     }, 'subscribeToUserRSVPs');
 };
 
-export const subscribeToRSVPCounts = (callback: (counts: Record<string, number>) => void) => {
-    // ─ OPTIMIZACIÓN: Antes descargaba TODOS los RSVPs sin límite — el mayor gasto
-    // de lecturas de toda la app. Ahora limitamos a los 500 más recientes.
-    // La solución ideal a largo plazo es almacenar el conteo denormalizado
-    // directamente en cada documento de 'events' (campo interestedCount),
-    // que ya existe y se actualiza con increment() en toggleRSVP. En ese
-    // escenario, este listener puede eliminarse completamente.
-    const rsvpsRef = collection(db, 'rsvps');
-    const q = query(rsvpsRef, orderBy('createdAt', 'desc'), limit(500));
-    return safeOnSnapshot(q, (snapshot) => {
-        const counts: Record<string, number> = {};
-        snapshot.docs.forEach(doc => {
-            const eventId = doc.data().eventId;
-            counts[eventId] = (counts[eventId] || 0) + 1;
-        });
-        callback(counts);
-    }, 'subscribeToRSVPCounts');
-};
+// ==================== SETTINGS ====================
 
 // ==================== SETTINGS ====================
 

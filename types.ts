@@ -323,6 +323,7 @@ export interface AppSettings {
   updatedAt: any;
   updatedBy: string;
   allowLocalityCreation?: boolean;
+  openrouterModel?: string;
 }
 
 // ==================== COUPONS ====================

@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-    Settings, ShieldAlert, Cpu, Sparkles, AlertCircle, Save, 
+    Settings, ShieldAlert, Cpu, Save, 
     RefreshCcw, Database, HardDrive, Network 
 } from 'lucide-react';
 import { useData } from '../../../context/DataContext';
@@ -10,25 +10,19 @@ import { updateAppConfig } from '../../../services/firestoreService';
 interface SystemPanelProps {
     appConfig: {
         maintenanceMode: boolean;
-        aiModel: string;
-        claudeModel: string;
+        openrouterModel: string;
         isSuperUserEnabled: boolean;
     };
-    aiConfig: {
-        gptModel: string;
-        claudeModel: string;
-    };
-    setAiConfig: (config: any) => void;
+    setAppConfig: (config: any) => void;
 }
 
-export const SystemPanel: React.FC<SystemPanelProps> = ({ appConfig, aiConfig, setAiConfig }) => {
+export const SystemPanel: React.FC<SystemPanelProps> = ({ appConfig, setAppConfig }) => {
     const { showToast } = useToast();
 
     const handleSaveAiConfig = async () => {
         try {
             await updateAppConfig({
-                aiModel: aiConfig.gptModel,
-                claudeModel: aiConfig.claudeModel
+                openrouterModel: appConfig.openrouterModel
             });
             showToast("Configuración de IA guardada", "success");
         } catch (error) {
@@ -99,33 +93,21 @@ export const SystemPanel: React.FC<SystemPanelProps> = ({ appConfig, aiConfig, s
                     <div className="space-y-6">
                         <div className="space-y-3">
                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                <Sparkles className="w-3 h-3" />
-                                GPT Model
+                                <Network className="w-3 h-3" />
+                                OpenRouter (Free)
                             </label>
                             <select 
-                                value={aiConfig.gptModel}
-                                onChange={e => setAiConfig({ ...aiConfig, gptModel: e.target.value })}
+                                value={appConfig.openrouterModel}
+                                onChange={e => setAppConfig({ ...appConfig, openrouterModel: e.target.value })}
                                 className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-xs text-white outline-none focus:border-sky-500/50"
                             >
-                                <option value="gpt-4o">GPT-4o (Standard)</option>
-                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Eco)</option>
-                            </select>
-                        </div>
-
-                        <div className="space-y-3">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                <AlertCircle className="w-3 h-3" />
-                                Claude Model
-                            </label>
-                            <select 
-                                value={aiConfig.claudeModel}
-                                onChange={e => setAiConfig({ ...aiConfig, claudeModel: e.target.value })}
-                                className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-xs text-white outline-none focus:border-sky-500/50"
-                            >
-                                <option value="claude-3-5-sonnet-20240620">Claude 3.5 Sonnet</option>
-                                <option value="claude-3-opus-20240229">Claude 3 Opus</option>
-                                <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                                <option value="minimax/minimax-m2.5:free">Minimax M2.5 (Fast)</option>
+                                <option value="meta-llama/llama-3-8b-instruct:free">Llama 3 8B</option>
+                                <option value="google/gemma-7b-it:free">Gemma 7B</option>
+                                <option value="mistralai/mistral-7b-instruct:free">Mistral 7B</option>
+                                <option value="microsoft/phi-3-mini-128k-instruct:free">Phi-3 Mini</option>
+                                <option value="openchat/openchat-7b:free">OpenChat 7B</option>
+                                <option value="huggingfaceh4/zephyr-7b-beta:free">Zephyr 7B</option>
                             </select>
                         </div>
 

@@ -47,7 +47,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp 
         incrementEventClickCount(event.id);
         onClick(event);
       }}
-      className={`bg-slate-900 border rounded-[2.5rem] overflow-hidden group active:scale-[0.98] transition-all cursor-pointer relative ${
+      className={`antigravity bg-slate-900 border rounded-[2.5rem] overflow-hidden group active:scale-[0.98] transition-all duration-300 cursor-pointer relative flex flex-col hover:border-white/20 hover:shadow-2xl hover:shadow-orange-500/10 ${
         isLive ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-white/5'
       }`}
     >
@@ -56,7 +56,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp 
       )}
 
       {/* Imagen con contenedor de aspecto fijo */}
-      <div className="relative w-full aspect-video rounded-[2.5rem] overflow-hidden">
+      <div className="relative w-full aspect-[4/3] sm:aspect-video rounded-[2.5rem] overflow-hidden">
         {/* Skeleton placeholder mientras carga */}
         {!isLoaded && !hasError && (
           <div className="absolute inset-0">
@@ -72,7 +72,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp 
             loading="lazy"
             onLoad={() => setIsLoaded(true)}
             onError={() => setHasError(true)}
-            className={`w-full h-full object-cover transition-opacity duration-500 ${
+            className={`w-full h-full object-cover transition-all duration-700 group-hover:scale-110 ${
               isLoaded ? 'opacity-100' : 'opacity-0'
             }`}
           />
@@ -83,7 +83,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp 
         )}
 
         {/* Overlay Gradients */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent/60 to-black/20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent/40 to-black/20" />
 
         {/* Top Badges */}
         <div className="absolute top-4 left-4 flex gap-2 z-20">
@@ -97,58 +97,58 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp 
               {String(event.vibe).toUpperCase() === 'FIESTA' ? 'PARTY' : event.vibe}
             </div>
           )}
-          <div className="px-3 py-1 bg-white/20 backdrop-blur-md text-white text-[10px] font-bold uppercase rounded-lg border border-white/10 flex items-center gap-1">
+          <div className="px-3 py-1 bg-white/10 backdrop-blur-md text-white text-[10px] font-bold uppercase rounded-lg border border-white/10 flex items-center gap-1">
             <MapPin className="w-3 h-3 text-white/70" />
-            <span>{event.locality || locality || 'Montañita'} • {event.sector}</span>
+            <span className="truncate max-w-[120px]">{event.locality || locality || 'Montañita'}</span>
           </div>
         </div>
+      </div>
 
-        {/* Content Overlay */}
-        <div className="absolute bottom-6 left-6 right-6 flex flex-col gap-1 z-20">
-          <div className="flex items-center justify-between text-orange-400">
-            <span className={`text-xs font-black tracking-tight ${isLive ? 'text-red-400' : 'text-orange-400'}`}>
-              {formatTimeRange(event.startAt)}
+      {/* Content Area - Changed from absolute to relative for better stability */}
+      <div className="px-6 pb-6 pt-2 flex flex-col gap-1 z-20 -mt-10 relative">
+        <div className="flex items-center justify-between text-orange-400">
+          <span className={`text-[10px] font-black tracking-tight ${isLive ? 'text-red-400' : 'text-orange-400'}`}>
+            {formatTimeRange(event.startAt)}
+          </span>
+          <div className="flex flex-col items-end">
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Interés</span>
+            <span className="text-lg font-black text-white">{event.interestedCount}</span>
+          </div>
+        </div>
+        <h3 className="text-xl font-black text-white leading-tight">{event.title}</h3>
+        <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed min-h-[32px]">{event.description}</p>
+
+        <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center gap-3">
+            <div className="flex -space-x-2">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="w-7 h-7 rounded-full border-2 border-slate-900 bg-slate-800 overflow-hidden ring-1 ring-white/5">
+                  <img
+                    src={`https://i.pravatar.cc/100?u=${i + event.id}`}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80"
+                    loading="lazy"
+                    alt="avatar"
+                  />
+                </div>
+              ))}
+            </div>
+            <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
+              +{event.interestedCount} ASISTIRÁN
             </span>
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Interest</span>
-              <span className="text-xl font-black text-white">{event.interestedCount}</span>
-            </div>
           </div>
-          <h3 className="text-2xl font-black text-white leading-tight mt-1">{event.title}</h3>
-          <p className="text-[11px] text-slate-400 mt-2 line-clamp-2 leading-relaxed h-[34px]">{event.description}</p>
 
-          <div className="flex items-center justify-between mt-4">
-            <div className="flex items-center gap-3">
-              <div className="flex -space-x-2">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="w-8 h-8 rounded-full border-2 border-slate-900 bg-slate-800 overflow-hidden ring-1 ring-white/10">
-                    <img
-                      src={`https://i.pravatar.cc/100?u=${i + event.id}`}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      alt="avatar"
-                    />
-                  </div>
-                ))}
-              </div>
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                +{event.interestedCount} GOING
-              </span>
-            </div>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRsvp?.(event.id, e);
-              }}
-              className={`px-6 py-2.5 text-xs font-black uppercase rounded-full shadow-lg transition-all active:scale-95 ${isRsvp
-                ? 'bg-emerald-500 text-white shadow-emerald-500/20'
-                : 'bg-orange-500 text-white shadow-orange-500/20 hover:bg-orange-400'
-                }`}
-            >
-              {isRsvp ? 'Going ✓' : 'Interested'}
-            </button>
-          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRsvp?.(event.id, e);
+            }}
+            className={`px-5 py-2 text-[10px] font-black uppercase rounded-full shadow-lg transition-all active:scale-95 ${(event as any).isPulsing || isRsvp
+              ? 'bg-emerald-500 text-white shadow-emerald-500/20'
+              : 'bg-orange-500 text-white shadow-orange-500/20 hover:bg-orange-400'
+              }`}
+          >
+            {(event as any).isPulsing || isRsvp ? '¡Pulso Sentido!' : 'Sentir el Pulso'}
+          </button>
         </div>
       </div>
     </div>

@@ -5,12 +5,12 @@ import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAllSettings,
     incrementViewCount, updateAppSettings, subscribeToUsers,
     getUserByEmail, getBusinessById, createUser, createBusiness, updateBusiness, deleteBusiness, updateUser,
-    toggleRSVP, deleteEvent, updateEvent, createEvent, subscribeToRSVPCounts,
+    toggleRSVP, deleteEvent, updateEvent, createEvent, cleanupOldEvents,
     subscribeToPosts, createPost, toggleLikePost, addCommentToPost, deletePost,
     subscribeToMessages, sendMessage,
     addPoints, redeemPoints, togglePulsePass, incrementPulseCount,
     toggleFollowBusiness, getFollowedBusinessIds, subscribeToUserFollows, subscribeToBusinessFollowers,
-    addFavorite, removeFavorite, subscribeToUserFavorites,
+    addFavorite, removeFavorite, subscribeToUserFavorites, subscribeToUserRSVPs,
     purgeAllReferencePoints,
     restoreBusiness,
     getCustomLocalities, subscribeToCustomLocalities, createCustomLocality, deleteCustomLocality, updateCustomLocality,
@@ -273,7 +273,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [events, setEvents] = useState<MontanitaEvent[]>([]);
     const [businesses, setBusinesses] = useState<Business[]>([]);
     const rawBusinessesRef = useRef<Business[]>([]);
-    const [rsvpCounts, setRsvpCounts] = useState<Record<string, number>>({});
     const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
     const [favorites, setFavorites] = useState<string[]>([]);
     const [paymentDetails, setPaymentDetails] = useState(DEFAULT_PAYMENT_DETAILS);
@@ -360,6 +359,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [followedBusinessIds, setFollowedBusinessIds] = useState<string[]>([]);
     const [businessFollowers, setBusinessFollowers] = useState<string[]>([]);
     const [rsvpStatus, setRsvpStatus] = useState<Record<string, boolean>>({});
+    const [pulsingEvents, setPulsingEvents] = useState<Record<string, boolean>>({});
     const [isPanelMinimized, setIsPanelMinimized] = useState(false);
     const [isNearbyMinimized, setIsNearbyMinimized] = useState(true);
     const [isEditorFocus, setIsEditorFocus] = useState(false);
@@ -681,6 +681,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     setEvents(data);
                     eventsLoaded = true;
                     checkInitialLoad();
+                    
+                    const lastCleanup = localStorage.getItem('montapulse_event_cleanup');
+                    const now = new Date();
+                    const currentMonth = `${now.getFullYear()}-${now.getMonth()}`;
+                    
+                    if (!lastCleanup || lastCleanup !== currentMonth) {
+                        cleanupOldEvents().then(() => {
+                            localStorage.setItem('montapulse_event_cleanup', currentMonth);
+                        });
+                    }
                 }
             });
 
@@ -708,8 +718,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 checkInitialLoad();
             });
 
-            const unsubCategories = subscribeToMasterData('categories', setMasterCategories);
-            const unsubTags = subscribeToMasterData('tags', setMasterTags);
+            // Master data with error handling
+            const unsubCategories = subscribeToMasterData('categories', (data) => {
+                setMasterCategories(data);
+            });
+            const unsubTags = subscribeToMasterData('tags', (data) => {
+                setMasterTags(data);
+            });
             const unsubVibes = subscribeToMasterData('vibes', (data) => {
                 if (active) {
                     setMasterVibes(data);
@@ -725,6 +740,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     checkInitialLoad();
                 }
             });
+
+            // If a collection fails to load (e.g. permission denied), we should still move forward
+            // after a shorter local timeout for that specific subscription.
+            const collectionLoadTimeout = setTimeout(() => {
+                if (active) {
+                    let changed = false;
+                    if (!eventsLoaded) { console.warn('[DataContext] Events taking too long, skipping block.'); eventsLoaded = true; changed = true; }
+                    if (!bizLoaded) { console.warn('[DataContext] Businesses taking too long, skipping block.'); bizLoaded = true; changed = true; }
+                    if (!masterDataLoaded) { console.warn('[DataContext] Master data taking too long, skipping block.'); masterDataLoaded = true; changed = true; }
+                    if (!publicCouponsLoaded) { console.warn('[DataContext] Coupons taking too long, skipping block.'); publicCouponsLoaded = true; changed = true; }
+                    if (!favoritesLoaded) { console.warn('[DataContext] Favorites taking too long, skipping block.'); favoritesLoaded = true; changed = true; }
+                    if (!followsLoaded) { console.warn('[DataContext] Follows taking too long, skipping block.'); followsLoaded = true; changed = true; }
+                    if (!userWalletLoaded) { console.warn('[DataContext] Wallet taking too long, skipping block.'); userWalletLoaded = true; changed = true; }
+                    
+                    if (changed) checkInitialLoad();
+                }
+            }, 5000);
 
             let unsubFavs = () => {};
             if (authUser) {
@@ -772,6 +804,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 checkInitialLoad();
             }
 
+            let unsubRsvps = () => {};
+            if (authUser) {
+                unsubRsvps = subscribeToUserRSVPs(authUser.uid, (eventIds) => {
+                    if (active) {
+                        const rsvpObj: Record<string, boolean> = {};
+                        eventIds.forEach(id => { rsvpObj[id] = true; });
+                        setRsvpStatus(rsvpObj);
+                    }
+                });
+            }
+
             return () => {
                 unsubEvents();
                 unsubBiz();
@@ -782,6 +825,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 unsubFollows();
                 unsubPublicCoupons();
                 unsubWallet();
+                unsubRsvps();
                 clearTimeout(safetyTimeoutId);
             };
         });
@@ -967,23 +1011,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [selectedEvent?.id]);
 
-    // Keep selectedEvent's interestedCount in sync with live rsvpCounts (all users)
-    useEffect(() => {
-        if (selectedEvent) {
-            const liveCount = rsvpCounts[selectedEvent.id] ?? 0;
-            if (selectedEvent.interestedCount !== liveCount) {
-                setSelectedEvent(prev => prev ? { ...prev, interestedCount: liveCount } : prev);
-            }
-        }
-    }, [rsvpCounts, selectedEvent?.id]);
-
-    const eventsWithLiveCounts = useMemo(() =>
-        events.map(e => ({ ...e, interestedCount: rsvpCounts[e.id] ?? e.interestedCount ?? 0 })),
-        [events, rsvpCounts]
-    );
+    const eventsWithLiveCounts = useMemo(() => {
+        return events.map(event => {
+            const isPulsing = pulsingEvents[event.id];
+            const baseCount = event.interestedCount || 0;
+            // When pulsing, we show +1 as feedback. 
+            // Note: If user was already interested, they are 'pulsing' to confirm? 
+            // The request says "suma arriba ... vuelve al inicial". 
+            // This suggests the +1 is always a temporary feedback pulse.
+            return {
+                ...event,
+                interestedCount: isPulsing ? baseCount + 1 : baseCount,
+                isPulsing
+            };
+        });
+    }, [events, pulsingEvents]);
 
     const favoritedEvents = useMemo(() => {
-        return eventsWithLiveCounts.filter(e => favorites.includes(e.id));
+        const now = new Date();
+        return eventsWithLiveCounts.filter(e => {
+            if (!favorites.includes(e.id)) return false;
+            const eventEnd = e.endAt ? new Date(e.endAt) : new Date(new Date(e.startAt).getTime() + 4 * 3600000);
+            return eventEnd > now;
+        });
     }, [eventsWithLiveCounts, favorites]);
 
     const filteredEvents = useMemo(() => {
@@ -1011,7 +1061,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // "cada mes se actualicen los eventos" -> Solo mostrar eventos del mes actual o futuros
             const isCurrentOrFutureMonth = eventDate >= startOfMonth;
-            const isActive = now <= new Date(e.endAt);
+            const eventEndDate = e.endAt ? new Date(e.endAt) : new Date(eventDate.getTime() + 4 * 3600000);
+            const isActive = now < eventEndDate;
 
             return matchesLocality && matchesSector && matchesSearch && matchesFilter && matchesMood && isCurrentOrFutureMonth && isActive && matchesCalendarDate;
         });
@@ -1112,7 +1163,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (activeView === 'explore') return filteredEvents;
 
         return [...events]
-            .filter(e => new Date() <= new Date(e.endAt))
+            .filter(e => {
+                const eventEndDate = e.endAt ? new Date(e.endAt) : new Date(new Date(e.startAt).getTime() + 4 * 3600000);
+                return new Date() < eventEndDate;
+            })
             .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     }, [activeView, events, favoritedEvents, filteredEvents, agendaRange, calendarBaseDate]);
 
@@ -1787,35 +1841,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     navigate('/host');
                     return;
                 }
+                
+                // Transient feedback state
+                setPulsingEvents(prev => ({ ...prev, [id]: true }));
+                
+                // The actual RSVP logic (toggle)
                 const isCurrentlyRsvp = !!rsvpStatus[id];
-                // Optimistic update: flip rsvp status and update count immediately
-                setRsvpStatus(prev => ({ ...prev, [id]: !prev[id] }));
-                setEvents(prev => prev.map(e =>
-                    e.id === id
-                        ? { ...e, interestedCount: Math.max(0, (e.interestedCount || 0) + (isCurrentlyRsvp ? -1 : 1)) }
-                        : e
-                ));
-                // Also update selectedEvent if it's the one being RSVP'd
-                setSelectedEvent(prev => prev?.id === id
-                    ? { ...prev, interestedCount: Math.max(0, (prev.interestedCount || 0) + (isCurrentlyRsvp ? -1 : 1)) }
-                    : prev
-                );
+                
                 try {
-                    await toggleRSVP(authUser.uid, id);
-                    showToast(isCurrentlyRsvp ? 'RSVP cancelado.' : 'RSVP confirmado.', 'success');
-                } catch (error) {
-                    // Revert on error
+                    // Update state permanently (optimistic)
                     setRsvpStatus(prev => ({ ...prev, [id]: !prev[id] }));
                     setEvents(prev => prev.map(e =>
                         e.id === id
-                            ? { ...e, interestedCount: Math.max(0, (e.interestedCount || 0) + (isCurrentlyRsvp ? 1 : -1)) }
+                            ? { ...e, interestedCount: Math.max(0, (e.interestedCount || 0) + (isCurrentlyRsvp ? -1 : 1)) }
                             : e
                     ));
-                    setSelectedEvent(prev => prev?.id === id
-                        ? { ...prev, interestedCount: Math.max(0, (prev.interestedCount || 0) + (isCurrentlyRsvp ? 1 : -1)) }
-                        : prev
-                    );
+                    
+                    // Transaction call
+                    await toggleRSVP(authUser.uid, id);
+                    
+                    // Note: No specific toast here as we have transient UI feedback now, 
+                    // or we can keep it for success confirmation.
+                } catch (error) {
+                    // Revert optimistic update on error
+                    setRsvpStatus(prev => ({ ...prev, [id]: isCurrentlyRsvp }));
+                    setEvents(prev => prev.map(e =>
+                        e.id === id
+                            ? { ...e, interestedCount: Math.max(0, (e.interestedCount || 0)) }
+                            : e
+                    ));
                     showToast("No se pudo registrar tu asistencia. Intenta de nuevo.", "error");
+                } finally {
+                    // Revert feedback after 1 second
+                    setTimeout(() => {
+                        setPulsingEvents(prev => ({ ...prev, [id]: false }));
+                    }, 1000);
                 }
             },
             handleDeleteEvent: async (id: string) => {

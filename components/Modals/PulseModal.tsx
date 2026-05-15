@@ -249,11 +249,18 @@ export const PulseModal: React.FC = () => {
     }, [todayActivities, upcomingActivities]);
 
     const filteredFeed = useMemo(() => {
-        let feed = activeTab === 'all' 
-            ? activityFeed 
-            : activeTab === 'events' 
-                ? activityFeed.filter(i => i.type === 'event')
-                : activityFeed.filter(i => i.type === 'post');
+        let feed = [];
+        if (activeTab === 'all') {
+            feed = activityFeed;
+        } else if (activeTab === 'events') {
+            feed = activityFeed.filter(i => i.type === 'event');
+        } else if (activeTab === 'posts') {
+            feed = activityFeed.filter(i => i.type === 'post');
+        } else if (activeTab === 'gifts') {
+            feed = activityFeed.filter(i => i.type === 'event' && (i.data?.isFlashOffer || i.data?.isPremium));
+        } else {
+            feed = [];
+        }
         
         const sq = searchQuery || '';
         if (sq.trim()) {
@@ -263,7 +270,8 @@ export const PulseModal: React.FC = () => {
                 const content = item.content?.toLowerCase() || '';
                 const user = item.user?.toLowerCase() || '';
                 const vibe = item.data?.vibe?.toLowerCase() || '';
-                return title.includes(query) || content.includes(query) || user.includes(query) || vibe.includes(query);
+                const bizName = item.businessName?.toLowerCase() || '';
+                return title.includes(query) || content.includes(query) || user.includes(query) || vibe.includes(query) || bizName.includes(query);
             });
         }
         
@@ -284,6 +292,15 @@ export const PulseModal: React.FC = () => {
             return timeB - timeA;
         });
     }, [activityFeed, activeTab, searchQuery]);
+
+    const filteredNotifications = useMemo(() => {
+        if (!searchQuery) return notifications;
+        const query = searchQuery.toLowerCase();
+        return notifications.filter((n: any) => 
+            (n.title?.toLowerCase() || '').includes(query) || 
+            (n.message?.toLowerCase() || n.body?.toLowerCase() || '').includes(query)
+        );
+    }, [notifications, searchQuery]);
 
     const premiumInFiltered = filteredFeed.filter(i => i.type === 'event' && isPremiumEvent(i.data)).length;
 
@@ -316,13 +333,13 @@ export const PulseModal: React.FC = () => {
 
     return (
         <>
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 sm:p-6 pb-24 md:pb-6">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6 pb-24 md:pb-6">
             <div
                 className="absolute inset-0 bg-black/60 animate-in fade-in duration-300"
                 onClick={onClose}
             />
 
-            <div className="relative w-full max-w-lg bg-slate-900/40 border border-white/20 rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] overflow-y-auto fade-in duration-500 flex flex-col max-h-[90vh]">
+            <div className="antigravity relative w-full max-w-lg bg-slate-900/40 backdrop-blur-xl border border-white/20 rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] overflow-hidden fade-in duration-500 flex flex-col h-full max-h-[100dvh] sm:max-h-[85vh]">
                 <div className="absolute inset-0 rounded-[3rem] border border-violet-500/20 pointer-events-none" />
 
                 <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
@@ -391,7 +408,7 @@ export const PulseModal: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="px-6 pt-2 pb-4 flex gap-2 border-b border-white/5">
+                <div className="px-6 pt-2 pb-4 flex gap-2 border-b border-white/5 overflow-x-auto no-scrollbar scroll-smooth shrink-0">
                     {[
                         { id: 'all', label: 'Todo', count: filteredFeed.length },
                         { id: 'events', label: 'Eventos', count: upcomingEvents.length },
@@ -404,10 +421,10 @@ export const PulseModal: React.FC = () => {
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
-                            className={`px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                            className={`px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                                 activeTab === tab.id 
                                     ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' 
-                                    : 'text-slate-500 hover:text-white'
+                                    : 'text-slate-500 hover:text-white bg-white/5 border border-transparent'
                             }`}
                         >
                             {tab.label} {tab.count > 0 && <span className="ml-1 opacity-70">({tab.count})</span>}
@@ -415,187 +432,160 @@ export const PulseModal: React.FC = () => {
                     ))}
                 </div>
 
-            {/* SECCIÓN PUNTOS DE INTERÉS */}
-            {activeTab === 'references' && (
-                <div className="p-4 space-y-4 pb-20 max-w-4xl mx-auto overflow-y-auto max-h-[80vh]">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {referencePoints.concat(premiumBusinesses).map(biz => (
-                            <div
-                                key={biz.id}
-                                className="bg-white/5 border border-white/10 rounded-2xl p-4 flex gap-4 cursor-pointer hover:border-[#FF6A00]/30 transition-all"
-                                onClick={() => {
-                                    setPublicProfileType('business');
-                                    setPublicProfileId(biz.id);
-                                    setShowPublicProfile(true);
-                                    onClose();
-                                }}
-                            >
-                                <div className="w-16 h-16 rounded-xl overflow-hidden border border-white/10 shrink-0">
-                                    <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h4 className="text-white font-bold truncate">{biz.name}</h4>
-                                    <p className="text-xs text-white/40 mb-2">{biz.category}</p>
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex items-center gap-1 text-[10px] text-white/40">
-                                            <MapPin className="w-3 h-3" />
-                                            {biz.sector}
-                                        </div>
-                                        <div className="flex items-center gap-1 text-[10px] text-white/40">
-                                            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                                            {biz.rating || '5.0'}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* SECCIÓN ME SIGUEN */}
-            {activeTab === 'followed' && (
-                <div className="p-4 space-y-4 pb-20 max-w-4xl mx-auto overflow-y-auto max-h-[80vh]">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {businesses.filter(b => followedBusinessIds.includes(b.id)).map(biz => (
-                            <div
-                                key={biz.id}
-                                className="bg-white/5 border border-white/10 rounded-2xl p-4 flex gap-4 cursor-pointer hover:border-[#FF6A00]/30 transition-all hover:-translate-y-1"
-                                onClick={() => {
-                                    setPublicProfileType('business');
-                                    setPublicProfileId(biz.id);
-                                    setShowPublicProfile(true);
-                                    onClose();
-                                }}
-                            >
-                                <div className="w-16 h-16 rounded-xl overflow-hidden border border-white/10 shrink-0">
-                                    <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h4 className="text-white font-bold truncate">{biz.name}</h4>
-                                    <p className="text-xs text-white/40 mb-2">{biz.category}</p>
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex items-center gap-1 text-[10px] text-white/40">
-                                            <Users className="w-3 h-3" />
-                                            {biz.followerCount || 0} seguidores
-                                        </div>
-                                        <div className="flex items-center gap-1 text-[10px] text-white/40">
-                                            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                                            {biz.rating || '5.0'}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col justify-between items-end">
-                                    <div className="bg-[#FF6A00]/20 text-[#FF6A00] p-1.5 rounded-full">
-                                        <Check className="w-4 h-4" />
-                                    </div>
-                                    <span className="text-[10px] text-white/40 whitespace-nowrap">Siguiendo</span>
-                                </div>
-                            </div>
-                        ))}
-                        {businesses.filter(b => followedBusinessIds.includes(b.id)).length === 0 && (
-                            <div className="col-span-full py-20 text-center bg-white/5 rounded-3xl border border-dashed border-white/10">
-                                <Heart className="w-12 h-12 text-white/20 mx-auto mb-4" />
-                                <h3 className="text-white font-bold mb-1">Aún no sigues a nadie</h3>
-                                <p className="text-white/40 text-sm">Sigue tus negocios favoritos para verlos aquí.</p>
+                {['all', 'events', 'posts', 'gifts'].includes(activeTab) && (
+                    <div className="px-6 py-4 flex gap-4 overflow-x-auto no-scrollbar border-b border-white/5 bg-black/20 shrink-0">
+                        {premiumInFiltered > 0 && (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-2xl border border-amber-500/30 shrink-0">
+                                <Zap className="w-4 h-4 text-amber-400" />
+                                <span className="text-[10px] font-black text-amber-400 uppercase truncate">{premiumInFiltered} Destacados</span>
                             </div>
                         )}
-                    </div>
-                </div>
-            )}
-
-            {/* SECCIÓN REGALOS */}
-            {activeTab === 'gifts' && (
-                <div className="p-4 space-y-4 pb-20 max-w-4xl mx-auto overflow-y-auto max-h-[80vh]">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {upcomingEvents.filter(e => e.isFlashOffer || e.isPremium).map(event => (
-                            <div
-                                key={event.id}
-                                className="relative group rounded-3xl overflow-hidden bg-gradient-to-br from-[#FF6A00] to-[#EE0979] p-[1px] shadow-xl cursor-pointer hover:scale-[1.02] transition-all"
-                                onClick={() => {
-                                    setSelectedEvent(event);
-                                    onClose();
-                                }}
-                            >
-                                <div className="bg-[#121212] rounded-[23px] h-full overflow-hidden flex flex-col">
-                                    <div className="absolute top-4 right-4 z-10 bg-white text-[#FF6A00] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-lg flex items-center gap-1">
-                                        <Gift className="w-3 h-3" />
-                                        {event.isFlashOffer ? 'Oferta Flash' : 'Beneficio Premium'}
-                                    </div>
-
-                                    <div className="relative h-32 overflow-hidden">
-                                        <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                                    </div>
-                                    
-                                    <div className="p-4 flex-1">
-                                        <h4 className="text-white font-black text-lg mb-1 leading-tight group-hover:text-[#FF6A00] transition-colors">{event.title}</h4>
-                                        <p className="text-white/60 text-xs line-clamp-2 mb-4 leading-relaxed">{event.description}</p>
-                                        
-                                        <div className="flex items-center justify-between mt-auto">
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-white/40 uppercase font-bold">Vence en</span>
-                                                <span className="text-sm text-white font-mono flex items-center gap-1">
-                                                    <Clock className="w-3 h-3 text-[#FF6A00]" />
-                                                    {new Date(event.endAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                            </div>
-                                            <button className="bg-white text-black px-4 py-2 rounded-full text-xs font-black hover:bg-[#FF6A00] hover:text-white transition-all shadow-lg">
-                                                RECLAMAR
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                        {upcomingEvents.filter(e => e.isFlashOffer || e.isPremium).length === 0 && (
-                            <div className="col-span-full py-20 text-center bg-white/5 rounded-3xl border border-dashed border-white/10">
-                                <Gift className="w-12 h-12 text-white/20 mx-auto mb-4" />
-                                <h3 className="text-white font-bold mb-1">Sin regalos por hoy</h3>
-                                <p className="text-white/40 text-sm">Descubre nuevas ofertas flash activando el Pulse Pass.</p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Cupones Disponibles */}
-                    {publicCoupons.length > 0 && (
-                        <div className="mt-6">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
-                                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] flex items-center gap-1.5">
-                                    <Ticket className="w-3.5 h-3.5" /> CUPONES DISPONIBLES
-                                </span>
-                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
-                            </div>
-                            <div className="grid grid-cols-1 gap-4">
-                                {publicCoupons.slice(0, 6).map(coupon => (
-                                    <CouponCard
-                                        key={coupon.id}
-                                        coupon={coupon}
-                                        compact
-                                        onRedeem={(c) => setSelectedCoupon(c)}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-     <div className="px-6 py-4 flex gap-4 overflow-x-auto no-scrollbar border-b border-white/5 bg-black/20">
-                    {premiumInFiltered > 0 && (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-2xl border border-amber-500/30 shrink-0">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-2xl border border-white/10 shrink-0">
                             <Zap className="w-4 h-4 text-amber-400" />
-                            <span className="text-[10px] font-black text-amber-400 uppercase truncate">{premiumInFiltered} Destacados</span>
+                            <span className="text-[10px] font-black text-white uppercase truncate">{filteredFeed.length} Resultados</span>
                         </div>
-                    )}
-                    <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-2xl border border-white/10 shrink-0">
-                        <Zap className="w-4 h-4 text-amber-400" />
-                        <span className="text-[10px] font-black text-white uppercase truncate">{filteredFeed.length} Resultados</span>
                     </div>
-                </div>
+                )}
 
                 <div className="flex-1 overflow-y-auto no-scrollbar p-6">
                     <div className="space-y-4">
+                        {/* SECCIÓN PUNTOS DE INTERÉS */}
+                        {activeTab === 'references' && (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {referencePoints.concat(premiumBusinesses)
+                                        .filter(b => !searchQuery || b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.category.toLowerCase().includes(searchQuery.toLowerCase()))
+                                        .map(biz => (
+                                        <div
+                                            key={biz.id}
+                                            className="bg-white/5 border border-white/10 rounded-2xl p-4 flex gap-4 cursor-pointer hover:border-[#FF6A00]/30 transition-all"
+                                            onClick={() => {
+                                                setPublicProfileType('business');
+                                                setPublicProfileId(biz.id);
+                                                setShowPublicProfile(true);
+                                                onClose();
+                                            }}
+                                        >
+                                            <div className="w-16 h-16 rounded-xl overflow-hidden border border-white/10 shrink-0">
+                                                <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="text-white font-bold truncate">{biz.name}</h4>
+                                                <p className="text-xs text-white/40 mb-2">{biz.category}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1 text-[10px] text-white/40">
+                                                        <MapPin className="w-3 h-3" />
+                                                        {biz.sector}
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-[10px] text-white/40">
+                                                        <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                                                        {biz.rating || '5.0'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SECCIÓN ME SIGUEN */}
+                        {activeTab === 'followed' && (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {businesses
+                                        .filter(b => followedBusinessIds.includes(b.id))
+                                        .filter(b => !searchQuery || b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.category.toLowerCase().includes(searchQuery.toLowerCase()))
+                                        .map(biz => (
+                                        <div
+                                            key={biz.id}
+                                            className="bg-white/5 border border-white/10 rounded-2xl p-4 flex gap-4 cursor-pointer hover:border-[#FF6A00]/30 transition-all hover:-translate-y-1"
+                                            onClick={() => {
+                                                setPublicProfileType('business');
+                                                setPublicProfileId(biz.id);
+                                                setShowPublicProfile(true);
+                                                onClose();
+                                            }}
+                                        >
+                                            <div className="w-16 h-16 rounded-xl overflow-hidden border border-white/10 shrink-0">
+                                                <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="text-white font-bold truncate">{biz.name}</h4>
+                                                <p className="text-xs text-white/40 mb-2">{biz.category}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1 text-[10px] text-white/40">
+                                                        <Users className="w-3 h-3" />
+                                                        {biz.followerCount || 0} seguidores
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-[10px] text-white/40">
+                                                        <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                                                        {biz.rating || '5.0'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col justify-between items-end">
+                                                <div className="bg-[#FF6A00]/20 text-[#FF6A00] p-1.5 rounded-full">
+                                                    <Check className="w-4 h-4" />
+                                                </div>
+                                                <span className="text-[10px] text-white/40 whitespace-nowrap">Siguiendo</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SECCIÓN REGALOS */}
+                        {activeTab === 'gifts' && (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {upcomingEvents
+                                        .filter(e => e.isFlashOffer || e.isPremium)
+                                        .filter(e => !searchQuery || e.title.toLowerCase().includes(searchQuery.toLowerCase()) || e.description?.toLowerCase().includes(searchQuery.toLowerCase()))
+                                        .map(event => (
+                                        <div
+                                            key={event.id}
+                                            className="relative group rounded-3xl overflow-hidden bg-gradient-to-br from-[#FF6A00] to-[#EE0979] p-[1px] shadow-xl cursor-pointer hover:scale-[1.02] transition-all"
+                                            onClick={() => {
+                                                setSelectedEvent(event);
+                                                onClose();
+                                            }}
+                                        >
+                                            <div className="bg-[#121212] rounded-[23px] h-full overflow-hidden flex flex-col">
+                                                <div className="absolute top-4 right-4 z-10 bg-white text-[#FF6A00] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-lg flex items-center gap-1">
+                                                    <Gift className="w-3 h-3" />
+                                                    {event.isFlashOffer ? 'Oferta Flash' : 'Beneficio Premium'}
+                                                </div>
+
+                                                <div className="relative h-32 overflow-hidden">
+                                                    <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                                                </div>
+                                                
+                                                <div className="p-4 flex-1">
+                                                    <h4 className="text-white font-black text-lg mb-1 leading-tight group-hover:text-[#FF6A00] transition-colors">{event.title}</h4>
+                                                    <p className="text-white/60 text-xs line-clamp-2 mb-4 leading-relaxed">{event.description}</p>
+                                                    
+                                                    <div className="flex items-center justify-between mt-auto">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] text-white/40 uppercase font-bold">Vence en</span>
+                                                            <span className="text-sm text-white font-mono flex items-center gap-1">
+                                                                <Clock className="w-3 h-3 text-[#FF6A00]" />
+                                                                {new Date(event.endAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            </span>
+                                                        </div>
+                                                        <button className="bg-white text-black px-4 py-2 rounded-full text-xs font-black hover:bg-[#FF6A00] hover:text-white transition-all shadow-lg">
+                                                            RECLAMAR
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         {filteredFeed.length > 0 ? (
                             <>
                                 {premiumInFiltered > 0 && activeTab !== 'posts' && (
@@ -934,8 +924,8 @@ export const PulseModal: React.FC = () => {
                                     )}
                                 </div>
                                 
-                                {notifications.length > 0 ? (
-                                    notifications.map((n: any) => (
+                                {filteredNotifications.length > 0 ? (
+                                    filteredNotifications.map((n: any) => (
                                         <div 
                                             key={n.id}
                                             onClick={() => {
@@ -1002,11 +992,15 @@ export const PulseModal: React.FC = () => {
                                 ) : (
                                     <div className="py-20 text-center flex flex-col items-center gap-4">
                                         <div className="w-20 h-20 bg-slate-800/50 rounded-[2.5rem] flex items-center justify-center border border-white/5 shadow-inner">
-                                            <BellOff className="w-10 h-10 text-slate-600" />
+                                            {searchQuery ? <Search className="w-10 h-10 text-slate-600" /> : <BellOff className="w-10 h-10 text-slate-600" />}
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="text-sm font-black text-white uppercase tracking-widest italic">BANDEJA VACÍA</p>
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">No tienes notificaciones pendientes</p>
+                                            <p className="text-sm font-black text-white uppercase tracking-widest italic">
+                                                {searchQuery ? 'SIN COINCIDENCIAS' : 'BANDEJA VACÍA'}
+                                            </p>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                                {searchQuery ? 'No encontramos alertas con ese término' : 'No tienes notificaciones pendientes'}
+                                            </p>
                                         </div>
                                     </div>
                                 )}
