@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, X, Info, Sparkles, Zap, Clock, ExternalLink } from 'lucide-react';
+import { Bell, X, Info, Sparkles, Zap, Clock, ExternalLink, Ticket } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useTranslation } from 'react-i18next';
 import { PulseNotification } from '../../types';

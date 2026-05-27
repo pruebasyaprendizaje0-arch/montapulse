@@ -1,12 +1,26 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
     ChevronLeft, Clock, Trash2, Calendar, MapPin, Zap, Sparkles, 
     BarChart3, HelpCircle, BookOpen, Activity, Users, Heart, 
-    Star, Droplets, ChevronDown, ChevronUp, Search, Info, MessageCircle, ArrowRight
+    Star, Droplets, ChevronDown, ChevronUp, Search, Info, MessageCircle, ArrowRight,
+    Edit3, Save, X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
+import { useToast } from '../context/ToastContext';
+import { getAppSettings, updateAppSettings } from '../services/firestoreService';
+
+const formatText = (text: string) => {
+    if (!text) return '';
+    const parts = text.split(/\*\*([^*]+)\*\*/g);
+    return parts.map((part, idx) => {
+        if (idx % 2 === 1) {
+            return <strong key={idx} className="font-bold text-white">{part}</strong>;
+        }
+        return part;
+    });
+};
 
 const AccordionItem: React.FC<{ title: string, children: React.ReactNode }> = ({ title, children }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -30,7 +44,46 @@ const AccordionItem: React.FC<{ title: string, children: React.ReactNode }> = ({
 
 export const History: React.FC = () => {
     const navigate = useNavigate();
-    const { user } = useAuthContext();
+    const { user, isSuperUser } = useAuthContext();
+    const { showToast } = useToast();
+
+    const [historyContent, setHistoryContent] = useState({
+        heroSubtitle: 'Tu guía definitiva en la Ruta del Spondylus. Mucho más que una aplicación, somos el latido digital de Montañita y su gente.',
+        spondylusQuote: 'Recorrer la ruta es una travesía, pero entender su alma requiere una brújula local que conozca cada secreto.',
+        spondylusDescription: 'Montañita es el epicentro vibrante de la costa ecuatoriana. MontaPulse nace de la necesidad de conectar a los viajeros con la esencia real del pueblo, permitiéndoles descubrir no solo dónde estar, sino **cuándo** estar ahí para vivir la experiencia perfecta.',
+        pulsoText: 'Un Pulso es la captura instantánea de la energía de un lugar. Es lo que está ocurriendo **AHORA**. No es un anuncio estático; es la vida misma de Montañita fluyendo en tiempo real a través de tu pantalla.',
+        vibeText: 'El Vibe es la atmósfera que buscas. ¿Prefieres un atardecer chill, una fiesta electrónica o una cena romántica? Las Vibes filtran el mapa para que encuentres exactamente la sintonía que tu cuerpo pide hoy.',
+        metricsText: 'Nuestra tecnología analiza miles de puntos de datos en tiempo real. Para los negocios, esto significa entender mejor a su audiencia; para ti, significa la seguridad de que el lugar al que vas tiene exactamente el ambiente que esperas.',
+        businessCoachingText: 'No solo te ofrecemos visibilidad, te brindamos asesoría estratégica basada en el comportamiento real de tus clientes. Optimiza tus horarios, tus ofertas y tu impacto digital con nosotros.',
+        manoInvisibleText: 'El concepto es simple: **si tú creces, nosotros crecemos**. La "Mano Invisible" representa nuestra red de apoyo mutuo donde impulsamos proyectos colectivos, facilitamos el trueque de servicios y nos aseguramos de que nadie en la comunidad se quede atrás.',
+        primeroLoNuestroText: 'Dedicado exclusivamente al apoyo de artesanos, agricultores locales y negocios comunales. Queremos que el mundo vea la maestría de nuestra gente y la calidad de nuestra tierra directamente, sin intermediarios.',
+        proyectoPlayaText: 'Nuestro compromiso ambiental. Una parte de cada suscripción se reinvierte en la conservación de nuestras playas, programas de reciclaje y educación ambiental para asegurar que el paraíso siga siendo paraíso.'
+    });
+    const [editForm, setEditForm] = useState(historyContent);
+    const [isEditing, setIsEditing] = useState(false);
+
+    useEffect(() => {
+        const loadSettings = async () => {
+            const data = await getAppSettings('history_info');
+            if (data) {
+                setHistoryContent(data as any);
+                setEditForm(data as any);
+            }
+        };
+        loadSettings();
+    }, []);
+
+    const handleSave = async () => {
+        try {
+            await updateAppSettings('history_info', editForm);
+            setHistoryContent(editForm);
+            setIsEditing(false);
+            showToast('Contenido de Nosotros actualizado correctamente', 'success');
+        } catch (error) {
+            console.error('Error updating history info:', error);
+            showToast('Error al actualizar la información', 'error');
+        }
+    };
 
     return (
         <div className="flex flex-col h-full overflow-y-auto no-scrollbar bg-[#020617] scroll-smooth">
@@ -49,6 +102,42 @@ export const History: React.FC = () => {
                     </button>
                 </div>
 
+                {isSuperUser && (
+                    <div className="absolute top-6 right-6 z-10 flex gap-2">
+                        {isEditing ? (
+                            <>
+                                <button 
+                                    onClick={handleSave} 
+                                    className="p-3 bg-emerald-500 hover:bg-emerald-600 border border-emerald-400/20 rounded-2xl transition-all active:scale-95 shadow-2xl flex items-center gap-2 text-white font-bold text-sm"
+                                    title="Guardar Cambios"
+                                >
+                                    <Save className="w-5 h-5" />
+                                    <span className="hidden md:inline">Guardar</span>
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        setEditForm(historyContent);
+                                        setIsEditing(false);
+                                    }} 
+                                    className="p-3 bg-rose-500 hover:bg-rose-600 border border-rose-400/20 rounded-2xl transition-all active:scale-95 shadow-2xl text-white"
+                                    title="Cancelar Edición"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </>
+                        ) : (
+                            <button 
+                                onClick={() => setIsEditing(true)} 
+                                className="p-3 bg-orange-500 hover:bg-orange-600 border border-orange-400/20 rounded-2xl transition-all active:scale-95 shadow-2xl flex items-center gap-2 text-white font-bold text-sm"
+                                title="Editar Contenido"
+                            >
+                                <Edit3 className="w-5 h-5" />
+                                <span className="hidden md:inline">Editar Nosotros</span>
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 <div className="relative z-10 px-8 pb-16 max-w-4xl animate-in fade-in slide-in-from-bottom-8 duration-1000">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="px-3 py-1 bg-orange-500/20 border border-orange-500/30 rounded-full">
@@ -61,9 +150,20 @@ export const History: React.FC = () => {
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500">PULSO</span> DE NUESTRA <br/>
                         COMUNIDAD
                     </h1>
-                    <p className="text-base md:text-lg text-slate-300 max-w-xl leading-relaxed font-medium">
-                        Tu guía definitiva en la Ruta del Spondylus. Mucho más que una aplicación, somos el latido digital de Montañita y su gente.
-                    </p>
+                    {isEditing ? (
+                        <div className="w-full max-w-xl space-y-2">
+                            <label className="text-[10px] uppercase font-black tracking-widest text-orange-500">Subtítulo de Portada</label>
+                            <textarea
+                                value={editForm.heroSubtitle}
+                                onChange={(e) => setEditForm({ ...editForm, heroSubtitle: e.target.value })}
+                                className="w-full bg-black/50 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-4 text-slate-200 focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all duration-300 resize-y min-h-[100px] text-base font-medium"
+                            />
+                        </div>
+                    ) : (
+                        <p className="text-base md:text-lg text-slate-300 max-w-xl leading-relaxed font-medium">
+                            {formatText(historyContent.heroSubtitle)}
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -77,12 +177,35 @@ export const History: React.FC = () => {
                             <MapPin className="w-8 h-8 text-orange-500" />
                         </div>
                         <h2 className="text-4xl font-black text-white tracking-tight leading-none uppercase">La Ruta del<br/><span className="text-orange-500">Spondylus</span></h2>
-                        <p className="text-lg text-slate-400 leading-relaxed italic border-l-2 border-orange-500/30 pl-6">
-                            "Recorrer la ruta es una travesía, pero entender su alma requiere una brújula local que conozca cada secreto."
-                        </p>
-                        <p className="text-base text-slate-300 leading-relaxed">
-                            Montañita es el epicentro vibrante de la costa ecuatoriana. MontaPulse nace de la necesidad de conectar a los viajeros con la esencia real del pueblo, permitiéndoles descubrir no solo dónde estar, sino **cuándo** estar ahí para vivir la experiencia perfecta.
-                        </p>
+                        {isEditing ? (
+                            <div className="space-y-4 w-full">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-black tracking-widest text-orange-500">Cita / Lema</label>
+                                    <textarea
+                                        value={editForm.spondylusQuote}
+                                        onChange={(e) => setEditForm({ ...editForm, spondylusQuote: e.target.value })}
+                                        className="w-full bg-black/50 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-4 text-slate-200 focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all duration-300 resize-y min-h-[80px] text-lg italic"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-black tracking-widest text-orange-500">Descripción de la Ruta</label>
+                                    <textarea
+                                        value={editForm.spondylusDescription}
+                                        onChange={(e) => setEditForm({ ...editForm, spondylusDescription: e.target.value })}
+                                        className="w-full bg-black/50 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-4 text-slate-200 focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all duration-300 resize-y min-h-[120px] text-base"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-lg text-slate-400 leading-relaxed italic border-l-2 border-orange-500/30 pl-6">
+                                    "{formatText(historyContent.spondylusQuote)}"
+                                </p>
+                                <p className="text-base text-slate-300 leading-relaxed">
+                                    {formatText(historyContent.spondylusDescription)}
+                                </p>
+                            </>
+                        )}
                     </div>
                     <div className="relative aspect-square rounded-[3rem] overflow-hidden border border-white/10 group shadow-2xl">
                         <img 
@@ -107,9 +230,20 @@ export const History: React.FC = () => {
                                 <Zap className="w-8 h-8 text-white" />
                             </div>
                             <h3 className="text-2xl font-black text-white mb-4">¿Qué es un Pulso?</h3>
-                            <p className="text-slate-400 leading-relaxed">
-                                Un Pulso es la captura instantánea de la energía de un lugar. Es lo que está ocurriendo **AHORA**. No es un anuncio estático; es la vida misma de Montañita fluyendo en tiempo real a través de tu pantalla.
-                            </p>
+                            {isEditing ? (
+                                <div className="space-y-2 mt-4">
+                                    <label className="text-[10px] uppercase font-black tracking-widest text-orange-500">¿Qué es un Pulso?</label>
+                                    <textarea
+                                        value={editForm.pulsoText}
+                                        onChange={(e) => setEditForm({ ...editForm, pulsoText: e.target.value })}
+                                        className="w-full bg-black/50 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-4 text-slate-200 focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all duration-300 resize-y min-h-[100px] text-sm"
+                                    />
+                                </div>
+                            ) : (
+                                <p className="text-slate-400 leading-relaxed">
+                                    {formatText(historyContent.pulsoText)}
+                                </p>
+                            )}
                         </div>
                         
                         <div className="group bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/20 p-10 rounded-[3rem] transition-all hover:bg-amber-500/[0.15] hover:border-amber-500/40">
@@ -117,9 +251,20 @@ export const History: React.FC = () => {
                                 <Sparkles className="w-8 h-8 text-white" />
                             </div>
                             <h3 className="text-2xl font-black text-white mb-4">¿Qué es un Vibe?</h3>
-                            <p className="text-slate-400 leading-relaxed">
-                                El Vibe es la atmósfera que buscas. ¿Prefieres un atardecer chill, una fiesta electrónica o una cena romántica? Las Vibes filtran el mapa para que encuentres exactamente la sintonía que tu cuerpo pide hoy.
-                            </p>
+                            {isEditing ? (
+                                <div className="space-y-2 mt-4">
+                                    <label className="text-[10px] uppercase font-black tracking-widest text-amber-500">¿Qué es un Vibe?</label>
+                                    <textarea
+                                        value={editForm.vibeText}
+                                        onChange={(e) => setEditForm({ ...editForm, vibeText: e.target.value })}
+                                        className="w-full bg-black/50 backdrop-blur-xl border border-amber-500/30 rounded-2xl p-4 text-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 outline-none transition-all duration-300 resize-y min-h-[100px] text-sm"
+                                    />
+                                </div>
+                            ) : (
+                                <p className="text-slate-400 leading-relaxed">
+                                    {formatText(historyContent.vibeText)}
+                                </p>
+                            )}
                         </div>
                     </div>
                 </section>
@@ -132,9 +277,20 @@ export const History: React.FC = () => {
                     <div className="relative z-10 flex flex-col md:flex-row gap-12 items-center">
                         <div className="flex-1 flex flex-col gap-6">
                             <h2 className="text-4xl font-black text-white leading-[0.9]">MÉTRICAS QUE<br/><span className="text-orange-500">POTENCIAN</span> TU DÍA</h2>
-                            <p className="text-slate-400 leading-relaxed">
-                                Nuestra tecnología analiza miles de puntos de datos en tiempo real. Para los negocios, esto significa entender mejor a su audiencia; para ti, significa la seguridad de que el lugar al que vas tiene exactamente el ambiente que esperas.
-                            </p>
+                            {isEditing ? (
+                                <div className="space-y-2 w-full mt-4">
+                                    <label className="text-[10px] uppercase font-black tracking-widest text-orange-500">Descripción de Métricas</label>
+                                    <textarea
+                                        value={editForm.metricsText}
+                                        onChange={(e) => setEditForm({ ...editForm, metricsText: e.target.value })}
+                                        className="w-full bg-black/50 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-4 text-slate-200 focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all duration-300 resize-y min-h-[100px] text-sm"
+                                    />
+                                </div>
+                            ) : (
+                                <p className="text-slate-400 leading-relaxed">
+                                    {formatText(historyContent.metricsText)}
+                                </p>
+                            )}
                             <div className="flex items-center gap-8 mt-4">
                                 <div className="flex flex-col">
                                     <span className="text-4xl font-black text-white">92%</span>
@@ -213,9 +369,20 @@ export const History: React.FC = () => {
                     </div>
                     <div className="relative z-10 flex flex-col gap-8 max-w-2xl">
                         <h2 className="text-4xl md:text-5xl font-black text-white leading-none tracking-tighter">TRANSFORMA<br/>TU NEGOCIO</h2>
-                        <p className="text-lg text-indigo-100 leading-relaxed font-medium">
-                            No solo te ofrecemos visibilidad, te brindamos asesoría estratégica basada en el comportamiento real de tus clientes. Optimiza tus horarios, tus ofertas y tu impacto digital con nosotros.
-                        </p>
+                        {isEditing ? (
+                            <div className="space-y-2 w-full">
+                                <label className="text-[10px] uppercase font-black tracking-widest text-indigo-200">Asesoría Estratégica</label>
+                                <textarea
+                                    value={editForm.businessCoachingText}
+                                    onChange={(e) => setEditForm({ ...editForm, businessCoachingText: e.target.value })}
+                                    className="w-full bg-black/50 backdrop-blur-xl border border-indigo-300/30 rounded-2xl p-4 text-slate-200 focus:border-indigo-300 focus:ring-1 focus:ring-indigo-300/50 outline-none transition-all duration-300 resize-y min-h-[100px] text-base"
+                                />
+                            </div>
+                        ) : (
+                            <p className="text-lg text-indigo-100 leading-relaxed font-medium">
+                                {formatText(historyContent.businessCoachingText)}
+                            </p>
+                        )}
                         <button onClick={() => navigate('/plans')} className="w-fit px-8 py-5 bg-white text-indigo-600 rounded-2xl font-black uppercase tracking-widest text-xs transition-all hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-3">
                             Convertirme en Afiliado
                             <ArrowRight className="w-4 h-4" />
@@ -238,9 +405,20 @@ export const History: React.FC = () => {
                         </div>
                         <div className="flex flex-col gap-4">
                             <h3 className="text-2xl font-black text-white uppercase tracking-tight">Crecimiento en Unidad</h3>
-                            <p className="text-base text-slate-300 leading-relaxed">
-                                El concepto es simple: **si tú creces, nosotros crecemos**. La "Mano Invisible" representa nuestra red de apoyo mutuo donde impulsamos proyectos colectivos, facilitamos el trueque de servicios y nos aseguramos de que nadie en la comunidad se quede atrás.
-                            </p>
+                            {isEditing ? (
+                                <div className="space-y-2 w-full mt-4">
+                                    <label className="text-[10px] uppercase font-black tracking-widest text-pink-500">Crecimiento en Unidad</label>
+                                    <textarea
+                                        value={editForm.manoInvisibleText}
+                                        onChange={(e) => setEditForm({ ...editForm, manoInvisibleText: e.target.value })}
+                                        className="w-full bg-black/50 backdrop-blur-xl border border-pink-500/30 rounded-2xl p-4 text-slate-200 focus:border-pink-500 focus:ring-1 focus:ring-pink-500/50 outline-none transition-all duration-300 resize-y min-h-[100px] text-base"
+                                    />
+                                </div>
+                            ) : (
+                                <p className="text-base text-slate-300 leading-relaxed">
+                                    {formatText(historyContent.manoInvisibleText)}
+                                </p>
+                            )}
                         </div>
                     </div>
                 </section>
@@ -252,18 +430,40 @@ export const History: React.FC = () => {
                             <Star className="w-6 h-6 text-amber-500" />
                             <h3 className="text-2xl font-black text-white uppercase">Primero Lo Nuestro</h3>
                         </div>
-                        <p className="text-sm text-slate-400 leading-relaxed">
-                            Dedicado exclusivamente al apoyo de artesanos, agricultores locales y negocios comunales. Queremos que el mundo vea la maestría de nuestra gente y la calidad de nuestra tierra directamente, sin intermediarios.
-                        </p>
+                        {isEditing ? (
+                            <div className="space-y-2 mt-4">
+                                <label className="text-[10px] uppercase font-black tracking-widest text-amber-500">Primero Lo Nuestro</label>
+                                <textarea
+                                    value={editForm.primeroLoNuestroText}
+                                    onChange={(e) => setEditForm({ ...editForm, primeroLoNuestroText: e.target.value })}
+                                    className="w-full bg-black/50 backdrop-blur-xl border border-amber-500/30 rounded-2xl p-4 text-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 outline-none transition-all duration-300 resize-y min-h-[100px] text-sm"
+                                />
+                            </div>
+                        ) : (
+                            <p className="text-sm text-slate-400 leading-relaxed">
+                                {formatText(historyContent.primeroLoNuestroText)}
+                            </p>
+                        )}
                     </div>
                     <div className="bg-emerald-950/40 border border-emerald-500/10 p-10 rounded-[3rem] flex flex-col gap-6 hover:border-emerald-500/30 transition-colors relative overflow-hidden group">
                         <div className="flex items-center gap-3 relative z-10">
                             <Droplets className="w-6 h-6 text-emerald-400" />
                             <h3 className="text-2xl font-black text-white uppercase">Proyecto Playa</h3>
                         </div>
-                        <p className="text-sm text-slate-400 leading-relaxed relative z-10">
-                            Nuestro compromiso ambiental. Una parte de cada suscripción se reinvierte en la conservación de nuestras playas, programas de reciclaje y educación ambiental para asegurar que el paraíso siga siendo paraíso.
-                        </p>
+                        {isEditing ? (
+                            <div className="space-y-2 relative z-10 mt-4">
+                                <label className="text-[10px] uppercase font-black tracking-widest text-emerald-400">Proyecto Playa</label>
+                                <textarea
+                                    value={editForm.proyectoPlayaText}
+                                    onChange={(e) => setEditForm({ ...editForm, proyectoPlayaText: e.target.value })}
+                                    className="w-full bg-black/50 backdrop-blur-xl border border-emerald-500/30 rounded-2xl p-4 text-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 outline-none transition-all duration-300 resize-y min-h-[100px] text-sm"
+                                />
+                            </div>
+                        ) : (
+                            <p className="text-sm text-slate-400 leading-relaxed relative z-10">
+                                {formatText(historyContent.proyectoPlayaText)}
+                            </p>
+                        )}
                         <div className="absolute bottom-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                             <Droplets className="w-32 h-32 text-emerald-400" />
                         </div>

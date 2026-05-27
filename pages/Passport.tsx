@@ -66,8 +66,6 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         handleObtainCoupon,
         showHostWizard,
         handleOpenNewEventWizard,
-        showPulseModal,
-        setShowPulseModal,
         helpSupport,
         handleUpdateHelpSupport,
         businessFollowers,
@@ -453,33 +451,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
                 {/* Pulse Window & Discovery & Wallet */}
                 <div className="px-6 mb-12">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <button
-                            onClick={() => setShowPulseModal(true)}
-                            className="relative w-full group overflow-hidden rounded-[2.5rem] bg-indigo-600 p-1 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-95 shadow-2xl shadow-indigo-600/20"
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-violet-600 to-indigo-700 animate-shimmer bg-[length:200%_100%]" />
-                            <div className="relative flex-1 flex items-center justify-between bg-black/40 backdrop-blur-3xl rounded-[2.25rem] p-6 border border-white/10 h-full">
-                                <div className="flex items-center gap-5">
-                                    <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
-                                        <Activity className="w-7 h-7 text-indigo-400" />
-                                    </div>
-                                    <div className="text-left">
-                                        <h3 className="text-xl font-black text-white tracking-tight leading-tight">Ventana Pulse</h3>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="relative flex h-2 w-2">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                            </span>
-                                            <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">En Vivo Ahora</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-indigo-500 group-hover:border-indigo-400 transition-all duration-500">
-                                    <Sparkles className="w-5 h-5 text-indigo-400 group-hover:text-white transition-colors" />
-                                </div>
-                            </div>
-                        </button>
+                    <div className="grid grid-cols-1 gap-4">
+                        {/* Pulse Window Removed */}
 
                         <button
                             onClick={() => setShowUserWallet(true)}
@@ -1121,7 +1094,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personaliza tu experiencia</p>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {[...Object.values(Vibe), ...(masterVibes || []).map(v => v.name)]
+                             {masterVibes
+                                .map(v => v.name)
                                 .filter((v, idx, self) => self.indexOf(v) === idx)
                                 .map(v => (
                                 <button
@@ -1143,6 +1117,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                         </div>
                     </div>
                 </div>
+
 
                 {/* Removed Admin Center from main flow, now in hidden modal */}
 
@@ -1301,7 +1276,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Vibe Favorita</label>
                                 <div className="grid grid-cols-2 gap-2">
-                                    {[...Object.values(Vibe), ...(masterVibes || []).map(v => v.name)]
+                                    {masterVibes
+                                        .map(v => v.name)
                                         .filter((v, idx, self) => self.indexOf(v) === idx)
                                         .map(v => (
                                         <button
@@ -1419,7 +1395,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-black text-white">Ayuda y Soporte</h3>
                             <div className="flex gap-2">
-                                {isAdmin && (
+                                {(isAdmin || isSuperUser) && (
                                     <button
                                         onClick={() => {
                                             if (isEditingHelp) {

@@ -5,6 +5,7 @@ import { Skeleton } from './Skeleton';
 import { SECTOR_INFO, BASE_URL } from '../constants';
 import { useToast } from '../context/ToastContext';
 import { useSEO } from '../hooks/useSEO';
+import { useData } from '../context/DataContext';
 
 
 interface EventModalProps {
@@ -43,6 +44,7 @@ export const EventModal: React.FC<EventModalProps> = ({
 }) => {
     const [imgError, setImgError] = React.useState(false);
     const { showToast, showConfirm } = useToast();
+    const { setShowPublicProfile, setPublicProfileId, setPublicProfileType } = useData();
 
     useSEO({
         title: event?.title || 'Evento',
@@ -253,7 +255,16 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                         )}
 
                         {business ? (
-                            <div className="flex items-center gap-3 mb-2">
+                            <div 
+                                className="flex items-center gap-3 mb-2 cursor-pointer hover:bg-white/5 p-2 -mx-2 rounded-2xl transition-colors"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onClose) onClose();
+                                    setPublicProfileType('business');
+                                    setPublicProfileId(business.id);
+                                    setShowPublicProfile(true);
+                                }}
+                            >
                                 <div className="relative group">
                                     <img
                                         src={business.imageUrl}

@@ -177,7 +177,7 @@ const todayAt = (h: number) => {
 export const MOCK_EVENTS: MontanitaEvent[] = [];
 
 export const PLAN_LIMITS = {
-  [SubscriptionPlan.FREE]: 0,
+  [SubscriptionPlan.FREE]: 1,
   [SubscriptionPlan.PRO]: 5,
   [SubscriptionPlan.ELITE]: 10,
   [SubscriptionPlan.EXPERT]: Infinity
@@ -185,43 +185,45 @@ export const PLAN_LIMITS = {
 
 export const EVENT_LIMITS = {
   [SubscriptionPlan.FREE]: 1,
-  [SubscriptionPlan.PRO]: 10,
-  [SubscriptionPlan.ELITE]: 20,
+  [SubscriptionPlan.PRO]: 5,
+  [SubscriptionPlan.ELITE]: 10,
   [SubscriptionPlan.EXPERT]: Infinity
 };
 
 export const PLAN_FEATURES: Record<SubscriptionPlan, PlanFeatureDefinition[]> = {
   [SubscriptionPlan.FREE]: [
     { text: "1 Evento al mes", description: "Publica tu primer evento", isIncluded: true },
+    { text: "1 Pulso activo/mes", description: "Visibilidad básica en tiempo real", isIncluded: true },
     { text: "Descubrimiento total", description: "Encuentra todos los eventos", isIncluded: true },
     { text: "Unirse a la comunidad", description: "Interactúa en el muro Pulse", isIncluded: true }
   ],
   [SubscriptionPlan.PRO]: [
-    { text: "10 Eventos al mes", description: "Ideal para negocios activos", isIncluded: true, highlight: true },
+    { text: "5 Eventos al mes", description: "Ideal para negocios activos", isIncluded: true, highlight: true },
     { text: "5 Pulsos activos/mes", description: "Tus eventos en tiempo real", isIncluded: true, highlight: true },
     { text: "Insignia Pro", isIncluded: true, highlight: true },
-    { text: "Añadir negocio al mapa", description: "Tu ubicación visible para todos", isIncluded: true, highlight: true },
-    { text: "Gestión de Ubicame Socio", description: "Edita y guarda cambios", isIncluded: true, highlight: true },
+    { text: "Tu negocio en el mapa", description: "Añade, edita y borra tu punto", isIncluded: true, highlight: true },
+    { text: "Gestión de perfil de negocio", description: "Edita y guarda cambios", isIncluded: true, highlight: true },
     { text: "Presencia destacada", description: "Aparece antes en las listas", isIncluded: true, highlight: true },
     { text: "Acceso a Dashboard Host", isIncluded: true, highlight: true }
   ],
   [SubscriptionPlan.ELITE]: [
-    { text: "20 Eventos al mes", description: "Para los más influyentes", isIncluded: true, highlight: true },
+    { text: "10 Eventos al mes", description: "Para los más influyentes", isIncluded: true, highlight: true },
     { text: "10 Pulsos activos/mes", description: "Ideal para agenda variada", isIncluded: true, highlight: true },
     { text: "Insignia Elite Gold", isIncluded: true, highlight: true },
-    { text: "Añadir negocio al mapa", description: "Tu ubicación visible para todos", isIncluded: true, highlight: true },
-    { text: "Gestión total de perfil", description: "Edita y guarda cambios 24/7", isIncluded: true, highlight: true },
+    { text: "Tu negocio en el mapa", description: "Añade, edita y borra tu punto", isIncluded: true, highlight: true },
+    { text: "Gestión total de perfil 24/7", description: "Edita y guarda cambios en cualquier momento", isIncluded: true, highlight: true },
     { text: "Fijado + destacado", description: "Top 1 en buscador", isIncluded: true, highlight: true },
-    { text: "IA Magic Content", description: "Descripciones optimizadas", isIncluded: true, highlight: true },
+    { text: "IA Magic Content", description: "Descripciones optimizadas por IA", isIncluded: true, highlight: true },
     { text: "Comunidad exclusiva", isIncluded: true, highlight: true },
     { text: "Soporte prioritario", isIncluded: true, highlight: true }
   ],
   [SubscriptionPlan.EXPERT]: [
     { text: "Eventos ILIMITADOS", isIncluded: true, highlight: true },
     { text: "Pulsos ILIMITADOS", isIncluded: true, highlight: true },
+    { text: "Puntos ilimitados en el mapa", description: "Negocios, POI y sectores — añade, edita y borra", isIncluded: true, highlight: true },
     { text: "Soporte VIP 24/7", isIncluded: true, highlight: true },
-    { text: "Panel Administrador", isIncluded: true, highlight: true },
-    { text: "Ubicación VIP en Mapa", isIncluded: true, highlight: true }
+    { text: "Panel Administrador completo", isIncluded: true, highlight: true },
+    { text: "Ubicación VIP en el Mapa", isIncluded: true, highlight: true }
   ]
 };
 

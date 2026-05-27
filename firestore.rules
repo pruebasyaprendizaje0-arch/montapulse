@@ -36,7 +36,9 @@ service cloud.firestore {
     // Users V2: Público para perfiles, pero solo dueño/admin escribe
     match /users_v2/{userId} {
       allow read: if true;
-      allow write: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && !request.resource.data.keys().hasAny(['role', 'plan']);
+      allow update: if isAdmin() || (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'plan']));
+      allow delete: if isAdmin();
     }
     
     // Negocios: Público read, incrementos de vista permitidos para todos
@@ -48,7 +50,7 @@ service cloud.firestore {
                     request.resource.data.name is string;
       allow update: if 
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount', 'weeklyViews'])) ||
-        (isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin() || isExpert()));
+        (isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin()));
       allow delete: if isAdmin();
     }
     
@@ -61,7 +63,7 @@ service cloud.firestore {
                     request.resource.data.title is string;
       allow update: if 
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['interestedCount', 'viewCount', 'clickCount', 'weeklyViews'])) ||
-        (isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin() || isExpert()));
+        (isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin()));
       allow delete: if isAdmin() || (isAuthenticated() && resource.data.ownerId == request.auth.uid);
     }
     
@@ -119,7 +121,7 @@ service cloud.firestore {
     // Localidades: Público read
     match /customLocalities/{localityId} {
       allow read: if true;
-      allow write: if isAdmin() || isExpert();
+      allow write: if isAdmin();
     }
 
     // Seguidores: Público read
@@ -159,7 +161,7 @@ service cloud.firestore {
     // Ajustes: Público read
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAdmin() || isExpert();
+      allow write: if isAdmin();
     }
 
     // Cupones: Público read, owner/admin manage
@@ -197,9 +199,9 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     
-    // Default: Solo Admin/Expert
+    // Default: Solo Admin
     match /{document=**} {
-      allow read, write: if isAdmin() || isExpert();
+      allow read, write: if isAdmin();
     }
   }
 }

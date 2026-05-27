@@ -1,9 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock } from 'lucide-react';
+import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass } from 'lucide-react';
 import { useAuthContext } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS } from '../../constants';
-import { Sector, BusinessCategory } from '../../types';
+import { Sector, BusinessCategory, MapEntryType } from '../../types';
 import { IconMap } from '../../utils/icons';
 import { OptimizedImageUploader } from '../OptimizedImageUploader';
 
@@ -13,7 +13,7 @@ interface BusinessEditModalProps {
 }
 
 export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, isRegistration = false }) => {
-    const { user, isSuperAdmin, isAdmin } = useAuthContext();
+    const { user, isSuperAdmin, isAdmin, isSuperUser } = useAuthContext();
     const {
         businesses, setBusinesses, editingBusinessId, setShowBusinessEdit,
         setEditingBusinessId, handleUpdateBusinessProfile,
@@ -26,14 +26,16 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
     const bizEditFileInputRef = useRef<HTMLInputElement>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [newService, setNewService] = useState('');
+    const [newEmblematic, setNewEmblematic] = useState('');
+
 
     const targetBusinessId = editingBusinessId || user?.businessId;
     const business = isRegistration ? null : businesses.find(b => b.id === targetBusinessId);
 
     const userBusiness = businesses.find(b => b.ownerId === user?.id && !b.isReference);
     const userReference = businesses.find(b => b.ownerId === user?.id && b.isReference);
-    const canAddBusiness = isSuperAdmin || isAdmin || !userBusiness;
-    const canAddReference = isSuperAdmin || isAdmin || !userReference;
+    const canAddBusiness = isSuperAdmin || isAdmin || isSuperUser || !userBusiness;
+    const canAddReference = isSuperAdmin || isAdmin || isSuperUser || !userReference;
 
     const handleClose = () => {
         if (onClose) {
@@ -66,6 +68,18 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
         updateField('services', updated);
     };
 
+    const emblematicList = (data as any).emblematicServices || [];
+    const addEmblematic = () => {
+        if (newEmblematic.trim()) {
+            updateField('emblematicServices', [...emblematicList, newEmblematic.trim()]);
+            setNewEmblematic('');
+        }
+    };
+    const removeEmblematic = (idx: number) => {
+        const updated = emblematicList.filter((_: string, i: number) => i !== idx);
+        updateField('emblematicServices', updated);
+    };
+
     return (
         <div className="fixed inset-0 z-[2000] bg-slate-900/80 backdrop-blur-md flex items-end justify-center p-4 overflow-y-auto no-scrollbar pt-20">
             <div className="w-full max-w-lg bg-slate-900 rounded-[3.5rem] p-8 pb-12 max-h-[90vh] overflow-y-auto border border-white/10 shadow-2xl no-scrollbar animate-in slide-in-from-bottom duration-500">
@@ -73,13 +87,13 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                     <div>
                         <h2 className="text-2xl font-black text-white tracking-tight">
                             {isRegistration 
-                                ? (data.isReference ? 'Registrar Referencia' : 'Registrar Negocio') 
-                                : (data.isReference ? 'Editar Referencia' : 'Editar Negocio')}
+                                ? (data.mapType === MapEntryType.SECTOR ? 'Registrar Sector' : data.isReference ? 'Registrar Referencia' : 'Registrar Negocio') 
+                                : (data.mapType === MapEntryType.SECTOR ? 'Editar Sector' : data.isReference ? 'Editar Referencia' : 'Editar Negocio')}
                         </h2>
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">
                             {isRegistration 
-                                ? (data.isReference ? 'Crea un punto de interés' : 'Crea tu perfil comercial') 
-                                : (data.isReference ? 'Configuración del punto de interés' : 'Configuración del perfil comercial')}
+                                ? (data.mapType === MapEntryType.SECTOR ? 'Identifica un barrio o zona' : data.isReference ? 'Crea un punto de interés' : 'Crea tu perfil comercial') 
+                                : (data.mapType === MapEntryType.SECTOR ? 'Configuración de zona' : data.isReference ? 'Configuración del punto de interés' : 'Configuración del perfil comercial')}
                         </p>
                     </div>
                     <button onClick={handleClose} className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors group">
@@ -91,49 +105,67 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                     {/* Point Type Selector */}
                     <div>
                         <label className="text-xs font-black text-slate-500 uppercase mb-4 block tracking-widest">Tipo de Punto</label>
-                        <div className="grid grid-cols-2 gap-3 p-2 bg-slate-800/30 rounded-[2rem] border border-white/5">
+                        <div className="grid grid-cols-3 gap-3 p-2 bg-slate-800/30 rounded-[2rem] border border-white/5">
                             <button
                                 type="button"
                                 disabled={!canAddBusiness}
                                 onClick={() => {
-                                    if (canAddBusiness) updateField('isReference', false);
+                                    if (canAddBusiness) {
+                                        updateField('mapType', MapEntryType.BUSINESS);
+                                        updateField('isReference', false);
+                                    }
                                 }}
-                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${!data.isReference ? 'bg-orange-500 text-white shadow-lg' : canAddBusiness ? 'text-slate-500 hover:text-slate-300' : 'text-slate-700 cursor-not-allowed'}`}
+                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${(!data.mapType && !data.isReference) || data.mapType === MapEntryType.BUSINESS ? 'bg-orange-500 text-white shadow-lg' : canAddBusiness ? 'text-slate-500 hover:text-slate-300' : 'text-slate-700 cursor-not-allowed'}`}
                                 title={!canAddBusiness ? 'Ya tienes un negocio registrado' : 'Registrar Negocio'}
                             >
-                                <Store className="w-6 h-6" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Negocio</span>
-                                {!canAddBusiness && <span className="text-[8px] text-slate-600">Ya tienes uno</span>}
+                                <Store className="w-5 h-5" />
+                                <span className="text-[9px] font-black uppercase tracking-widest">Negocio</span>
+                                {!canAddBusiness && <span className="text-[7px] text-slate-600">Ya tienes uno</span>}
                             </button>
                             <button
                                 type="button"
                                 disabled={!canAddReference}
                                 onClick={() => {
-                                    if (canAddReference) updateField('isReference', true);
+                                    if (canAddReference) {
+                                        updateField('mapType', MapEntryType.LANDMARK);
+                                        updateField('isReference', true);
+                                    }
                                 }}
-                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${data.isReference ? 'bg-sky-500 text-white shadow-lg' : canAddReference ? 'text-slate-500 hover:text-slate-300' : 'text-slate-700 cursor-not-allowed'}`}
+                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${(data.mapType === MapEntryType.LANDMARK || (!data.mapType && data.isReference)) ? 'bg-sky-500 text-white shadow-lg' : canAddReference ? 'text-slate-500 hover:text-slate-300' : 'text-slate-700 cursor-not-allowed'}`}
                                 title={!canAddReference ? 'Ya tienes un punto de referencia' : 'Registrar Punto de Referencia'}
                             >
-                                <MapPin className="w-6 h-6" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Referencia</span>
-                                {!canAddReference && <span className="text-[8px] text-slate-600">Ya tienes uno</span>}
+                                <MapPin className="w-5 h-5" />
+                                <span className="text-[9px] font-black uppercase tracking-widest">Referencia</span>
+                                {!canAddReference && <span className="text-[7px] text-slate-600">Ya tienes uno</span>}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    updateField('mapType', MapEntryType.SECTOR);
+                                    updateField('isReference', true);
+                                }}
+                                className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${data.mapType === MapEntryType.SECTOR ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                title="Registrar como Sector/Barrio"
+                            >
+                                <Compass className="w-5 h-5" />
+                                <span className="text-[9px] font-black uppercase tracking-widest">Sector</span>
                             </button>
                         </div>
                     </div>
                     <div>
                         <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">
-                            {data.isReference ? 'Nombre del Punto' : 'Nombre Comercial'}
+                            {data.mapType === MapEntryType.SECTOR ? 'Nombre del Sector/Barrio' : data.isReference ? 'Nombre del Punto' : 'Nombre Comercial'}
                         </label>
                         <input
                             type="text"
                             value={data.name}
                             onChange={(e) => updateField('name', e.target.value)}
                             className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                            placeholder={data.isReference ? "Ej: Letras de Montañita" : "Nombre de tu negocio"}
+                            placeholder={data.mapType === MapEntryType.SECTOR ? "Ej: Barrio Las Brisas" : data.isReference ? "Ej: Letras de Montañita" : "Nombre de tu negocio"}
                         />
                     </div>
 
-                    {isSuperAdmin && !data.isReference && (
+                    {(isSuperAdmin || isSuperUser) && !data.isReference && (
                         <div className="space-y-3">
                              <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest pl-2">Dueño del Negocio</label>
                              <div className="relative">
@@ -227,8 +259,48 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
 
                     {!data.isReference && (
                         <div>
-                            <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Servicios y Productos</label>
-                            <p className="text-[10px] text-slate-600 mb-3">Agrega los servicios o productos que ofrece tu negocio (ej: "Cerveza artesanal", "Clases de surf", "WiFi gratis")</p>
+                            <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Productos o Servicios Emblemáticos</label>
+                            <p className="text-[10px] text-slate-600 mb-3">Agrega tus productos o servicios insignia (ej: "Pizza Montañita", "Coctel de la Casa", "Tour de Ballenas")</p>
+                            <div className="flex gap-2 mb-3">
+                                <input
+                                    type="text"
+                                    value={newEmblematic}
+                                    onChange={(e) => setNewEmblematic(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addEmblematic())}
+                                    placeholder="Escribe un producto emblemático..."
+                                    className="flex-1 bg-slate-800/50 border border-white/5 rounded-2xl px-4 py-3 text-white text-sm font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={addEmblematic}
+                                    className="px-4 py-2 bg-amber-500/20 border border-amber-500/30 rounded-2xl text-amber-400 hover:bg-amber-500/30 transition-all"
+                                >
+                                    <Plus className="w-5 h-5" />
+                                </button>
+                            </div>
+                            {(data as any).emblematicServices && (data as any).emblematicServices.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                    {(data as any).emblematicServices.map((item: string, idx: number) => (
+                                        <span key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-xs font-bold text-amber-300">
+                                            {item}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeEmblematic(idx)}
+                                                className="hover:text-amber-400 transition-colors"
+                                            >
+                                                <XCircle className="w-4 h-4" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {!data.isReference && (
+                        <div>
+                            <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Servicios Generales</label>
+                            <p className="text-[10px] text-slate-600 mb-3">Agrega los servicios o productos que ofrece tu negocio (ej: "WiFi gratis", "Aire Acondicionado")</p>
                             <div className="flex gap-2 mb-3">
                                 <input
                                     type="text"
@@ -249,7 +321,7 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                             {(data as any).services && (data as any).services.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
                                     {(data as any).services.map((service: string, idx: number) => (
-                                        <span key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-xs font-bold text-amber-300">
+                                        <span key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full text-xs font-bold text-orange-300">
                                             {service}
                                             <button
                                                 type="button"

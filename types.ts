@@ -1,4 +1,10 @@
 
+export enum MapEntryType {
+  BUSINESS = 'business',
+  LANDMARK = 'landmark',
+  SECTOR = 'sector'
+}
+
 export enum Sector {
   PLAYA = 'Playa',
   CENTRO = 'Centro',
@@ -45,6 +51,9 @@ export enum Vibe {
   SURF = 'Surf',
   GASTRONOMIA = 'Gastronomía',
   FUTBOL = 'Fútbol',
+  AVENTURA = 'Aventura',
+  ROMANCE = 'Romance',
+  CULTURA = 'Cultura',
   OTRO = 'Otro'
 }
 
@@ -153,10 +162,12 @@ export interface Business {
   weeklyViews?: number;
   paymentStatus?: 'pending' | 'completed' | 'active' | 'expired';
   hasMilitaryBenefit?: boolean;
+  emblematicServices?: string[];
   openingHours?: {
     [key: string]: { open: string; close: string; closed?: boolean } | null;
   };
   moods?: Vibe[];
+  mapType?: MapEntryType;
 }
 
 export interface ProfileReview {
@@ -370,3 +381,20 @@ export interface CouponRedemption {
   redeemedAt?: any;        // Fecha de "quema" en el local
   validatedBy?: string;    // ID del negocio/encargado que validó
 }
+
+// ==================== LEADS & PROSPECTING ====================
+
+export interface Lead {
+  id?: string;
+  name: string;
+  category: BusinessCategory;
+  sector: Sector;
+  locality: string;
+  contact?: string;
+  status: 'new' | 'contacted' | 'interested' | 'converted' | 'rejected';
+  notes?: string;
+  aiPitch?: string;
+  createdAt: any;
+  updatedAt?: any;
+}
+

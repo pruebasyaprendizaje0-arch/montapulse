@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
     Settings, ShieldAlert, Cpu, Save, 
-    RefreshCcw, Database, HardDrive, Network 
+    RefreshCcw, Database, HardDrive, Network, Bot 
 } from 'lucide-react';
 import { useData } from '../../../context/DataContext';
 import { useToast } from '../../../context/ToastContext';
 import { updateAppConfig } from '../../../services/firestoreService';
+import { LeadsPanel } from './LeadsPanel';
 
 interface SystemPanelProps {
     appConfig: {
@@ -18,6 +19,7 @@ interface SystemPanelProps {
 
 export const SystemPanel: React.FC<SystemPanelProps> = ({ appConfig, setAppConfig }) => {
     const { showToast } = useToast();
+    const [activeSubTab, setActiveSubTab] = useState<'config' | 'leads'>('config');
 
     const handleSaveAiConfig = async () => {
         try {
@@ -41,7 +43,27 @@ export const SystemPanel: React.FC<SystemPanelProps> = ({ appConfig, setAppConfi
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Sub-tab Navigation */}
+            <div className="flex gap-2 border-b border-white/5 pb-4 mb-6 overflow-x-auto no-scrollbar">
+                <button
+                    onClick={() => setActiveSubTab('config')}
+                    className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border ${activeSubTab === 'config' ? 'bg-sky-500 text-black border-sky-500 shadow-lg shadow-sky-500/20' : 'bg-transparent text-slate-400 border-white/5 hover:border-white/10 hover:text-white'}`}
+                >
+                    <Settings className="w-4 h-4" />
+                    Configuración del Sistema
+                </button>
+                <button
+                    onClick={() => setActiveSubTab('leads')}
+                    className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border ${activeSubTab === 'leads' ? 'bg-orange-500 text-black border-orange-500 shadow-lg shadow-orange-500/20' : 'bg-transparent text-slate-400 border-white/5 hover:border-white/10 hover:text-white'}`}
+                >
+                    <Bot className="w-4 h-4" />
+                    Prospección y Leads IA
+                </button>
+            </div>
+
+            {activeSubTab === 'config' ? (
+                <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Maintenance Section */}
                 <div className="bg-neutral-900/50 border border-white/5 rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-8 shadow-xl">
                     <div className="flex items-center gap-3 mb-8">
@@ -94,20 +116,35 @@ export const SystemPanel: React.FC<SystemPanelProps> = ({ appConfig, setAppConfi
                         <div className="space-y-3">
                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                                 <Network className="w-3 h-3" />
-                                OpenRouter (Free)
+                                Modelo de OpenRouter
                             </label>
                             <select 
                                 value={appConfig.openrouterModel}
                                 onChange={e => setAppConfig({ ...appConfig, openrouterModel: e.target.value })}
                                 className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-xs text-white outline-none focus:border-sky-500/50"
                             >
-                                <option value="minimax/minimax-m2.5:free">Minimax M2.5 (Fast)</option>
-                                <option value="meta-llama/llama-3-8b-instruct:free">Llama 3 8B</option>
-                                <option value="google/gemma-7b-it:free">Gemma 7B</option>
-                                <option value="mistralai/mistral-7b-instruct:free">Mistral 7B</option>
-                                <option value="microsoft/phi-3-mini-128k-instruct:free">Phi-3 Mini</option>
-                                <option value="openchat/openchat-7b:free">OpenChat 7B</option>
-                                <option value="huggingfaceh4/zephyr-7b-beta:free">Zephyr 7B</option>
+                                <optgroup label="Modelos Gratuitos (Free Tier)" className="bg-neutral-900 text-slate-400 font-black text-[9px] uppercase tracking-wider">
+                                    <option value="minimax/minimax-m2.5:free" className="text-white text-xs font-medium normal-case">Minimax M2.5 (Fast)</option>
+                                    <option value="meta-llama/llama-3.3-70b-instruct:free" className="text-white text-xs font-medium normal-case">Llama 3.3 70B</option>
+                                    <option value="google/gemma-2-9b-it:free" className="text-white text-xs font-medium normal-case">Gemma 2 9B</option>
+                                    <option value="qwen/qwen-2.5-72b-instruct:free" className="text-white text-xs font-medium normal-case">Qwen 2.5 72B</option>
+                                    <option value="deepseek/deepseek-chat:free" className="text-white text-xs font-medium normal-case">DeepSeek V3 (R1)</option>
+                                    <option value="deepseek/deepseek-v4-flash:free" className="text-white text-xs font-medium normal-case">DeepSeek V4 Flash</option>
+                                    <option value="meta-llama/llama-3.2-11b-vision-instruct:free" className="text-white text-xs font-medium normal-case">Llama 3.2 Vision</option>
+                                    <option value="microsoft/phi-3-medium-128k-instruct:free" className="text-white text-xs font-medium normal-case">Phi-3 Medium</option>
+                                </optgroup>
+                                <optgroup label="Modelos Premium / De Pago" className="bg-neutral-900 text-slate-400 font-black text-[9px] uppercase tracking-wider">
+                                    <option value="anthropic/claude-3.5-sonnet" className="text-white text-xs font-medium normal-case">Claude 3.5 Sonnet</option>
+                                    <option value="anthropic/claude-3.5-haiku" className="text-white text-xs font-medium normal-case">Claude 3.5 Haiku</option>
+                                    <option value="openai/gpt-4o" className="text-white text-xs font-medium normal-case">GPT-4o</option>
+                                    <option value="openai/gpt-4o-mini" className="text-white text-xs font-medium normal-case">GPT-4o Mini</option>
+                                    <option value="google/gemini-2.5-pro" className="text-white text-xs font-medium normal-case">Gemini 2.5 Pro</option>
+                                    <option value="google/gemini-2.5-flash" className="text-white text-xs font-medium normal-case">Gemini 2.5 Flash</option>
+                                    <option value="deepseek/deepseek-chat" className="text-white text-xs font-medium normal-case">DeepSeek V3 (Paid)</option>
+                                    <option value="deepseek/deepseek-reasoner" className="text-white text-xs font-medium normal-case">DeepSeek R1 (Reasoner)</option>
+                                    <option value="deepseek/deepseek-v4-flash" className="text-white text-xs font-medium normal-case">DeepSeek V4 Flash (Paid)</option>
+                                    <option value="meta-llama/llama-3.3-70b-instruct" className="text-white text-xs font-medium normal-case">Llama 3.3 70B (Paid)</option>
+                                </optgroup>
                             </select>
                         </div>
 
@@ -140,6 +177,10 @@ export const SystemPanel: React.FC<SystemPanelProps> = ({ appConfig, setAppConfi
                     <HealthCard icon={RefreshCcw} label="Sincronización" status="Active" last="Now" />
                 </div>
             </div>
+            </>
+            ) : (
+                <LeadsPanel appConfig={appConfig} />
+            )}
         </div>
     );
 };

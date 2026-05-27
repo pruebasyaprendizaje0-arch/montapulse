@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles, Plus } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles, Plus, Heart } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Sector } from '../../types';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isToday } from 'date-fns';
@@ -21,7 +21,9 @@ export const CalendarModal: React.FC = () => {
         handleOpenNewEventWizard,
         user,
         businesses,
-        setSelectedEvent
+        setSelectedEvent,
+        toggleFavorite,
+        favorites
     } = useData();
 
     if (!showCalendarModal) return null;
@@ -198,7 +200,7 @@ export const CalendarModal: React.FC = () => {
                                     return (
                                         <div
                                             key={event.id}
-                                            className="flex gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 items-center group cursor-pointer hover:bg-white/10 transition-colors"
+                                            className="relative flex gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 items-center group cursor-pointer hover:bg-white/10 transition-colors"
                                             onClick={() => setSelectedEvent(event)}
                                         >
                                             <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-white/10">
@@ -213,6 +215,22 @@ export const CalendarModal: React.FC = () => {
                                             {event.isPremium && (
                                                 <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
                                             )}
+                                            {/* Heart / Like button */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleFavorite(event.id, e);
+                                                }}
+                                                className="p-2 rounded-full bg-black/20 border border-white/10 hover:scale-110 active:scale-95 transition-all shrink-0"
+                                            >
+                                                <Heart
+                                                    className={`w-3.5 h-3.5 transition-colors ${
+                                                        favorites.includes(event.id)
+                                                            ? 'fill-rose-500 text-rose-500'
+                                                            : 'text-slate-400'
+                                                    }`}
+                                                />
+                                            </button>
                                         </div>
                                     );
                                 })

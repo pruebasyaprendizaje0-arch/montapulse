@@ -356,7 +356,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
         const marker = L.marker(business.coordinates as L.LatLngExpression, {
           icon: customIcon,
-          draggable: !!(isAdmin || isSuperUser) && !!isEditorFocus
+          draggable: !!(isAdmin && isSuperUser) && !!isEditorFocus
         }).addTo(markersLayerRef.current!);
 
         marker.on('dragend', (e) => {
@@ -366,12 +366,17 @@ export const MapView: React.FC<MapViewProps> = ({
 
         marker.on('click', (e) => {
           L.DomEvent.stopPropagation(e as any);
-          if (isAdmin || isSuperUser) {
-            if ((e as any).originalEvent?.button === 2 || e.originalEvent?.ctrlKey) {
-              setQuickEditBusiness(business);
-              setShowQuickEdit(true);
+          if (isAdmin) {
+            if (isSuperUser) {
+              if ((e as any).originalEvent?.button === 2 || e.originalEvent?.ctrlKey) {
+                setQuickEditBusiness(business);
+                setShowQuickEdit(true);
+              } else {
+                setAdminSelectedBusiness(business);
+              }
             } else {
-              setAdminSelectedBusiness(business);
+              showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+              onBusinessSelect(business);
             }
           } else {
             onBusinessSelect(business);
@@ -406,9 +411,16 @@ export const MapView: React.FC<MapViewProps> = ({
       const { lat, lng } = e.latlng;
       if (editingSector) {
         setTempCoords(prev => [...prev, [lat, lng]]);
-      } else if ((isAdmin || isEliteUser) && isAddingPoint && onAddBusiness) {
-        onAddBusiness(lat, lng, addingPointType === 'reference');
-        setIsAddingPoint(false);
+      } else if (isAddingPoint && onAddBusiness) {
+        if (isAdmin && !isSuperUser) {
+          showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+          setIsAddingPoint(false);
+          return;
+        }
+        if (isAdmin || isEliteUser) {
+          onAddBusiness(lat, lng, addingPointType === 'reference');
+          setIsAddingPoint(false);
+        }
       } else if (isMovingBusiness && movingBusinessId && onUpdateBusiness) {
         onUpdateBusiness(movingBusinessId, lat, lng);
         onMoveBusinessComplete?.();
@@ -594,7 +606,7 @@ export const MapView: React.FC<MapViewProps> = ({
       </div>
 
       {/* Admin/Elite Controls */}
-      {(isAdmin || isEliteUser) && !hideUI && (
+      {(isAdmin || isEliteUser || isSuperUser) && !hideUI && (
         <div className="absolute right-4 top-24 z-[1000] flex flex-col gap-3">
           {/* Add Point Toggle */}
           <button
@@ -629,7 +641,7 @@ export const MapView: React.FC<MapViewProps> = ({
             >
               🏪
             </button>
-            {isAdmin && (
+            {(isAdmin || isSuperUser) && (
               <button
                 onClick={() => {
                   setAddingPointType('reference');
@@ -686,7 +698,7 @@ export const MapView: React.FC<MapViewProps> = ({
       )}
 
       {/* Admin Context Menu / Card for Selected Business */}
-      {isAdmin && adminSelectedBusiness && (
+      {(isAdmin || isSuperUser) && adminSelectedBusiness && (
         <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-[1001] w-[90%] max-w-sm animate-in fade-in slide-in-from-bottom-5 duration-300">
           <div className="bg-slate-950/90 backdrop-blur-2xl border border-white/20 p-6 rounded-[2.5rem] shadow-2xl space-y-4">
             <div className="flex items-center justify-between">

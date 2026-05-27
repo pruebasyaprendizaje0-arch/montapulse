@@ -1,8 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { MontanitaEvent, Vibe } from "../types";
-
-const GEMINI_API_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 export interface ItineraryItem {
     time: string;
@@ -17,11 +13,7 @@ export const generateItinerary = async (
     events: MontanitaEvent[],
     userName: string
 ): Promise<string> => {
-    if (!GEMINI_API_KEY) return "AI services are currently unavailable.";
-
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
         const prompt = `
             You are a local Montañita expert guide. Create a personalized 24-hour itinerary for ${userName}.
             Their preferred vibe is: ${preferredVibe}.
@@ -46,8 +38,20 @@ export const generateItinerary = async (
             ...
         `;
 
-        const result = await model.generateContent(prompt);
-        return result.response.text();
+        const response = await fetch('/api/ai/gemini', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ prompt }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Gemini Proxy error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.text || "I couldn't feel the pulse for your itinerary right now. Try again later!";
     } catch (error) {
         console.error("Error generating itinerary:", error);
         return "I couldn't feel the pulse for your itinerary right now. Try again later!";

@@ -25,13 +25,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSuperUser, setIsSuperUser] = useState(() => {
-        return localStorage.getItem('montapulse_superuser') === 'true';
+        return sessionStorage.getItem('montapulse_superuser') === 'true';
     });
 
     const toggleSuperUser = () => {
         setIsSuperUser(prev => {
             const next = !prev;
-            localStorage.setItem('montapulse_superuser', String(next));
+            sessionStorage.setItem('montapulse_superuser', String(next));
             return next;
         });
     };
@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setUser(null);
                 setLoading(false);
                 setIsSuperUser(false);
-                localStorage.removeItem('montapulse_superuser');
+                sessionStorage.removeItem('montapulse_superuser');
                 return;
             }
 
@@ -137,7 +137,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await firebaseLogout();
         setUser(null);
         setIsSuperUser(false);
-        localStorage.removeItem('montapulse_superuser');
+        sessionStorage.removeItem('montapulse_superuser');
     };
 
     return (

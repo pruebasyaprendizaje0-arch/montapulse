@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight, Clock, Circle, Ticket } from 'lucide-react';
-import { Business, UserProfile, MontanitaEvent, ProfileReview, Coupon } from '../types';
+import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2 } from 'lucide-react';
+import { Business, UserProfile, MontanitaEvent, ProfileReview, Coupon, Sector } from '../types';
 import { useData } from '../context/DataContext';
-import { BASE_URL } from '../constants';
+import { BASE_URL, SECTOR_INFO } from '../constants';
 import { subscribeToProfileReviews, addProfileReview, getUser, incrementBusinessViewCount } from '../services/firestoreService';
 import { subscribeToBusinessCoupons, obtainCoupon } from '../services/couponService';
 import { useAuthContext } from '../context/AuthContext';
@@ -28,16 +28,24 @@ interface PublicProfileModalProps {
     businessId?: string;
     userId?: string;
     dataLoading?: boolean;
+    onEditBusiness?: (business: Business) => void;
+    onDeleteBusiness?: (id: string) => void;
+    canEditAll?: boolean;
+    onViewOnMap?: (coords: [number, number]) => void;
 }
 
-export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
+export const PublicProfileModal = React.memo(({
     isOpen,
     onClose,
     businessId,
     userId,
-    dataLoading
-}) => {
-    const { businesses, events, allUsers, handleToggleFollow, isBusinessFollowed, setPublicProfileId, setPublicProfileType, setShowPublicProfile } = useData();
+    dataLoading,
+    onEditBusiness,
+    onDeleteBusiness,
+    canEditAll,
+    onViewOnMap
+}: PublicProfileModalProps) => {
+    const { businesses, events, allUsers, handleToggleFollow, isBusinessFollowed, setPublicProfileId, setPublicProfileType, setShowPublicProfile, setSelectedEvent } = useData();
     const { user: currentUser } = useAuthContext();
     const { showToast } = useToast();
     const [reviews, setReviews] = useState<ProfileReview[]>([]);
@@ -51,8 +59,14 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
         if (isOpen && !isMountedRef.current) {
             isMountedRef.current = true;
             lastOpenTimeRef.current = Date.now();
+            
+            if (businessId) {
+                incrementBusinessViewCount(businessId).catch(console.error);
+            }
+        } else if (!isOpen) {
+            isMountedRef.current = false;
         }
-    }, [isOpen]);
+    }, [isOpen, businessId]);
 
     const [fetchedUser, setFetchedUser] = useState<UserProfile | null>(null);
     const [isLoadingUser, setIsLoadingUser] = useState(false);
@@ -151,6 +165,13 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleShareWhatsApp = () => {
+        if (!business) return;
+        const shareUrl = `${window.location.origin}/negocio/${business.slug || business.id}`;
+        const shareText = `${shareUrl}\n\nMira el perfil de ${business.name} en MontaPulse: ubicación, servicios y promociones.`;
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
     };
 
     const handleObtainCoupon = async (coupon: Coupon) => {
@@ -260,10 +281,20 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
     }
 
     // Filter public pulses for this business/user
-    const publicPulses = events.filter(e =>
+    const now = new Date();
+    const allBusinessPulses = events.filter(e =>
         (businessId && e.businessId === businessId) ||
         (userId && e.ownerId === userId)
-    ).slice(0, 3);
+    );
+    
+    const activePulses = allBusinessPulses.filter(e => new Date(e.startAt) > now);
+    const publicPulses = activePulses.length > 0 
+        ? activePulses.slice(0, 4)
+        : allBusinessPulses.slice(0, 4);
+    
+    const isShowingActive = activePulses.length > 0;
+    
+    const totalEventClicks = allBusinessPulses.reduce((sum, e) => sum + (e.clickCount || 0), 0);
 
     return (
         <div
@@ -275,29 +306,77 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
                 onClick={e => e.stopPropagation()}
             >
                 {/* Profile Header */}
-                <div className="relative h-48 bg-gradient-to-br from-indigo-600 to-purple-800 shrink-0">
-                    <button
-                        onClick={onClose}
-                        className="absolute top-6 right-6 p-2 bg-black/20 hover:bg-black/40 rounded-full text-white/80 hover:text-white transition-all z-10"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+                <div className="relative h-56 shrink-0">
+                    {/* Background Image/Gradient */}
+                    <div className="absolute inset-0 bg-slate-800">
+                        {business?.imageUrl ? (
+                            <img 
+                                src={business.imageUrl} 
+                                className="w-full h-full object-cover opacity-40 blur-[1px]" 
+                                alt="" 
+                            />
+                        ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-indigo-600 to-purple-800" />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent" />
+                    </div>
 
-                    {/* Floating Avatar */}
-                    <div className="absolute -bottom-12 left-8 p-1.5 bg-slate-900 rounded-[2rem]">
-                        <div className="w-24 h-24 rounded-[1.8rem] bg-slate-700 animate-pulse border-4 border-slate-900 shadow-xl overflow-hidden">
+                    <div className="absolute top-6 right-6 flex items-center gap-2 z-10">
+                        {canEditAll && business && (
+                            <>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onEditBusiness?.(business);
+                                    }}
+                                    className="p-2.5 bg-sky-500/80 hover:bg-sky-500 rounded-full text-white transition-all shadow-lg shadow-sky-500/20 backdrop-blur-md"
+                                    title="Editar Negocio"
+                                >
+                                    <Edit3 className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm('¿Estás seguro de eliminar este negocio?')) {
+                                            onDeleteBusiness?.(business.id);
+                                            onClose();
+                                        }
+                                    }}
+                                    className="p-2.5 bg-rose-500/80 hover:bg-rose-500 rounded-full text-white transition-all shadow-lg shadow-rose-500/20 backdrop-blur-md"
+                                    title="Eliminar Negocio"
+                                >
+                                    <Trash2 className="w-5 h-5" />
+                                </button>
+                            </>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="p-2.5 bg-black/40 hover:bg-black/60 rounded-full text-white/90 hover:text-white transition-all backdrop-blur-md"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* Main Image - Even more centered and prominent */}
+                    <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 p-2.5 bg-[#0f172a] rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-20 transition-transform hover:scale-105 duration-500">
+                        <div className="w-36 h-36 rounded-[2.6rem] bg-slate-800 border-4 border-slate-900/50 overflow-hidden relative group ring-4 ring-white/5">
                             <img
                                 src={avatar}
                                 alt={displayName}
-                                className="w-full h-full object-cover transition-opacity duration-500"
+                                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
                                 loading="lazy"
                                 onLoad={e => (e.currentTarget.style.opacity = '1')}
                                 style={{ opacity: 0 }}
                             />
+                            {!business && !userProfile?.avatarUrl && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-slate-800 text-slate-400">
+                                    <UserCircle className="w-20 h-20" />
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    {/* Business / User badge top right */}
+                    {/* Business / User badge top left */}
                     <div className="absolute top-6 left-6 flex items-center gap-1.5 flex-wrap">
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 backdrop-blur-sm">
                             {business
@@ -319,66 +398,206 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
                     </div>
                 </div>
 
-                <div className="pt-16 p-8 space-y-6">
+                <div className="pt-24 p-8 space-y-8 flex flex-col items-center text-center">
                     {/* Name & Role */}
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-2xl font-black text-white">{displayName}</h2>
-                            {business && <Star className="w-5 h-5 text-amber-400 fill-current" />}
+                    <div className="space-y-4 w-full flex flex-col items-center">
+                        <div className="space-y-2">
+                            <h2 className="text-3xl font-black text-white flex items-center justify-center gap-3">
+                                {displayName}
+                                {business && <Star className="w-6 h-6 text-amber-400 fill-current animate-pulse" />}
+                            </h2>
                         </div>
-                        <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest flex-wrap">
-                            <MapPin className="w-3 h-3" />
-                            {business?.locality || "Montañita"}
-                            <span>•</span>
-                            {business?.category || "Explorador"}
-                            <span>•</span>
-                            {business
-                                ? (business.isReference || business.id?.startsWith('ref-') ? 'Punto de Referencia Verificado' : 'Ubicame Socio Verificado')
-                                : 'Explorador Pulse'
-                            }
+                        
+                        <div className="flex items-center justify-center gap-3 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] flex-wrap max-w-md">
+                            <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 transition-colors">
+                                <MapPin className="w-3 h-3 text-sky-400" />
+                                {business?.locality || "Montañita"}
+                            </div>
+                            {business?.sector && (
+                                <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 transition-colors">
+                                    <span className="text-[11px] leading-none">{SECTOR_INFO[business.sector as Sector]?.symbol || '🧭'}</span>
+                                    <span>{business.sector}</span>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 transition-colors">
+                                <Store className="w-3 h-3 text-amber-400" />
+                                {business?.category || "Explorador"}
+                            </div>
+                            <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 transition-colors">
+                                {business
+                                    ? (business.isReference || business.id?.startsWith('ref-') ? 'Punto de Referencia Verificado' : 'Socio Verificado')
+                                    : 'Explorador Pulse'
+                                }
+                            </div>
+                            {coupons.length > 0 && (
+                                <div className="flex items-center gap-1.5 bg-pink-500/10 text-pink-400 px-3 py-1.5 rounded-full border border-pink-500/20 hover:bg-pink-500/20 transition-colors animate-pulse">
+                                    <Ticket className="w-3 h-3" />
+                                    <span>Hay Cupones</span>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Email asociado */}
-                        {contactEmail && (
-                            <div className="flex items-center gap-2 mt-2">
-                                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
-                                    <Mail className="w-3 h-3 text-indigo-400" />
-                                    <span className="text-[10px] font-black text-indigo-300 tracking-wide">{contactEmail}</span>
+                        {/* Centered Actions & Info Group */}
+                        <div className="flex flex-col items-center gap-4 w-full max-w-sm pt-4">
+                            {/* Ver en el mapa button - Primary full-width action */}
+                            {business && business.coordinates && (
+                                <button
+                                    onClick={() => {
+                                        if (onViewOnMap) {
+                                            onViewOnMap(business.coordinates);
+                                        } else {
+                                            window.open(`https://www.google.com/maps?q=${business.coordinates[0]},${business.coordinates[1]}`, '_blank');
+                                        }
+                                    }}
+                                    className="w-full flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-sky-500/20 group border border-white/10"
+                                >
+                                    <Navigation2 className="w-5 h-5 text-white group-hover:rotate-12 transition-transform" />
+                                    <span className="text-xs font-black text-white uppercase tracking-[0.2em]">Ver en el Mapa</span>
+                                </button>
+                            )}
+
+                            {/* Compartir por WhatsApp button */}
+                            {business && (
+                                <div className="flex gap-3 w-full">
+                                    <button
+                                        onClick={() => {
+                                            const shareUrl = `${window.location.origin}/negocio/${business.slug || business.id}`;
+                                            navigator.clipboard.writeText(shareUrl);
+                                            showToast("¡Enlace copiado al portapapeles!", 'success');
+                                        }}
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-4 bg-slate-700/80 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-lg border border-white/10"
+                                    >
+                                        <Share2 className="w-4 h-4 text-sky-400" />
+                                        <span className="text-[10px] font-black text-white uppercase tracking-[0.1em]">Copiar Enlace</span>
+                                    </button>
+                                    <button
+                                        onClick={handleShareWhatsApp}
+                                        className="flex-[2] flex items-center justify-center gap-2 px-4 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/20 group border border-white/10"
+                                    >
+                                        <Share2 className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
+                                        <span className="text-[10px] font-black text-white uppercase tracking-[0.1em]">WhatsApp</span>
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Primary Actions Row */}
+                            <div className="flex gap-3 w-full">
+                                <button
+                                    onClick={() => businessId && handleToggleFollow(businessId)}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
+                                        isFollowing 
+                                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' 
+                                        : 'bg-white/5 text-white border border-white/10 hover:bg-white/10'
+                                    }`}
+                                >
+                                    {isFollowing ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                                    {isFollowing ? 'Siguiendo' : 'Seguir'}
+                                </button>
+
+                                {business?.whatsapp && (
+                                    <a
+                                        href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex-1 flex items-center justify-center gap-2 py-4 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 font-black text-[10px] uppercase tracking-widest hover:bg-emerald-500/20 transition-all shadow-lg shadow-emerald-500/5"
+                                    >
+                                        <MessageCircle className="w-4 h-4" />
+                                        WhatsApp
+                                    </a>
+                                )}
+                            </div>
+
+                            {/* Secondary Actions / Info */}
+                            <div className="w-full flex flex-col gap-2">
+                                {contactEmail && (
+                                    <div className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl">
+                                        <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span className="text-[10px] font-black text-slate-400 tracking-widest uppercase truncate">{contactEmail}</span>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Horario de atención */}
+                            {business && business.openingHours && (
+                                <div className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl transition-all ${businessStatus.isOpen ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-slate-800/60 border border-white/5'}`}>
+                                    <Clock className={`w-3.5 h-3.5 shrink-0 ${businessStatus.isOpen ? 'text-emerald-400' : 'text-slate-400'}`} />
+                                    <span className={`text-[10px] font-black uppercase tracking-widest ${businessStatus.isOpen ? 'text-emerald-300' : 'text-slate-400'}`}>
+                                        {businessStatus.message || 'Horario disponible'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Bio */}
+                    <div className="relative w-full max-w-sm">
+                        <div className="absolute -top-4 -left-4 text-4xl text-white/5 font-serif">"</div>
+                        <p className="text-slate-300 text-sm leading-relaxed italic relative z-10 px-4">
+                            {bio}
+                        </p>
+                        <div className="absolute -bottom-4 -right-4 text-4xl text-white/5 font-serif">"</div>
+                    </div>
+
+                    {/* Products and Services Section */}
+                    <div className="w-full space-y-8">
+                        {/* Emblematic Services */}
+                        {business && business.emblematicServices && business.emblematicServices.length > 0 && (
+                            <div className="space-y-4 w-full bg-gradient-to-br from-amber-500/5 to-orange-500/5 p-6 rounded-[2.5rem] border border-amber-500/10">
+                                <h3 className="text-[10px] font-black text-amber-500/80 uppercase tracking-[0.3em] flex items-center justify-center gap-2">
+                                    <Star className="w-3.5 h-3.5 fill-amber-500" />
+                                    Productos o Servicios Emblemáticos
+                                </h3>
+                                <div className="flex flex-wrap justify-center gap-3">
+                                    {business.emblematicServices.map((service, idx) => (
+                                        <div 
+                                            key={idx}
+                                            className="px-5 py-2.5 bg-slate-900/60 border border-white/5 rounded-2xl flex items-center gap-3 shadow-xl group hover:border-amber-500/30 transition-all"
+                                        >
+                                            <div className="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                                                <Zap className="w-3 h-3 text-amber-500" />
+                                            </div>
+                                            <span className="text-[11px] font-black text-slate-200 uppercase tracking-wider">{service}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
-                        
-                        {/* Horario de atención */}
-                        {business && business.openingHours && (
-                            <div className="flex items-center gap-2 mt-2">
-                                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${businessStatus.isOpen ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-slate-800/60 border border-white/5'}`}>
-                                    <Clock className={`w-3 h-3 ${businessStatus.isOpen ? 'text-emerald-400' : 'text-slate-400'}`} />
-                                    <span className={`text-[10px] font-bold tracking-wide ${businessStatus.isOpen ? 'text-emerald-300' : 'text-slate-400'}`}>
-                                        {businessStatus.message || 'Horario disponible'}
-                                    </span>
+
+                        {/* General Services */}
+                        {business && business.services && business.services.length > 0 && (
+                            <div className="space-y-4 w-full bg-white/5 p-6 rounded-[2.5rem] border border-white/5">
+                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] flex items-center justify-center gap-2">
+                                    <Store className="w-3.5 h-3.5" />
+                                    Servicios Principales
+                                </h3>
+                                <div className="flex flex-wrap justify-center gap-2">
+                                    {business.services.map((service, idx) => (
+                                        <div 
+                                            key={idx}
+                                            className="px-4 py-2 bg-slate-800/40 border border-white/5 rounded-xl flex items-center gap-2"
+                                        >
+                                            <div className="w-1.5 h-1.5 rounded-full bg-sky-400/50" />
+                                            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{service}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* Bio */}
-                    <p className="text-slate-400 text-sm leading-relaxed italic">
-                        "{bio}"
-                    </p>
-
-                    {/* Stats */}
-                    <div className="grid grid-cols-3 gap-4 py-4 border-y border-white/5">
+                    {/* Stats - Centered Grid */}
+                    <div className="grid grid-cols-3 gap-4 py-4 border-y border-white/5 w-full">
+                        <div className="text-center">
+                            <p className="text-xl font-black text-white">{business?.viewCount || 0}</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase">Visitas</p>
+                        </div>
                         <div className="text-center">
                             <p className="text-xl font-black text-white">{business?.followerCount || 0}</p>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase">Followers</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase">Seguidores</p>
                         </div>
                         <div className="text-center">
-                            <p className="text-xl font-black text-white">{business?.reviewCount || userProfile?.reviewCount || 0}</p>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase">Reviews</p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-xl font-black text-white">{business?.rating || userProfile?.rating || '0.0'}</p>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase">Rating</p>
+                            <p className="text-xl font-black text-white">{totalEventClicks}</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase">Clicks Eventos</p>
                         </div>
                     </div>
 
@@ -391,10 +610,11 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
                                 <Building2 className="w-3 h-3 text-amber-400" />
                                 Su Negocio
                             </h3>
-                            <button
-                                onClick={() => openLinkedBusiness(linkedBusiness)}
-                                className="w-full flex items-center gap-4 p-4 bg-slate-800/60 rounded-2xl border border-white/5 hover:border-amber-500/30 transition-all group"
-                            >
+                            <div className="flex flex-col items-center w-full">
+                                <button
+                                    onClick={() => openLinkedBusiness(linkedBusiness)}
+                                    className="w-full flex items-center gap-4 p-4 bg-slate-800/60 rounded-2xl border border-white/5 hover:border-amber-500/30 transition-all group"
+                                >
                                 <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/10">
                                     <img
                                         src={linkedBusiness.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(linkedBusiness.name)}&background=f59e0b&color=fff`}
@@ -404,16 +624,28 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
                                 </div>
                                 <div className="flex-1 text-left min-w-0">
                                     <p className="text-sm font-black text-white truncate">{linkedBusiness.name}</p>
-                                    <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest">{linkedBusiness.category}</p>
+                                    <div className="flex items-center gap-1.5 text-[10px] text-amber-400 font-bold uppercase tracking-widest flex-wrap">
+                                        <span>{linkedBusiness.category}</span>
+                                        {linkedBusiness.sector && (
+                                            <>
+                                                <span className="text-slate-600">·</span>
+                                                <span className="text-slate-400 flex items-center gap-1">
+                                                    <span>{SECTOR_INFO[linkedBusiness.sector as Sector]?.symbol || '🧭'}</span>
+                                                    <span>{linkedBusiness.sector}</span>
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
                                     {linkedBusiness.email && (
-                                        <div className="flex items-center gap-1 mt-0.5">
+                                        <div className="flex items-center gap-1 mt-1">
                                             <Mail className="w-2.5 h-2.5 text-slate-500" />
                                             <span className="text-[9px] text-slate-500">{linkedBusiness.email}</span>
                                         </div>
                                     )}
                                 </div>
                                 <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-colors shrink-0" />
-                            </button>
+                                </button>
+                            </div>
                         </div>
                     )}
 
@@ -426,10 +658,11 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
                                 <User className="w-3 h-3 text-sky-400" />
                                 Perfil del Propietario
                             </h3>
-                            <button
-                                onClick={() => openLinkedUser(owner.id)}
-                                className="w-full flex items-center gap-4 p-4 bg-slate-800/60 rounded-2xl border border-white/5 hover:border-sky-500/30 transition-all group"
-                            >
+                            <div className="flex flex-col items-center w-full">
+                                <button
+                                    onClick={() => openLinkedUser(owner.id)}
+                                    className="w-full flex items-center gap-4 p-4 bg-slate-800/60 rounded-2xl border border-white/5 hover:border-sky-500/30 transition-all group"
+                                >
                                 <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 border-white/10">
                                     <img
                                         src={owner.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(`${owner.name} ${owner.surname}`)}&background=0ea5e9&color=fff`}
@@ -448,7 +681,8 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
                                     )}
                                 </div>
                                 <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-sky-400 transition-colors shrink-0" />
-                            </button>
+                                </button>
+                            </div>
                         </div>
                     )}
                     
@@ -459,7 +693,7 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
                                 <Ticket className="w-3 h-3 text-pink-400" />
                                 Cupones Disponibles
                             </h3>
-                            <div className="space-y-2">
+                            <div className="space-y-2 w-full">
                                 {coupons.map(coupon => (
                                     <button 
                                         key={coupon.id}
@@ -495,11 +729,19 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
                         <div className="space-y-4">
                             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                                 <Zap className="w-3 h-3 text-sky-400" />
-                                Pulsos Recientes
+                                {isShowingActive ? 'Próximos Eventos' : 'Pulsos Recientes'}
                             </h3>
-                            <div className="space-y-3">
+                            <div className="space-y-3 w-full">
                                 {publicPulses.map(pulse => (
-                                    <div key={pulse.id} className="flex items-center gap-4 p-3 bg-slate-800/50 rounded-2xl border border-white/5">
+                                    <div 
+                                        key={pulse.id} 
+                                        className="flex items-center gap-4 p-3 bg-slate-800/50 rounded-2xl border border-white/5 cursor-pointer hover:bg-slate-800 transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedEvent(pulse);
+                                            onClose();
+                                        }}
+                                    >
                                         <div className="w-12 h-12 rounded-xl border border-white/10 overflow-hidden shrink-0">
                                             <img
                                                 src={pulse.imageUrl}
@@ -517,106 +759,7 @@ export const PublicProfileModal = React.memo<PublicProfileModalProps>(({
                         </div>
                     )}
 
-                    {/* Reviews Section */}
-                    {(businessId || userId) && (
-                        <div className="space-y-4 pt-4 border-t border-white/5">
-                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                <Star className="w-3 h-3 text-amber-400" />
-                                Reseñas de la Comunidad
-                            </h3>
-
-                            {/* Review List */}
-                            <div className="space-y-4 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                                {reviews.length > 0 ? reviews.map(review => (
-                                    <div key={review.id} className="space-y-1">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs font-bold text-white">{review.userName}</span>
-                                            <div className="flex gap-0.5">
-                                                {[...Array(5)].map((_, i) => (
-                                                    <Star key={i} className={`w-2.5 h-2.5 ${i < review.rating ? 'text-amber-400 fill-current' : 'text-slate-700'}`} />
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <p className="text-xs text-slate-400 leading-relaxed italic">"{review.comment}"</p>
-                                    </div>
-                                )) : (
-                                    <p className="text-center py-4 text-xs text-slate-600 font-bold">Sé el primero en dejar una reseña</p>
-                                )}
-                            </div>
-
-                            {/* Add Review Form */}
-                            {currentUser && currentUser.id !== userId && (
-                                <div className="p-4 bg-slate-800/30 rounded-2xl border border-white/5 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[10px] font-black text-slate-500 uppercase">Tu Calificación</span>
-                                        <div className="flex gap-1">
-                                            {[1, 2, 3, 4, 5].map((star) => (
-                                                <button
-                                                    key={star}
-                                                    onClick={() => setNewReview(prev => ({ ...prev, rating: star }))}
-                                                    className="p-0.5 hover:scale-110 transition-transform"
-                                                >
-                                                    <Star className={`w-5 h-5 ${star <= newReview.rating ? 'text-amber-400 fill-current' : 'text-slate-700'}`} />
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="relative">
-                                        <textarea
-                                            value={newReview.comment}
-                                            onChange={e => setNewReview(prev => ({ ...prev, comment: e.target.value }))}
-                                            placeholder="¿Qué tal fue tu experiencia?"
-                                            className="w-full bg-slate-900/50 border border-white/10 rounded-xl p-3 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 transition-all resize-none"
-                                            rows={2}
-                                        />
-                                        <button
-                                            onClick={handleSubmitReview}
-                                            disabled={isSubmitting || !newReview.comment.trim()}
-                                            className="absolute bottom-3 right-3 p-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-400 disabled:opacity-50 transition-all"
-                                        >
-                                            <Send className="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Social/Contact */}
-                    <div className="flex gap-3">
-                        {businessId && (
-                            <button
-                                onClick={() => handleToggleFollow(businessId)}
-                                className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-xs uppercase transition-all shadow-lg ${isFollowing
-                                    ? 'bg-slate-800 text-white border border-white/10'
-                                    : 'bg-indigo-500 text-white hover:bg-indigo-400 shadow-indigo-500/20'
-                                    }`}
-                            >
-                                {isFollowing ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                                {isFollowing ? 'Siguiendo' : 'Seguir'}
-                            </button>
-                        )}
-                        {business?.whatsapp && (
-                            <a
-                                href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex-1 flex items-center justify-center gap-2 py-4 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
-                            >
-                                <MessageCircle className="w-4 h-4" />
-                                Contactar
-                            </a>
-                        )}
-                        {contactEmail && (
-                            <a
-                                href={`mailto:${contactEmail}`}
-                                className="p-4 bg-slate-800 rounded-2xl border border-white/10 text-slate-400 hover:text-indigo-400 hover:border-indigo-500/30 transition-all"
-                                title={`Enviar email a ${contactEmail}`}
-                            >
-                                <Mail className="w-5 h-5" />
-                            </a>
-                        )}
-                    </div>
+                    
                 </div>
             </div>
         </div>

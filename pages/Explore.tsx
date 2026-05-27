@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, ShieldCheck, Flame, Star, Search, Filter, Layers, ChevronDown, ChevronUp, TrendingUp, Clock, Trash2, ArrowRight, Radio, Navigation, Route, Compass } from 'lucide-react';
 const MapView = lazy(() => import('../components/Map/MapView').then(m => ({ default: m.MapView })));
 import { EventCard } from '../components/EventCard';
-import { Sector, MontanitaEvent, Business, BusinessCategory, Vibe, SubscriptionPlan } from '../types';
+import { Sector, MontanitaEvent, Business, BusinessCategory, Vibe, SubscriptionPlan, MapEntryType } from '../types';
 import { LOCALITIES, LOCALITY_SECTORS, SECTOR_INFO, LOCALITY_POLYGONS, BASE_URL } from '../constants';
 import { getPlannerRecommendations, PlannerSection, getRecommendationForUser } from '../services/geminiService';
 import { deleteBusiness, createBusiness, updateBusiness, incrementBusinessViewCount } from '../services/firestoreService';
@@ -23,11 +23,15 @@ import { Skeleton } from '../components/Skeleton';
 interface ExploreProps {
     onEditBusiness?: (id: string) => void;
     userBusinessId?: string;
+    focusCoords?: { coords: [number, number]; zoom: number } | null;
+    onClearFocusCoords?: () => void;
 }
 
 export const Explore: React.FC<ExploreProps> = ({
     onEditBusiness,
-    userBusinessId
+    userBusinessId,
+    focusCoords,
+    onClearFocusCoords
 }) => {
     const {
         events,
@@ -69,10 +73,10 @@ export const Explore: React.FC<ExploreProps> = ({
         handleAddCustomLocality,
         showLocalityManager,
         setShowLocalityManager,
-        showPulseModal,
-        setShowPulseModal,
         appSettings,
-        loading
+        loading,
+        masterVibes,
+        masterActivities
     } = useData();
 
     const navigate = useNavigate();
@@ -93,9 +97,13 @@ export const Explore: React.FC<ExploreProps> = ({
     const [showAskModal, setShowAskModal] = useState(false);
     const [showLocalityMenu, setShowLocalityMenu] = useState(false);
     const [showFilterMenu, setShowFilterMenu] = useState(false);
+    const [showMoodMenu, setShowMoodMenu] = useState(false);
+    const [showVibesDropdown, setShowVibesDropdown] = useState(false);
+    const [showActivitiesDropdown, setShowActivitiesDropdown] = useState(false);
     const [focusedBusinessId, setFocusedBusinessId] = useState<string | null>(null);
     const [showingDirections, setShowingDirections] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+
 
     // SEO Hook
     useSEO({
@@ -122,7 +130,6 @@ export const Explore: React.FC<ExploreProps> = ({
 
     const userBusinessIdResolved = userBusinessId || businesses.find(b => b.ownerId === authUser?.uid)?.id;
 
-
     useEffect(() => {
         const state = location.state as { focusBusiness?: string } | null;
         if (state?.focusBusiness) {
@@ -137,6 +144,15 @@ export const Explore: React.FC<ExploreProps> = ({
             window.history.replaceState({}, document.title);
         }
     }, [location, businesses]);
+
+    useEffect(() => {
+        if (focusCoords && onClearFocusCoords) {
+            const timer = setTimeout(() => {
+                onClearFocusCoords();
+            }, 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [focusCoords, onClearFocusCoords]);
 
     const handleAiAsk = async () => {
         setIsAiLoading(true);
@@ -245,6 +261,10 @@ export const Explore: React.FC<ExploreProps> = ({
 
     const filteredEvents = useMemo(() => {
         let result = [...eventsWithLiveCounts];
+        
+        // Filter by locality
+        result = result.filter(e => e.locality === currentLocality.name);
+
         if (activeFilter !== 'All') {
             result = result.filter(e => e.vibe === activeFilter);
         }
@@ -259,13 +279,29 @@ export const Explore: React.FC<ExploreProps> = ({
                        vibe.toLowerCase().includes(q);
             });
         }
+        if (selectedMood) {
+            result = result.filter(e => (e.vibe || '') === selectedMood);
+        }
         return result;
-    }, [eventsWithLiveCounts, activeFilter, searchQuery]);
+    }, [eventsWithLiveCounts, activeFilter, searchQuery, selectedMood, currentLocality.name]);
 
     const deferredFilteredEvents = useDeferredValue(filteredEvents);
 
     const filteredBusinesses = useMemo(() => {
         let result = [...businesses];
+
+        // Filter by locality
+        result = result.filter(b => b.locality === currentLocality.name);
+
+        if (activeTab === 'directory') {
+            // Only show actual businesses in directory
+            result = result.filter(b => 
+                !b.isReference && 
+                b.category !== BusinessCategory.REFERENCIA &&
+                (b.mapType === MapEntryType.BUSINESS || !b.mapType)
+            );
+        }
+
         if (activeFilter !== 'All') {
             result = result.filter(b => b.category === activeFilter);
         }
@@ -286,12 +322,9 @@ export const Explore: React.FC<ExploreProps> = ({
         if (selectedSector) {
             result = result.filter(b => b.sector === selectedSector);
         }
-        // Always show landmarks if landmarks tab is active
-        if (activeTab === 'landmarks') {
-            result = result.filter(b => b.category === BusinessCategory.REFERENCIA);
-        }
+        
         return result;
-    }, [businesses, activeFilter, searchQuery, selectedMood, selectedSector, activeTab]);
+    }, [businesses, activeFilter, searchQuery, selectedMood, selectedSector, activeTab, currentLocality.name]);
 
     const deferredFilteredBusinesses = useDeferredValue(filteredBusinesses);
 
@@ -388,6 +421,107 @@ export const Explore: React.FC<ExploreProps> = ({
                                 </button>
                             )}
                              <div className="relative">
+                                {/* Mood Selector Button */}
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowMoodMenu(!showMoodMenu);
+                                    }}
+                                    className={`w-11 h-11 rounded-full flex items-center justify-center border mr-1 shadow-lg transition-all hover:bg-slate-700 active:scale-95 ${selectedMood ? 'bg-rose-500 border-rose-400 text-white' : 'border-white/10 bg-gradient-to-br from-slate-800 to-slate-900 text-slate-400'}`}
+                                >
+                                    <span className={`text-lg ${selectedMood ? 'text-white' : 'text-slate-400'}`}>🎯</span>
+                                </button>
+                                
+                                {showMoodMenu && (
+                                    <div className="absolute top-[calc(100%+12px)] right-0 w-72 bg-[#020617]/95 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl py-3 z-[60] animate-in fade-in slide-in-from-top-2">
+                                        <div className="px-4 py-2 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 border-b border-white/5 flex items-center justify-between">
+                                            <span style={{ color: '#ec4899' }}>¿Cómo te sientes?</span>
+                                            {selectedMood && (
+                                                <button 
+                                                    onClick={() => setSelectedMood(null)}
+                                                    className="text-rose-400 hover:text-rose-300 transition-colors"
+                                                >
+                                                    Limpiar
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 px-3 pb-3 mb-2 border-b border-white/5">
+                                            {masterVibes && masterVibes.length > 0 ? (
+                                                masterVibes.map((vibe: any) => {
+                                                    const isSelected = selectedMood === vibe.name || selectedMood === vibe.label;
+                                                    return (
+                                                        <button
+                                                            key={vibe.id}
+                                                            onClick={() => {
+                                                                setSelectedMood(isSelected ? null : (vibe.label || vibe.name));
+                                                                setShowMoodMenu(false);
+                                                            }}
+                                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${isSelected ? 'bg-rose-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                                                        >
+                                                            {vibe.label || vibe.name}
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                ["Aburrido", "Agradecido", "Cansado", "Curioso", "Enfermo", "Feliz", "Hambriento", "Inspirado", "Relajado", "Triste"].map((mood) => {
+                                                    const isSelected = selectedMood === mood;
+                                                    return (
+                                                        <button
+                                                            key={mood}
+                                                            onClick={() => {
+                                                                setSelectedMood(isSelected ? null : mood as Vibe);
+                                                                setShowMoodMenu(false);
+                                                            }}
+                                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${isSelected ? 'bg-rose-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                                                        >
+                                                            {mood}
+                                                        </button>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                        <div className="px-4 py-2 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 border-b border-white/5 flex items-center justify-between">
+                                            <span style={{ color: '#f59e0b' }}>¿Qué quieres hacer?</span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 px-3 pt-2">
+                                            {masterActivities && masterActivities.length > 0 ? (
+                                                masterActivities.map((activity: any) => {
+                                                    const isSelected = selectedMood === activity.name;
+                                                    return (
+                                                        <button
+                                                            key={activity.id}
+                                                            onClick={() => {
+                                                                setSelectedMood(isSelected ? null : activity.name);
+                                                                setShowMoodMenu(false);
+                                                            }}
+                                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${isSelected ? 'bg-amber-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                                                        >
+                                                            {activity.name}
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                ["Bailar", "Comer", "Cuidado Personal", "Deporte", "Descansar", "Farrear", "Plan Relax", "Surf", "Trabajar", "Turismo"].map((activity) => {
+                                                    const isSelected = selectedMood === activity;
+                                                    return (
+                                                        <button
+                                                            key={activity}
+                                                            onClick={() => {
+                                                                setSelectedMood(isSelected ? null : (activity as Vibe));
+                                                                setShowMoodMenu(false);
+                                                            }}
+                                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${isSelected ? 'bg-amber-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                                                        >
+                                                            {activity}
+                                                        </button>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="relative">
                                 <button 
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -573,7 +707,7 @@ export const Explore: React.FC<ExploreProps> = ({
                     </div>
                 </div>
 
-                <div className={`flex-1 relative h-full min-h-0 z-10 ${showPulseModal ? 'pointer-events-none' : ''}`}>
+                <div className="flex-1 relative h-full min-h-0 z-10">
                     <Suspense fallback={<div className="w-full h-full bg-slate-900 animate-pulse flex items-center justify-center text-slate-500 uppercase font-black text-[10px] tracking-widest">Cargando Mapa...</div>}>
                     <MapView
                         onBusinessSelect={(b) => {
@@ -628,10 +762,10 @@ export const Explore: React.FC<ExploreProps> = ({
                             setSearchQuery('');
                             setIsPanelMinimized(false);
                             setIsEditorFocus(false);
-                            setShowPulseModal(false);
                         }}
                         activeTab={activeTab}
                         focusedBusinessId={focusedBusinessId}
+                        focusCoords={focusCoords}
                     />
                     </Suspense>
                 </div>
@@ -667,7 +801,7 @@ export const Explore: React.FC<ExploreProps> = ({
                                 <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t('explore.seeMap')}</span>
                             </button>
                             <button
-                                onClick={() => setActiveTab(activeTab === 'events' ? null : 'events')}
+                                onClick={() => setActiveTab('events')}
                                 className={`flex-1 flex items-center justify-center gap-3 py-3.5 rounded-[1.6rem] transition-all duration-500 relative overflow-hidden group ${activeTab === 'events' ? 'text-white shadow-2xl shadow-sky-500/20' : 'text-slate-500 hover:text-slate-300'}`}
                             >
                                 {activeTab === 'events' && (
@@ -678,47 +812,196 @@ export const Explore: React.FC<ExploreProps> = ({
                                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t('explore.title')}</span>
                                 </div>
                             </button>
-                            <button
-                                onClick={() => setActiveTab(activeTab === 'landmarks' ? null : 'landmarks')}
-                                className={`flex-1 flex items-center justify-center gap-3 py-3.5 rounded-[1.6rem] transition-all duration-500 relative overflow-hidden group ${activeTab === 'landmarks' ? 'text-white shadow-2xl shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                {activeTab === 'landmarks' && (
-                                    <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600 to-teal-600 animate-in fade-in zoom-in duration-500" />
-                                )}
-                                <div className="relative flex items-center gap-2.5">
-                                    <MapPin className={`w-4 h-4 ${activeTab === 'landmarks' ? 'fill-white animate-pulse' : 'group-hover:scale-110 transition-transform'}`} />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Puntos</span>
-                                </div>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab(activeTab === 'directory' ? null : 'directory')}
-                                className={`flex-1 flex items-center justify-center gap-3 py-3.5 rounded-[1.6rem] transition-all duration-500 relative overflow-hidden group ${activeTab === 'directory' ? 'text-white shadow-2xl shadow-amber-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                {activeTab === 'directory' && (
-                                    <div className="absolute inset-0 bg-gradient-to-tr from-amber-600 to-orange-600 animate-in fade-in zoom-in duration-500" />
-                                )}
-                                <div className="relative flex items-center gap-2.5">
-                                    <Store className={`w-4 h-4 ${activeTab === 'directory' ? 'fill-white animate-pulse' : 'group-hover:scale-110 transition-transform'}`} />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t('explore.directory')}</span>
-                                </div>
-                            </button>
                         </div>
 
-                        {/* Pulse Pass Exclusive Banner */}
-                        {user?.pulsePassActive && (
-                            <div className="mb-8 p-3 lg:p-4 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 rounded-2xl lg:rounded-3xl border border-indigo-500/30 flex items-center justify-between group cursor-default">
-                                <div className="flex items-center gap-3 lg:gap-4">
-                                    <div className="w-8 h-8 lg:w-10 lg:h-10 bg-indigo-500 rounded-xl lg:rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                                        <Zap className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
+                        {/* Section 1: ¿Cómo te sientes? - Pink (from masterVibes) */}
+                        <div className="px-4 py-3 border-b border-white/5 relative">
+                            <p style={{ color: '#ec4899', fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>🎯 ¿Cómo te sientes?</p>
+                            
+                            {/* Custom Dropdown Selector */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowVibesDropdown(!showVibesDropdown)}
+                                    className="w-full flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-sm font-semibold text-slate-300 transition-all active:scale-[0.98] outline-none focus:outline-none"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <span className="text-base">🎯</span>
+                                        <span>
+                                            {selectedMood && (
+                                                masterVibes?.some((v: any) => v.name === selectedMood || v.label === selectedMood) ||
+                                                ["Aburrido", "Agradecido", "Cansado", "Curioso", "Enfermo", "Feliz", "Hambriento", "Inspirado", "Relajado", "Triste"].includes(selectedMood)
+                                            ) ? selectedMood : 'Selecciona tu ánimo / vibra...'}
+                                        </span>
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        {selectedMood && (
+                                            masterVibes?.some((v: any) => v.name === selectedMood || v.label === selectedMood) ||
+                                            ["Aburrido", "Agradecido", "Cansado", "Curioso", "Enfermo", "Feliz", "Hambriento", "Inspirado", "Relajado", "Triste"].includes(selectedMood)
+                                        ) && (
+                                            <span 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedMood(null);
+                                                }}
+                                                className="p-1 hover:bg-white/15 rounded-full text-slate-400 hover:text-white transition-colors"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </span>
+                                        )}
+                                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${showVibesDropdown ? 'rotate-180' : ''}`} />
                                     </div>
-                                    <div>
-                                        <h4 className="text-white text-[10px] lg:text-sm font-black uppercase tracking-tight">{t('explore.pulsePassBenefit')}</h4>
-                                        <p className="text-indigo-300 text-[8px] lg:text-[10px] font-bold uppercase">{t('explore.pulsePassDesc')}</p>
-                                    </div>
-                                </div>
-                                <ShieldCheck className="w-5 h-5 lg:w-6 lg:h-6 text-indigo-400 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                </button>
+
+                                {showVibesDropdown && (
+                                    <>
+                                        {/* Overlay to handle click outside */}
+                                        <div 
+                                            className="fixed inset-0 z-[105]" 
+                                            onClick={() => setShowVibesDropdown(false)}
+                                        />
+                                        <div className="absolute top-[calc(100%+6px)] left-0 right-0 bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl py-2 z-[110] max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedMood(null);
+                                                    setShowVibesDropdown(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors hover:bg-white/10 ${!selectedMood ? 'text-[#ec4899] bg-[#ec4899]/10 font-black' : 'text-slate-400'}`}
+                                            >
+                                                Todos los ánimos
+                                            </button>
+                                            {masterVibes && masterVibes.length > 0 ? (
+                                                masterVibes.map((vibe: any) => {
+                                                    const vibeName = vibe.label || vibe.name;
+                                                    const isSelected = selectedMood === vibe.name || selectedMood === vibe.label;
+                                                    return (
+                                                        <button
+                                                            key={vibe.id}
+                                                            onClick={() => {
+                                                                setSelectedMood(isSelected ? null : vibeName);
+                                                                setShowVibesDropdown(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#ec4899] bg-[#ec4899]/10 font-black' : 'text-slate-300'}`}
+                                                        >
+                                                            {vibeName}
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                ["Aburrido", "Agradecido", "Cansado", "Curioso", "Enfermo", "Feliz", "Hambriento", "Inspirado", "Relajado", "Triste"].map((mood) => {
+                                                    const isSelected = selectedMood === mood;
+                                                    return (
+                                                        <button
+                                                            key={mood}
+                                                            onClick={() => {
+                                                                setSelectedMood(isSelected ? null : mood as Vibe);
+                                                                setShowVibesDropdown(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#ec4899] bg-[#ec4899]/10 font-black' : 'text-slate-300'}`}
+                                                        >
+                                                            {mood}
+                                                        </button>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                             </div>
-                        )}
+                        </div>
+
+                        {/* Section 2: ¿Qué quieres hacer? - Amber (from masterActivities) */}
+                        <div className="px-4 py-3 border-b border-white/5 relative">
+                            <p style={{ color: '#f59e0b', fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>⚡ ¿Qué quieres hacer?</p>
+                            
+                            {/* Custom Dropdown Selector */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowActivitiesDropdown(!showActivitiesDropdown)}
+                                    className="w-full flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-sm font-semibold text-slate-300 transition-all active:scale-[0.98] outline-none focus:outline-none"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <span className="text-base">⚡</span>
+                                        <span>
+                                            {selectedMood && (
+                                                masterActivities?.some((a: any) => a.name === selectedMood) ||
+                                                ["Bailar", "Comer", "Cuidado Personal", "Deporte", "Descansar", "Farrear", "Plan Relax", "Surf", "Trabajar", "Turismo"].includes(selectedMood)
+                                            ) ? selectedMood : 'Selecciona una actividad...'}
+                                        </span>
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        {selectedMood && (
+                                            masterActivities?.some((a: any) => a.name === selectedMood) ||
+                                            ["Bailar", "Comer", "Cuidado Personal", "Deporte", "Descansar", "Farrear", "Plan Relax", "Surf", "Trabajar", "Turismo"].includes(selectedMood)
+                                        ) && (
+                                            <span 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedMood(null);
+                                                }}
+                                                className="p-1 hover:bg-white/15 rounded-full text-slate-400 hover:text-white transition-colors"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </span>
+                                        )}
+                                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${showActivitiesDropdown ? 'rotate-180' : ''}`} />
+                                    </div>
+                                </button>
+
+                                {showActivitiesDropdown && (
+                                    <>
+                                        {/* Overlay to handle click outside */}
+                                        <div 
+                                            className="fixed inset-0 z-[105]" 
+                                            onClick={() => setShowActivitiesDropdown(false)}
+                                        />
+                                        <div className="absolute top-[calc(100%+6px)] left-0 right-0 bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl py-2 z-[110] max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedMood(null);
+                                                    setShowActivitiesDropdown(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors hover:bg-white/10 ${!selectedMood ? 'text-[#f59e0b] bg-[#f59e0b]/10 font-black' : 'text-slate-400'}`}
+                                            >
+                                                Todas las actividades
+                                            </button>
+                                            {masterActivities && masterActivities.length > 0 ? (
+                                                masterActivities.map((activity: any) => {
+                                                    const isSelected = selectedMood === activity.name;
+                                                    return (
+                                                        <button
+                                                            key={activity.id}
+                                                            onClick={() => {
+                                                                setSelectedMood(isSelected ? null : activity.name);
+                                                                setShowActivitiesDropdown(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#f59e0b] bg-[#f59e0b]/10 font-black' : 'text-slate-300'}`}
+                                                        >
+                                                            {activity.name}
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                ["Bailar", "Comer", "Cuidado Personal", "Deporte", "Descansar", "Farrear", "Plan Relax", "Surf", "Trabajar", "Turismo"].map((activity) => {
+                                                    const isSelected = selectedMood === activity;
+                                                    return (
+                                                        <button
+                                                            key={activity}
+                                                            onClick={() => {
+                                                                setSelectedMood(isSelected ? null : activity as Vibe);
+                                                                setShowActivitiesDropdown(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#f59e0b] bg-[#f59e0b]/10 font-black' : 'text-slate-300'}`}
+                                                        >
+                                                            {activity}
+                                                        </button>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
 
                         {/* Flash Offers Carousel */}
                         {(loading || deferredFilteredEvents.some(e => e.isFlashOffer)) && (
@@ -779,41 +1062,6 @@ export const Explore: React.FC<ExploreProps> = ({
                                         <Layers className="w-4 h-4" />
                                     </button>
                                 )}
-                                
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAiAsk();
-                                    }}
-                                    disabled={isAiLoading}
-                                    className="bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 px-5 py-2.5 rounded-2xl border border-sky-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
-                                >
-                                    <Sparkles className={`w-4 h-4 ${isAiLoading ? 'animate-spin' : ''}`} />
-                                    <span className="text-[11px] font-black uppercase tracking-wider">{t('explore.aiPlanner')}</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Mood Selector: How do you feel? */}
-                        <div className="mb-8">
-                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4 px-1">{t('explore.moodPrompt')}</p>
-                            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-                                {Object.values(Vibe).map((vibe) => (
-                                    <button
-                                        key={vibe}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedMood(selectedMood === vibe ? null : vibe);
-                                        }}
-                                        className={`px-6 py-3 rounded-2xl border transition-all flex items-center gap-2 shrink-0 ${selectedMood === vibe
-                                            ? 'bg-sky-500 border-sky-400 text-white shadow-lg shadow-sky-500/20 scale-105'
-                                            : 'bg-slate-900/60 border-white/5 text-slate-400 hover:bg-slate-800 hover:text-white'
-                                            }`}
-                                    >
-                                        <span className="text-sm font-bold">{vibe}</span>
-                                        {selectedMood === vibe && <Sparkles className="w-3 h-3 animate-pulse" />}
-                                    </button>
-                                ))}
                             </div>
                         </div>
 
@@ -962,46 +1210,82 @@ export const Explore: React.FC<ExploreProps> = ({
                             </div>
                         )}
 
-                        {/* Featured Businesses Carousel */}
-                        {businesses.some(b => b.plan === SubscriptionPlan.EXPERT) && (
-                            <div className="mb-10">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                                        <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">{t('explore.featured')}</h3>
+
+                        {/* Landmarks & Sectors Section - Show when Points tab is active */}
+                        {activeTab === 'landmarks' && (
+                            <div className="mb-8">
+                                {/* Sectors / Neighborhoods Subsection */}
+                                <div className="px-6 mb-6">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <Compass className="w-4 h-4 text-emerald-400" />
+                                        <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Sectores y Barrios</h3>
                                     </div>
-                                </div>
-                                <div className="flex gap-4 overflow-x-auto no-scrollbar -mx-6 px-6">
-                                    {loading ? (
-                                        [1, 2, 3, 4].map(i => (
-                                            <Skeleton key={`featured-skeleton-${i}`} className="min-w-[130px] w-[130px] h-[130px] rounded-[2rem] shrink-0" />
-                                        ))
-                                    ) : (
-                                        businesses.filter(b => b.plan === SubscriptionPlan.EXPERT).map(business => (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {businesses.filter(b => (b.mapType === MapEntryType.SECTOR) && b.locality === currentLocality.name).map((sector, idx) => (
                                             <div
-                                                key={`featured-${business.id}`}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setPublicProfileId(business.id);
+                                                key={`sector-${sector.id}-${idx}`}
+                                                onClick={() => {
+                                                    setPublicProfileId(sector.id);
                                                     setPublicProfileType('business');
                                                     setShowPublicProfile(true);
                                                 }}
-                                                className="min-w-[130px] w-[130px] shrink-0 group cursor-pointer"
+                                                className="p-4 bg-white/5 rounded-2xl border border-white/10 hover:border-emerald-500/30 hover:bg-emerald-500/5 transition-all cursor-pointer group"
                                             >
-                                            <div className="relative aspect-square rounded-[2rem] overflow-hidden border-2 border-amber-500/20 group-hover:border-amber-500 transition-all shadow-xl shadow-black/20">
-                                                <img src={business.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={business.name} loading="lazy" />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent group-hover:from-black/70 transition-colors" />
-                                                <div className="absolute inset-0 border border-white/10 rounded-[2rem] pointer-events-none" />
-                                                <div className="absolute bottom-3 left-3 right-3">
-                                                    <p className="text-[10px] font-black text-white uppercase tracking-tight truncate group-hover:text-amber-400 transition-colors">{business.name}</p>
-                                                    <div className="flex items-center gap-1 mt-0.5">
-                                                        <MapPin className="w-2.5 h-2.5 text-slate-400" />
-                                                        <span className="text-[8px] font-bold text-slate-400 uppercase truncate">{business.sector}</span>
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                                                        <Compass className="w-5 h-5" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs font-black text-white uppercase truncate group-hover:text-emerald-400 transition-colors">{sector.name}</p>
+                                                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5 truncate">{sector.sector}</p>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )))}
+                                        ))}
+                                    </div>
+                                    {businesses.filter(b => (b.mapType === MapEntryType.SECTOR) && b.locality === currentLocality.name).length === 0 && (
+                                        <p className="text-[10px] font-bold text-slate-600 text-center py-4 bg-white/5 rounded-2xl border border-dashed border-white/10 italic">No hay sectores registrados</p>
+                                    )}
+                                </div>
+
+                                {/* Reference Points Subsection */}
+                                <div className="px-6">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <MapPin className="w-4 h-4 text-sky-400" />
+                                        <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Puntos de Referencia</h3>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {businesses.filter(b => 
+                                            (b.mapType === MapEntryType.LANDMARK || (b.isReference && !b.mapType) || (b.category === BusinessCategory.REFERENCIA && !b.mapType)) && 
+                                            b.locality === currentLocality.name
+                                        ).map((landmark, idx) => (
+                                            <div
+                                                key={`landmark-${landmark.id}-${idx}`}
+                                                onClick={() => {
+                                                    setPublicProfileId(landmark.id);
+                                                    setPublicProfileType('business');
+                                                    setShowPublicProfile(true);
+                                                }}
+                                                className="p-4 bg-white/5 rounded-2xl border border-white/10 hover:border-sky-500/30 hover:bg-sky-500/5 transition-all cursor-pointer group"
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 group-hover:bg-sky-500 group-hover:text-white transition-all">
+                                                        <MapPin className="w-5 h-5" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs font-black text-white uppercase truncate group-hover:text-sky-400 transition-colors">{landmark.name}</p>
+                                                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5 truncate">{landmark.sector}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {businesses.filter(b => 
+                                        (b.mapType === MapEntryType.LANDMARK || (b.isReference && !b.mapType) || (b.category === BusinessCategory.REFERENCIA && !b.mapType)) && 
+                                        b.locality === currentLocality.name
+                                    ).length === 0 && (
+                                        <p className="text-[10px] font-bold text-slate-600 text-center py-4 bg-white/5 rounded-2xl border border-dashed border-white/10 italic">No hay puntos de referencia</p>
+                                    )}
                                 </div>
                             </div>
                         )}

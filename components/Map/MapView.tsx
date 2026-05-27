@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, memo } from 'react';
 import L from 'leaflet';
-import { Navigation, Layers, Plus, Minus, X, CheckCircle, MapPin, Zap, Flame, Info, Crosshair } from 'lucide-react';
-import { Business, Sector, MontanitaEvent, SubscriptionPlan, BusinessCategory, CommunityPost, AppSettings } from '../../types';
+import { Navigation, Layers, Plus, Minus, X, CheckCircle, MapPin, Zap, Flame, Info, Crosshair, Compass, Store } from 'lucide-react';
+import { Business, Sector, MontanitaEvent, SubscriptionPlan, BusinessCategory, CommunityPost, AppSettings, MapEntryType } from '../../types';
 import { SECTOR_INFO, LOCALITIES, MAP_ICONS } from '../../constants';
 import { useToast } from '../../context/ToastContext';
 import { useTranslation } from 'react-i18next';
@@ -49,6 +49,7 @@ interface MapViewProps {
   focusedBusinessId?: string | null;
   directionsFrom?: [number, number] | null;
   directionsTo?: [number, number] | null;
+  focusCoords?: { coords: [number, number]; zoom: number } | null;
 }
 
 const CATEGORY_COLORS: Record<string, { bg: string; border: string; shadow: string }> = {
@@ -67,6 +68,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; border: string; shadow: stri
 
 const REFERENCE_STYLE = { bg: 'linear-gradient(135deg, #0ea5e9, #0284c7)', border: '#38bdf8', shadow: '0 0 15px rgba(56, 189, 248, 0.5)' };
 const BUSINESS_STYLE = { bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', border: '#a78bfa', shadow: '0 0 15px rgba(167, 139, 250, 0.4)' };
+const SECTOR_STYLE = { bg: 'linear-gradient(135deg, #10b981, #059669)', border: '#34d399', shadow: '0 0 15px rgba(52, 211, 153, 0.5)' };
 
 const CATEGORY_ICONS: Record<string, string> = {
   palmtree: '🏖️',
@@ -99,6 +101,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   bicycle: '🚴',
   school: '🏫',
   location: '📍',
+  compass: '🧭',
 };
 
 export const MapView: React.FC<MapViewProps> = memo(({
@@ -140,8 +143,11 @@ export const MapView: React.FC<MapViewProps> = memo(({
   onStartMoveBusiness,
   customLocalities = [],
   onAddLocality,
-  activeTab,
-  focusedBusinessId
+activeTab,
+  focusedBusinessId,
+  focusCoords,
+  directionsFrom,
+  directionsTo
 }) => {
   const { t } = useTranslation();
   const { showConfirm, showPrompt, showToast } = useToast();
@@ -157,7 +163,9 @@ export const MapView: React.FC<MapViewProps> = memo(({
   const [editingSector, setEditingSector] = useState<Sector | null>(null);
   const [tempCoords, setTempCoords] = useState<[number, number][]>([]);
   const [mousePos, setMousePos] = useState<[number, number] | null>(null);
-  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showLandmarks, setShowLandmarks] = useState(true);
+  const [showBusinesses, setShowBusinesses] = useState(true);
+  const [showEvents, setShowEvents] = useState(false);
   const [isAddingPoint, setIsAddingPoint] = useState(false);
   const [addingPointType, setAddingPointType] = useState<'business' | 'reference'>('business');
   const previewPolylineRef = useRef<L.Polyline | null>(null);
@@ -325,9 +333,12 @@ export const MapView: React.FC<MapViewProps> = memo(({
           searchQuery,
           activeFilter,
           localityName,
-          isPanelMinimized
+          isPanelMinimized,
+          showLandmarks,
+          showBusinesses,
+          showEvents
       ].join('|');
-  }, [businesses, events, posts, selectedSector, activeTab, searchQuery, activeFilter, localityName, isPanelMinimized]);
+  }, [businesses, events, posts, selectedSector, activeTab, searchQuery, activeFilter, localityName, isPanelMinimized, showLandmarks, showBusinesses, showEvents]);
 
   const lastSignatureRef = useRef<string>('');
 
@@ -344,7 +355,7 @@ export const MapView: React.FC<MapViewProps> = memo(({
     polygonsLayerRef.current.clearLayers();
     heatmapLayerRef.current.clearLayers();
 
-    if (showHeatmap) {
+    if (showEvents) {
       events.forEach((event) => {
         if (!event.coordinates) return;
         const heat = 0.5 + (Math.random() * 0.5);
@@ -388,20 +399,36 @@ export const MapView: React.FC<MapViewProps> = memo(({
       const isVisible = activeFilter === 'All' || business.category === activeFilter;
       const matchesSearch = !sq || (business.name ?? '').toLowerCase().includes(sq.toLowerCase());
       
-      const isReference = business.isReference === true;
+      const isReference = business.isReference === true || business.mapType === MapEntryType.LANDMARK;
+      const isSector = business.mapType === MapEntryType.SECTOR;
       const hasActiveEvents = events.some(e => e.businessId === business.id);
       
       let tabMatch = false;
       if (activeTab === 'events') {
         tabMatch = hasActiveEvents;
       } else if (activeTab === 'directory') {
-        tabMatch = !isReference;
+        tabMatch = !isReference && !isSector;
       } else if (activeTab === 'landmarks') {
-        tabMatch = isReference;
+        tabMatch = isReference || isSector;
       }
 
       const matchesLocality = (business.locality || 'Montañita') === localityName;
-      const isActuallyVisible = isVisible && matchesSearch && tabMatch && matchesLocality;
+      
+      let isActuallyVisible = false;
+
+      // Only evaluate if it matches the general filters (search, category, locality)
+      if (matchesSearch && isVisible && matchesLocality) {
+        // Additive visibility based on the three independent toggles
+        if (showEvents && hasActiveEvents) {
+          isActuallyVisible = true;
+        }
+        if (showLandmarks && (isReference || isSector)) {
+          isActuallyVisible = true;
+        }
+        if (showBusinesses && !isReference && !isSector) {
+          isActuallyVisible = true;
+        }
+      }
 
       if (isActuallyVisible) {
         const isPremium = business.plan === SubscriptionPlan.EXPERT;
@@ -411,8 +438,13 @@ export const MapView: React.FC<MapViewProps> = memo(({
         let borderColor: string;
         let markerShadow: string;
 
-        if (isReference) {
-          iconKey = business.icon || 'church';
+        if (isSector) {
+          iconKey = 'compass';
+          markerBg = SECTOR_STYLE.bg;
+          borderColor = SECTOR_STYLE.border;
+          markerShadow = SECTOR_STYLE.shadow;
+        } else if (isReference) {
+          iconKey = business.icon || 'location';
           markerBg = REFERENCE_STYLE.bg;
           borderColor = REFERENCE_STYLE.border;
           markerShadow = REFERENCE_STYLE.shadow;
@@ -440,13 +472,17 @@ export const MapView: React.FC<MapViewProps> = memo(({
           html: `
             <div class="relative group flex flex-col items-center">
               <div class="absolute inset-x-0 bottom-0 h-2 bg-black/30 blur-md rounded-full transform translate-y-2 scale-75"></div>
-              <div class="relative w-10 h-10 bg-slate-900 border-2 rounded-2xl flex items-center justify-center text-white shadow-2xl transition-all duration-300 group-hover:scale-110 group-hover:-translate-y-1" style="border-color: ${borderColor}; ${markerShadow}">
+              ${showEvents && hasActiveEvents ? `
+                <div class="absolute inset-0 bg-orange-500 rounded-full blur-[20px] animate-pulse opacity-80 translate-y-2"></div>
+                <div class="absolute inset-0 bg-red-500 rounded-full blur-[15px] animate-ping opacity-50 translate-y-2"></div>
+              ` : ''}
+              <div class="relative w-10 h-10 bg-slate-900 border-2 rounded-2xl flex items-center justify-center text-white shadow-2xl transition-all duration-300 group-hover:scale-110 group-hover:-translate-y-1" style="border-color: ${showEvents && hasActiveEvents ? '#f97316' : borderColor}; ${showEvents && hasActiveEvents ? 'box-shadow: 0 0 25px rgba(249, 115, 22, 0.8)' : markerShadow}">
                 ${svg}
               </div>
               
               <div class="mt-1.5 px-2 py-0.5 bg-slate-900/90 backdrop-blur-md border border-white/10 rounded-lg shadow-xl pointer-events-none transition-all duration-300 group-hover:bg-slate-800 group-hover:border-white/20 group-hover:scale-105">
                 <span class="text-[9px] font-black text-white uppercase tracking-tighter whitespace-nowrap block max-w-[80px] overflow-hidden text-ellipsis">${business.name}</span>
-                ${isReference ? '<span class="block text-[7px] text-cyan-400 font-bold">REF</span>' : ''}
+                ${isSector ? '<span class="block text-[7px] text-emerald-400 font-bold">SECTOR</span>' : isReference ? '<span class="block text-[7px] text-cyan-400 font-bold">REF</span>' : ''}
               </div>
 
               ${isPremium && !isReference ? `
@@ -467,7 +503,7 @@ export const MapView: React.FC<MapViewProps> = memo(({
         });
 
         const isOwnBusiness = business.id === userBusinessId || business.ownerId === userId;
-        const canEdit = isSuperUser || (isPremiumUser && isOwnBusiness);
+        const canEdit = (isAdmin && isSuperUser) || (!isAdmin && isPremiumUser && isOwnBusiness);
         
         // Get coordinates - use default locality coords if missing
         const businessLocality = business.locality || localityName || 'Montañita';
@@ -486,8 +522,13 @@ export const MapView: React.FC<MapViewProps> = memo(({
           .addTo(markersLayerRef.current!)
           .on('click', (e) => {
             L.DomEvent.stopPropagation(e as any);
-            if (isSuperUser) {
-              handleSuperAdminAction(business);
+            if (isAdmin) {
+              if (isSuperUser) {
+                handleSuperAdminAction(business);
+              } else {
+                showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                onBusinessSelectRef.current(business);
+              }
             } else if (isPremiumUser && isOwnBusiness) {
               handlePremiumAction(business);
             } else {
@@ -505,7 +546,6 @@ export const MapView: React.FC<MapViewProps> = memo(({
     });
 
     const sq = searchQuery || '';
-    const showEvents = activeTab === 'events';
 
     if (showEvents) {
       events.forEach(event => {
@@ -563,7 +603,7 @@ export const MapView: React.FC<MapViewProps> = memo(({
         map.flyTo(mapCenter, 15, { duration: 1.2 });
       }
     }
-  }, [businesses, events, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, isSuperAdmin, isSuperUser, editingSector, tempCoords, mapCenter, localityName, showHeatmap, posts, isEditorFocus, activeTab]);
+  }, [businesses, events, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, isSuperUser, editingSector, tempCoords, mapCenter, localityName, showEvents, showLandmarks, showBusinesses, posts, isEditorFocus, activeTab]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -574,7 +614,12 @@ export const MapView: React.FC<MapViewProps> = memo(({
         setTempCoords(prev => [...prev, [lat, lng]]);
       } else if (isAddingPoint && onAddBusiness) {
         const isRef = addingPointType === 'reference';
-        if (isSuperUser || (isRef && isEliteUser) || (!isRef && isPremiumUser)) {
+        if (isAdmin && !isSuperUser) {
+          showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+          setIsAddingPoint(false);
+          return;
+        }
+        if (isSuperUser || isAdmin || (isRef && isEliteUser) || (!isRef && isPremiumUser)) {
           onAddBusiness(lat, lng, isRef);
           setIsAddingPoint(false);
           [100, 300, 600, 1000, 2000].forEach(delay =>
@@ -595,7 +640,7 @@ export const MapView: React.FC<MapViewProps> = memo(({
       map.off('click', onClick);
       map.off('mousemove', onMouseMove);
     };
-  }, [isSuperAdmin, isSuperUser, isPremiumUser, isEliteUser, isAddingPoint, addingPointType, editingSector, isMovingBusiness, movingBusinessId, onAddBusiness, onUpdateBusiness, onMoveBusinessComplete]);
+  }, [isAdmin, isSuperUser, isPremiumUser, isEliteUser, isAddingPoint, addingPointType, editingSector, isMovingBusiness, movingBusinessId, onAddBusiness, onUpdateBusiness, onMoveBusinessComplete]);
 
   // Invalidate map whenever UI interaction states change
   useEffect(() => {
@@ -654,6 +699,69 @@ export const MapView: React.FC<MapViewProps> = memo(({
       }
     }
   }, [focusedBusinessId, businesses]);
+
+  const prevFocusCoordsRef = React.useRef<string>('');
+  const focusMarkerRef = React.useRef<L.Marker | null>(null);
+  
+  useEffect(() => {
+    if (focusCoords && mapRef.current) {
+      const key = `${focusCoords.coords[0]}-${focusCoords.coords[1]}-${focusCoords.zoom}`;
+      if (prevFocusCoordsRef.current !== key) {
+        prevFocusCoordsRef.current = key;
+        
+        // Remove previous focus marker
+        if (focusMarkerRef.current) {
+          focusMarkerRef.current.remove();
+          focusMarkerRef.current = null;
+        }
+        
+        // Add new focus marker
+        const pulseIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `
+            <div style="
+              width: 50px;
+              height: 50px;
+              background: linear-gradient(135deg, #f97316, #ea580c);
+              border-radius: 50%;
+              border: 3px solid white;
+              box-shadow: 0 0 20px rgba(249, 115, 22, 0.6);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              animation: pulse 1.5s infinite;
+            ">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </div>
+            <style>
+              @keyframes pulse {
+                0% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.1); opacity: 0.8; }
+                100% { transform: scale(1); opacity: 1; }
+              }
+            </style>
+          `,
+          iconSize: [50, 50],
+          iconAnchor: [25, 25]
+        });
+        
+        focusMarkerRef.current = L.marker([focusCoords.coords[0], focusCoords.coords[1]], { icon: pulseIcon }).addTo(mapRef.current);
+        
+        setTimeout(() => {
+          mapRef.current?.flyTo([focusCoords.coords[0], focusCoords.coords[1]], focusCoords.zoom, { duration: 1.2 });
+        }, 100);
+      }
+    } else {
+      // Remove marker when focus is cleared
+      if (focusMarkerRef.current) {
+        focusMarkerRef.current.remove();
+        focusMarkerRef.current = null;
+      }
+    }
+  }, [focusCoords]);
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
@@ -950,14 +1058,36 @@ export const MapView: React.FC<MapViewProps> = memo(({
           <button
             onClick={() => setMapMode(mapMode === 'dark' ? 'satellite' : 'dark')}
             className="w-12 h-12 rounded-2xl bg-slate-900/80 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl mt-4 pointer-events-auto"
+            title="Cambiar vista de mapa"
           >
             {mapMode === 'dark' ? <Navigation className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
           </button>
+          
+          {/* Toggle Negocios */}
           <button
-            onClick={() => setShowHeatmap(!showHeatmap)}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center border border-white/10 backdrop-blur-xl mt-2 transition-all pointer-events-auto ${showHeatmap ? 'bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.4)]' : 'bg-slate-900/80 text-slate-400'}`}
+            onClick={() => setShowBusinesses(!showBusinesses)}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center border border-white/10 backdrop-blur-xl mt-2 transition-all pointer-events-auto ${showBusinesses ? 'bg-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)]' : 'bg-slate-900/80 text-slate-400'}`}
+            title="Mostrar/Ocultar Negocios"
           >
-            <Flame className={`w-5 h-5 ${showHeatmap ? 'animate-pulse' : ''}`} />
+            <Store className={`w-5 h-5 ${showBusinesses ? '' : 'opacity-50'}`} />
+          </button>
+
+          {/* Toggle Puntos de Referencia */}
+          <button
+            onClick={() => setShowLandmarks(!showLandmarks)}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center border border-white/10 backdrop-blur-xl mt-2 transition-all pointer-events-auto ${showLandmarks ? 'bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.4)]' : 'bg-slate-900/80 text-slate-400'}`}
+            title="Mostrar/Ocultar Referencias"
+          >
+            <MapPin className={`w-5 h-5 ${showLandmarks ? '' : 'opacity-50'}`} />
+          </button>
+
+          {/* Toggle Eventos */}
+          <button
+            onClick={() => setShowEvents(!showEvents)}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center border border-white/10 backdrop-blur-xl mt-2 transition-all pointer-events-auto ${showEvents ? 'bg-rose-500 text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]' : 'bg-slate-900/80 text-slate-400'}`}
+            title="Mostrar/Ocultar Eventos"
+          >
+            <Zap className={`w-5 h-5 ${showEvents ? '' : 'opacity-50'}`} />
           </button>
           {isPremiumUser && userBusinessId && (
             <button

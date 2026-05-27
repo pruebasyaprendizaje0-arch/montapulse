@@ -306,6 +306,11 @@ const CouponManagerModal: React.FC<CouponManagerModalProps> = ({ isOpen, onClose
                                 <input type="text" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} 
                                     className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-4 text-white text-sm outline-none" />
                             </div>
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Fecha y Hora de Expiración (Opcional)</label>
+                                <input type="datetime-local" value={form.expiresAt} onChange={e => setForm({ ...form, expiresAt: e.target.value })} 
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-4 text-white text-sm outline-none [color-scheme:dark]" />
+                            </div>
                             <button onClick={handleSubmit} disabled={isLoading} className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-black font-black text-sm uppercase rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2">
                                 {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
                                 {editingId ? 'Guardar Cambios' : 'Crear Cupón'}

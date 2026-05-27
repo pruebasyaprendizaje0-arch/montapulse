@@ -4,8 +4,7 @@ export interface ChatMessage {
   content: string;
 }
 
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_URL = '/api/ai/openrouter';
 
 const SYSTEM_PROMPT = `Eres un experto planificador de viajes local para Montañita, Ecuador y pueblos cercanos (Olón, Manglaralto, Ayangue, Puerto López, etc.).
 
@@ -22,33 +21,24 @@ Reglas:
 
 
 export async function sendChatMessage(messages: ChatMessage[], model?: string, signal?: AbortSignal): Promise<string> {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error('OpenRouter API key not configured');
-  }
-
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      'HTTP-Referer': window.location.origin,
-      'X-Title': 'Montapulse Planner',
     },
     body: JSON.stringify({
-      model: model || 'minimax/minimax-m2.5:free',
+      model: model,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...messages,
       ],
-      max_tokens: 1024,
-      temperature: 0.7,
     }),
     signal,
   });
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
+    throw new Error(`OpenRouter Proxy API error: ${response.status} - ${error}`);
   }
 
   const data = await response.json();
@@ -61,26 +51,17 @@ export async function sendChatMessageStream(
   model?: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error('OpenRouter API key not configured');
-  }
-
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      'HTTP-Referer': window.location.origin,
-      'X-Title': 'Montapulse Planner',
     },
     body: JSON.stringify({
-      model: model || 'minimax/minimax-m2.5:free',
+      model: model,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...messages,
       ],
-      max_tokens: 1024,
-      temperature: 0.7,
       stream: true,
     }),
     signal,
@@ -88,7 +69,7 @@ export async function sendChatMessageStream(
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
+    throw new Error(`OpenRouter Proxy API error: ${response.status} - ${error}`);
   }
 
   const reader = response.body?.getReader();

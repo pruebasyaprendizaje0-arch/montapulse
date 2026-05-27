@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar as CalendarIcon, Search, ChevronLeft, ChevronRight, Plus, MapPin } from 'lucide-react';
+import { Calendar as CalendarIcon, Search, ChevronLeft, ChevronRight, Plus, MapPin, Heart } from 'lucide-react';
 import { MontanitaEvent, Vibe, Sector, SubscriptionPlan } from '../types';
 import { useData } from '../context/DataContext';
 
@@ -27,8 +27,10 @@ const MOCK_AVATARS = [
 interface CalendarEventCardProps {
     event: MontanitaEvent;
     isRsvp: boolean;
+    isFavorite: boolean;
     onSelect: (event: MontanitaEvent) => void;
     onRsvp: (id: string) => void;
+    onLike: (id: string, e: React.MouseEvent) => void;
     businessName?: string;
     locality?: string;
 }
@@ -36,8 +38,10 @@ interface CalendarEventCardProps {
 const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
     event,
     isRsvp,
+    isFavorite,
     onSelect,
     onRsvp,
+    onLike,
     businessName,
     locality,
 }) => {
@@ -62,7 +66,7 @@ const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
             {/* Dark Overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/20" />
 
-            {/* Top Row: Vibe Badge + Location + Interest */}
+            {/* Top Row: Vibe Badge + Location + Interest + Heart */}
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider ${vibeBg}`}>
@@ -75,9 +79,22 @@ const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
                         </span>
                     )}
                 </div>
-                <div className="text-right">
-                    <p className="text-[9px] font-black text-white/60 uppercase tracking-widest">Interest</p>
-                    <p className="text-2xl font-black text-white leading-none">{event.interestedCount}</p>
+                <div className="flex items-center gap-2">
+                    {/* Heart button */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onLike(event.id, e); }}
+                        className="p-2 bg-black/40 backdrop-blur-xl rounded-full border border-white/10 hover:scale-110 active:scale-90 transition-all"
+                    >
+                        <Heart
+                            className={`w-4 h-4 transition-colors ${
+                                isFavorite ? 'fill-rose-500 text-rose-500' : 'text-white'
+                            }`}
+                        />
+                    </button>
+                    <div className="text-right">
+                        <p className="text-[9px] font-black text-white/60 uppercase tracking-widest">Interest</p>
+                        <p className="text-2xl font-black text-white leading-none">{event.interestedCount}</p>
+                    </div>
                 </div>
             </div>
 
@@ -141,7 +158,9 @@ export const Calendar: React.FC = () => {
         handleRSVP,
         rsvpStatus,
         user,
-        events
+        events,
+        toggleFavorite,
+        favorites
     } = useData();
 
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
@@ -190,15 +209,82 @@ export const Calendar: React.FC = () => {
 
     const RANGE_LABELS = { day: 'Daily', week: 'Weekly', month: 'Monthly' } as const;
 
-    // Filter events for a specific date
-    const getEventsForDate = (date: Date) =>
-        eventsWithLiveCounts.filter(e => {
-            const d = new Date(e.startAt);
-            return d.getDate() === date.getDate() &&
-                d.getMonth() === date.getMonth() &&
-                d.getFullYear() === date.getFullYear() &&
-                e.status !== 'deactivated';
-        }).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+    // Check if event is active (ongoing now)
+    const isEventActive = (event: MontanitaEvent): boolean => {
+        const now = new Date();
+        const start = new Date(event.startAt);
+        const end = event.endAt ? new Date(event.endAt) : new Date(start.getTime() + 4 * 3600000);
+        return now >= start && now <= end && event.status !== 'deactivated';
+    };
+
+    // Check if event has ended
+    const isEventTerminated = (event: MontanitaEvent): boolean => {
+        const now = new Date();
+        const end = event.endAt ? new Date(event.endAt) : new Date(new Date(event.startAt).getTime() + 4 * 3600000);
+        return now > end || event.status === 'deactivated';
+    };
+
+    // Check if event is upcoming
+    const isEventUpcoming = (event: MontanitaEvent): boolean => {
+        const now = new Date();
+        const start = new Date(event.startAt);
+        return now < start && event.status !== 'deactivated';
+    };
+
+    // Filter events for a specific date (including ongoing events)
+    const getEventsForDate = (date: Date) => {
+        const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const dateEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+        
+        return eventsWithLiveCounts.filter(e => {
+            const start = new Date(e.startAt);
+            const end = e.endAt ? new Date(e.endAt) : new Date(start.getTime() + 4 * 3600000);
+            
+            // Event starts on this date OR event is ongoing on this date OR event spans across this date
+            const startsOnDate = start.getDate() === date.getDate() && start.getMonth() === date.getMonth() && start.getFullYear() === date.getFullYear();
+            const endsOnDate = end.getDate() === date.getDate() && end.getMonth() === date.getMonth() && end.getFullYear() === date.getFullYear();
+            const spansDate = start < dateEnd && end > dateStart;
+            
+            return (startsOnDate || endsOnDate || spansDate) && e.status !== 'deactivated';
+        }).sort((a, b) => {
+            // Sort by: active first, then upcoming, then by start time
+            const aActive = isEventActive(a);
+            const bActive = isEventActive(b);
+            if (aActive && !bActive) return -1;
+            if (!aActive && bActive) return 1;
+            return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+        });
+    };
+
+    // Get events for month view sorted by status
+    const getEventsForMonth = () => {
+        const year = calendarBaseDate.getFullYear();
+        const month = calendarBaseDate.getMonth();
+        
+        return eventsWithLiveCounts.filter(e => {
+            const start = new Date(e.startAt);
+            const end = e.endAt ? new Date(e.endAt) : new Date(start.getTime() + 4 * 3600000);
+            
+            // Event starts in this month OR ends in this month OR spans this month
+            const startsInMonth = start.getMonth() === month && start.getFullYear() === year;
+            const endsInMonth = end.getMonth() === month && end.getFullYear() === year;
+            const spansMonth = start.getMonth() <= month && end.getMonth() >= month && start.getFullYear() <= year && end.getFullYear() >= year;
+            
+            return (startsInMonth || endsInMonth || spansMonth) && e.status !== 'deactivated';
+        }).sort((a, b) => {
+            // Sort: active first, then upcoming, then terminated
+            const aActive = isEventActive(a);
+            const bActive = isEventActive(b);
+            const aTerminated = isEventTerminated(a);
+            const bTerminated = isEventTerminated(b);
+            
+            if (aActive && !bActive) return -1;
+            if (!aActive && bActive) return 1;
+            if (aTerminated && !bTerminated) return 1;
+            if (!aTerminated && bTerminated) return -1;
+            return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+        });
+    };
 
     const getBusinessName = (event: MontanitaEvent) =>
         businesses.find(b => b.id === event.businessId)?.name;
@@ -308,8 +394,10 @@ export const Calendar: React.FC = () => {
                                     key={event.id}
                                     event={event}
                                     isRsvp={!!rsvpStatus[event.id]}
+                                    isFavorite={favorites.includes(event.id)}
                                     onSelect={onSelectEvent}
                                     onRsvp={handleRSVP}
+                                    onLike={toggleFavorite}
                                     businessName={getBusinessName(event)}
                                     locality={getLocality(event)}
                                 />
@@ -348,8 +436,10 @@ export const Calendar: React.FC = () => {
                                             key={event.id}
                                             event={event}
                                             isRsvp={!!rsvpStatus[event.id]}
+                                            isFavorite={favorites.includes(event.id)}
                                             onSelect={onSelectEvent}
                                             onRsvp={handleRSVP}
+                                            onLike={toggleFavorite}
                                             businessName={getBusinessName(event)}
                                             locality={getLocality(event)}
                                         />
@@ -372,12 +462,7 @@ export const Calendar: React.FC = () => {
 
                 {/* ── MONTHLY VIEW ── */}
                 {agendaRange === 'month' && (() => {
-                    const monthEvents = eventsWithLiveCounts.filter(e => {
-                        const d = new Date(e.startAt);
-                        return d.getMonth() === calendarBaseDate.getMonth() &&
-                            d.getFullYear() === calendarBaseDate.getFullYear() &&
-                            e.status !== 'deactivated';
-                    }).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+                    const monthEvents = getEventsForMonth();
 
                     if (monthEvents.length === 0) return (
                         <div className="py-20 text-center">
@@ -385,7 +470,7 @@ export const Calendar: React.FC = () => {
                         </div>
                     );
 
-                    // Group by day
+                    // Group by day and sort events within each day
                     const grouped: Record<string, MontanitaEvent[]> = {};
                     monthEvents.forEach(event => {
                         const key = new Date(event.startAt).toDateString();
@@ -393,9 +478,15 @@ export const Calendar: React.FC = () => {
                         grouped[key].push(event);
                     });
 
+                    // Sort grouped by date
+                    const sortedDates = Object.keys(grouped).sort((a, b) => 
+                        new Date(a).getTime() - new Date(b).getTime()
+                    );
+
                     return (
                         <div className="space-y-6">
-                            {Object.entries(grouped).map(([dateStr, dayEvents]) => {
+                            {sortedDates.map((dateStr) => {
+                                const dayEvents = grouped[dateStr];
                                 const date = new Date(dateStr);
                                 const isToday = date.toDateString() === new Date().toDateString();
                                 return (
@@ -418,8 +509,10 @@ export const Calendar: React.FC = () => {
                                                 key={event.id}
                                                 event={event}
                                                 isRsvp={!!rsvpStatus[event.id]}
+                                                isFavorite={favorites.includes(event.id)}
                                                 onSelect={onSelectEvent}
                                                 onRsvp={handleRSVP}
+                                                onLike={toggleFavorite}
                                                 businessName={getBusinessName(event)}
                                                 locality={getLocality(event)}
                                             />

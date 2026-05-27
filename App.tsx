@@ -24,7 +24,6 @@ const EventCard = lazy(() => import('./components/EventCard').then(m => ({ defau
 const EventModal = lazy(() => import('./components/EventModal').then(m => ({ default: m.EventModal })));
 const MigrationPanel = lazy(() => import('./components/MigrationPanel').then(m => ({ default: m.MigrationPanel })));
 const LoginScreen = lazy(() => import('./components/LoginScreen').then(m => ({ default: m.LoginScreen })));
-const PulseModal = lazy(() => import('./components/Modals/PulseModal').then(m => ({ default: m.PulseModal })));
 const PulsePassModal = lazy(() => import('./components/Modals/PulsePassModal').then(m => ({ default: m.PulsePassModal })));
 const BusinessEditModal = lazy(() => import('./components/Modals/BusinessEditModal').then(m => ({ default: m.BusinessEditModal })));
 const EventEditorModal = lazy(() => import('./components/Modals/EventEditorModal').then(m => ({ default: m.EventEditorModal })));
@@ -97,7 +96,6 @@ const Dashboard: React.FC = () => {
     isCalendarFilterActive, setIsCalendarFilterActive,
     calendarBaseDate, setCalendarBaseDate,
     showCalendarModal, setShowCalendarModal,
-    showPulseModal, setShowPulseModal,
     showPulsePassModal, setShowPulsePassModal,
     sectorPolygons, setSectorPolygons,
     sectorLabels, setSectorLabels,
@@ -145,20 +143,6 @@ const Dashboard: React.FC = () => {
     customLocalities
   } = useData();
 
-  const canUserEditBusiness = (id: string): boolean => {
-    if (canEditAllBusiness) return true;
-    if (canEditOwnBusiness && id === user?.businessId) return true;
-    return false;
-  };
-
-  const handleEditBusiness = (id: string) => {
-    if (!canUserEditBusiness(id)) {
-      showToast('Solo puedes editar tu propio negocio', 'error');
-      return;
-    }
-    setEditingBusinessId(id);
-    setShowBusinessEdit(true);
-  };
 
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiRecData, setAiRecData] = useState<any>(null);
@@ -223,7 +207,8 @@ const Dashboard: React.FC = () => {
 
   React.useEffect(() => {
     const path = location.pathname;
-    if (path === '/' || path === '/explore' || path.startsWith('/evento/') || path.startsWith('/negocio/')) setActiveView('explore');
+    if (path === '/' || path === '/explore' || path.startsWith('/evento/')) setActiveView('explore');
+    else if (path.startsWith('/negocio/')) setActiveView('services');
     else if (path === '/calendar') setActiveView('calendar');
     else if (path === '/community' || path === '/chat') setActiveView('community');
     else if (path === '/passport') setActiveView('favorites');
@@ -237,52 +222,77 @@ const Dashboard: React.FC = () => {
   }, [location.pathname]);
 
   const urlToStateRef = React.useRef<string>('');
-  const initialLoadRef = React.useRef(true);
+  const hasProcessedUrlRef = React.useRef(false);
   
   // Sincronizar URL hacia el estado (solo al cargar la página, no cuando el usuario abre algo)
   React.useEffect(() => {
-    if (!initialLoadRef.current) return;
-    initialLoadRef.current = false;
+    if (hasProcessedUrlRef.current) return;
     
     const path = location.pathname;
     const searchParams = new URLSearchParams(location.search);
+    const hasEventUrl = path.startsWith('/evento/') || searchParams.has('event');
+    const hasBusinessUrl = path.startsWith('/negocio/') || searchParams.has('business');
+    
+    if (!hasEventUrl && !hasBusinessUrl) {
+      hasProcessedUrlRef.current = true;
+      return;
+    }
+    
+    let processed = false;
+    let shouldMarkProcessed = false;
     
     // Parsear Slugs de la URL
     if (path.startsWith('/evento/')) {
       const slug = path.replace('/evento/', '');
-      if (slug && eventsWithLiveCounts.length > 0 && !selectedEvent) {
+      if (eventsWithLiveCounts.length > 0) {
+        shouldMarkProcessed = true;
         const event = eventsWithLiveCounts.find(e => e.slug === slug || e.id === slug);
-        if (event) setSelectedEvent(event);
+        if (event) {
+          setSelectedEvent(event);
+          processed = true;
+        }
       }
     } else if (path.startsWith('/negocio/')) {
       const slug = path.replace('/negocio/', '');
-      if (slug && businesses.length > 0) {
+      if (businesses.length > 0) {
+        shouldMarkProcessed = true;
         urlToStateRef.current = path;
         const business = businesses.find(b => b.slug === slug || b.id === slug);
         if (business) {
           setPublicProfileId(business.id);
           setPublicProfileType('business');
           setShowPublicProfile(true);
+          processed = true;
         }
       }
     }
     
     // Compatibilidad hacia atrás (URL Params antiguos)
     const eventId = searchParams.get('event');
-    if (eventId && eventsWithLiveCounts.length > 0 && !selectedEvent) {
+    if (eventId && eventsWithLiveCounts.length > 0) {
+       shouldMarkProcessed = true;
        const event = eventsWithLiveCounts.find(e => e.id === eventId);
-       if (event) setSelectedEvent(event);
+       if (event) {
+         setSelectedEvent(event);
+         processed = true;
+       }
     }
     const bizId = searchParams.get('business');
     if (bizId && businesses.length > 0) {
+       shouldMarkProcessed = true;
        const biz = businesses.find(b => b.id === bizId);
        if (biz) {
          setPublicProfileId(biz.id);
          setPublicProfileType('business');
          setShowPublicProfile(true);
+         processed = true;
        }
     }
-  }, []);
+
+    if (processed || shouldMarkProcessed) {
+      hasProcessedUrlRef.current = true;
+    }
+  }, [businesses, eventsWithLiveCounts, selectedEvent]);
 
   const prevUrlRef = React.useRef<string>('');
   const prevShowPublicProfileRef = React.useRef(false);
@@ -327,14 +337,24 @@ const Dashboard: React.FC = () => {
             window.history.replaceState(null, '', `/negocio/${slug}`);
          }
        }
+    } else if (activeView === 'services' && currentPath.startsWith('/negocio/')) {
+        // Limpiar la URL a /services si se cerró el modal estando en la vista de servicios
+        if (hasProcessedUrlRef.current) {
+           prevUrlRef.current = '/services';
+           window.history.replaceState(null, '', '/services');
+        }
     } else if (activeView === 'explore' && (currentPath.startsWith('/evento/') || currentPath.startsWith('/negocio/'))) {
-       prevUrlRef.current = '/explore';
-       window.history.replaceState(null, '', '/explore');
+       // Solo limpiar la URL a /explore si ya se procesó el deep-link inicial
+       if (hasProcessedUrlRef.current) {
+          prevUrlRef.current = '/explore';
+          window.history.replaceState(null, '', '/explore');
+       }
     }
   }, [selectedEvent, showPublicProfile, publicProfileId, publicProfileType, activeView]);
 
   const [profileError, setProfileError] = useState<string | null>(null);
   const [managementTab, setManagementTab] = useState<'users' | 'businesses' | 'stats'>('users');
+  const [focusMapCoords, setFocusMapCoords] = useState<{ coords: [number, number]; zoom: number } | null>(null);
 
   const resizeRefreshRef = React.useRef(false);
   React.useEffect(() => {
@@ -417,8 +437,23 @@ const Dashboard: React.FC = () => {
     SubscriptionPlan.EXPERT
   ].includes(user.plan as SubscriptionPlan);
 
-  const canEditOwnBusiness = isPremiumUser && userBusiness;
   const canEditAllBusiness = isAdmin || isSuperUser;
+  const canEditOwnBusiness = isPremiumUser && userBusiness;
+
+  const canUserEditBusiness = (id: string): boolean => {
+    if (canEditAllBusiness) return true;
+    if (canEditOwnBusiness && id === user?.businessId) return true;
+    return false;
+  };
+
+  const handleEditBusiness = (id: string) => {
+    if (!canUserEditBusiness(id)) {
+      showToast('Solo puedes editar tu propio negocio', 'error');
+      return;
+    }
+    setEditingBusinessId(id);
+    setShowBusinessEdit(true);
+  };
 
   const handleAddBusinessMap = (lat: number, lng: number) => {
     // Permisos: Administradores o Usuarios Elite (pueden crear nuevos) o Dueños de negocio Pro (pueden mover el suyo)
@@ -462,6 +497,8 @@ const Dashboard: React.FC = () => {
               <Explore
                 onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)}
                 userBusinessId={userBusiness?.id}
+                focusCoords={focusMapCoords}
+                onClearFocusCoords={() => setFocusMapCoords(null)}
               />
             </Suspense>
           </ErrorBoundary>
@@ -527,7 +564,11 @@ const Dashboard: React.FC = () => {
         return (
           <ErrorBoundary name="Default Explore">
             <Suspense fallback={<PageLoader />}>
-              <Explore onEditBusiness={handleEditBusiness} />
+              <Explore 
+                onEditBusiness={handleEditBusiness} 
+                focusCoords={focusMapCoords}
+                onClearFocusCoords={() => setFocusMapCoords(null)}
+              />
             </Suspense>
           </ErrorBoundary>
         );
@@ -876,9 +917,7 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      <Suspense fallback={null}>
-        <PulseModal />
-      </Suspense>
+
       <Suspense fallback={null}>
         <PulsePassModal
           isOpen={showPulsePassModal}
@@ -886,29 +925,7 @@ const Dashboard: React.FC = () => {
         />
       </Suspense>
 
-      {/* Global Pulse Window FAB */}
-      {!isEditorFocus && (
-        <div className="fixed bottom-36 right-6 z-[1100] animate-in slide-in-from-right duration-500 delay-150">
-          <button
-            onClick={() => setShowPulseModal(true)}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              setShowPulseModal(true);
-            }}
-            className="group relative w-16 h-16 bg-[#111111] border-2 border-orange-500/30 rounded-2xl flex flex-col items-center justify-center shadow-[0_20px_50px_rgba(0,0,0,0.8)] transition-all hover:scale-110 active:scale-95 hover:border-orange-500 hover:shadow-[0_20px_60px_rgba(249,115,22,0.3)] overflow-hidden cursor-pointer"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-amber-500/10 opacity-50" />
-            <Activity className="w-6 h-6 text-orange-500 mb-1 group-hover:animate-pulse" />
-            <span className="text-[8px] font-black text-orange-400 uppercase tracking-tighter leading-none">PULSE</span>
 
-            <div className="absolute -top-12 right-0 bg-slate-900 border border-white/10 px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none translate-y-2 group-hover:translate-y-0 shadow-2xl">
-              <span className="text-[9px] font-black text-white uppercase tracking-widest whitespace-nowrap">Ventana de Pulse</span>
-            </div>
-
-            <div className="absolute inset-0 rounded-2xl ring-4 ring-orange-500/20 animate-pulse opacity-50" />
-          </button>
-        </div>
-      )}
 
       {/* Global Login Modal Overlay */}
       {showLogin && !user && (
@@ -947,7 +964,7 @@ const Dashboard: React.FC = () => {
             onPrevious={navigateToPreviousEvent}
             hasNext={hasNextEvent}
             hasPrevious={hasPreviousEvent}
-            isAdmin={isAdmin}
+            isAdmin={canEditAllBusiness}
             onEdit={event => {
               handleEditEvent(event);
               setSelectedEvent(null);
@@ -979,6 +996,15 @@ const Dashboard: React.FC = () => {
             businessId={publicProfileType === 'business' ? publicProfileId || undefined : undefined}
             userId={publicProfileType === 'user' ? publicProfileId || undefined : undefined}
             dataLoading={loading}
+            onEditBusiness={(business) => handleEditBusiness(business.id)}
+            onDeleteBusiness={handleDeleteBusiness}
+            canEditAll={canEditAllBusiness}
+            onViewOnMap={(coords) => {
+              setFocusMapCoords({ coords, zoom: 19 });
+              setActiveView('explore');
+              setShowPublicProfile(false);
+              setIsPanelMinimized(true);
+            }}
           />
         </Suspense>
       )}

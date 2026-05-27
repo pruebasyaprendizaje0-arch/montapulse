@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, CheckCircle, MapPin, Store, Edit3, Zap } from 'lucide-react';
-import { BusinessCategory } from '../../types';
+import { X, CheckCircle, MapPin, Store, Edit3, Zap, Compass } from 'lucide-react';
+import { BusinessCategory, MapEntryType } from '../../types';
 import { MAP_ICONS } from '../../constants';
 import { useToast } from '../../context/ToastContext';
 
@@ -13,6 +13,7 @@ interface PointCreationModalProps {
     category: BusinessCategory;
     icon: string;
     isReference: boolean;
+    mapType: MapEntryType;
     coordinates: [number, number];
     locality: string;
     sector: string;
@@ -24,6 +25,7 @@ interface PointCreationModalProps {
     category: BusinessCategory;
     icon: string;
     isReference: boolean;
+    mapType?: MapEntryType;
   };
   coordinates: [number, number];
   locality: string;
@@ -46,6 +48,7 @@ export const PointCreationModal: React.FC<PointCreationModalProps> = ({
   const [category, setCategory] = useState<BusinessCategory>(initialData?.category || BusinessCategory.OTRO);
   const [icon, setIcon] = useState(initialData?.icon || 'map');
   const [isReference, setIsReference] = useState(initialData?.isReference || false);
+  const [mapType, setMapType] = useState<MapEntryType>(initialData?.mapType || (initialData?.isReference ? MapEntryType.LANDMARK : MapEntryType.BUSINESS));
 
   const handleSubmit = () => {
     if (!name.trim()) {
@@ -59,6 +62,7 @@ export const PointCreationModal: React.FC<PointCreationModalProps> = ({
       category,
       icon,
       isReference,
+      mapType,
       coordinates,
       locality,
       sector
@@ -79,11 +83,11 @@ export const PointCreationModal: React.FC<PointCreationModalProps> = ({
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl flex items-center justify-center">
-              {isReference ? <MapPin className="w-5 h-5 text-white" /> : <Store className="w-5 h-5 text-white" />}
+              {mapType === MapEntryType.SECTOR ? <Compass className="w-5 h-5 text-white" /> : isReference ? <MapPin className="w-5 h-5 text-white" /> : <Store className="w-5 h-5 text-white" />}
             </div>
             <div>
               <h2 className="text-xl font-black text-white uppercase tracking-tight">
-                {isReference ? 'Nuevo Punto de Referencia' : 'Nuevo Negocio'}
+                {mapType === MapEntryType.SECTOR ? 'Nuevo Sector/Barrio' : isReference ? 'Nuevo Punto de Referencia' : 'Nuevo Negocio'}
               </h2>
               <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">
                 Configura los detalles básicos
@@ -116,22 +120,39 @@ export const PointCreationModal: React.FC<PointCreationModalProps> = ({
         {/* Point Type Selector */}
         <div className="mb-6">
           <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Tipo de Punto</label>
-          <div className="grid grid-cols-2 gap-3 p-1 bg-slate-800/30 rounded-[2rem] border border-white/5">
+          <div className="grid grid-cols-3 gap-3 p-1 bg-slate-800/30 rounded-[2rem] border border-white/5">
             <button
               type="button"
-              onClick={() => setIsReference(false)}
-              className={`flex flex-col items-center justify-center py-3 rounded-[1.5rem] transition-all gap-2 ${!isReference ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+              onClick={() => {
+                setIsReference(false);
+                setMapType(MapEntryType.BUSINESS);
+              }}
+              className={`flex flex-col items-center justify-center py-3 rounded-[1.5rem] transition-all gap-2 ${mapType === MapEntryType.BUSINESS ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
               <Store className="w-5 h-5" />
               <span className="text-[9px] font-black uppercase tracking-widest">Negocio</span>
             </button>
             <button
               type="button"
-              onClick={() => setIsReference(true)}
-              className={`flex flex-col items-center justify-center py-3 rounded-[1.5rem] transition-all gap-2 ${isReference ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+              onClick={() => {
+                setIsReference(true);
+                setMapType(MapEntryType.LANDMARK);
+              }}
+              className={`flex flex-col items-center justify-center py-3 rounded-[1.5rem] transition-all gap-2 ${mapType === MapEntryType.LANDMARK ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
               <MapPin className="w-5 h-5" />
               <span className="text-[9px] font-black uppercase tracking-widest">Referencia</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsReference(true);
+                setMapType(MapEntryType.SECTOR);
+              }}
+              className={`flex flex-col items-center justify-center py-3 rounded-[1.5rem] transition-all gap-2 ${mapType === MapEntryType.SECTOR ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              <Compass className="w-5 h-5" />
+              <span className="text-[9px] font-black uppercase tracking-widest">Sector</span>
             </button>
           </div>
         </div>
@@ -139,14 +160,14 @@ export const PointCreationModal: React.FC<PointCreationModalProps> = ({
         {/* Name Input */}
         <div className="mb-6">
           <label className="text-xs font-black text-slate-500 uppercase mb-2 block tracking-widest">
-            {isReference ? 'Nombre del Punto' : 'Nombre Comercial'}
+            {mapType === MapEntryType.SECTOR ? 'Nombre del Sector' : isReference ? 'Nombre del Punto' : 'Nombre Comercial'}
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-            placeholder={isReference ? "Ej: Letras de Montañita" : "Nombre del negocio"}
+            placeholder={mapType === MapEntryType.SECTOR ? "Ej: Barrio Las Brisas" : isReference ? "Ej: Letras de Montañita" : "Nombre del negocio"}
           />
         </div>
 

@@ -16,10 +16,12 @@ import { SubscriptionPlan, UserProfile } from '../types';
 // PLAN LIMITS CONFIGURATION
 export const PLAN_LIMITS = {
   [SubscriptionPlan.FREE]: {
-    maxEvents: 0,
+    maxEvents: 1,
     maxAnnouncements: 0,
     hasPremiumIcon: false,
     canCreateBusiness: false,
+    canManageOwnMapPoint: false,
+    canManageAllMapPoints: false,
     canFollow: true,
     canReview: true,
     canReceiveNotifications: false,
@@ -29,6 +31,8 @@ export const PLAN_LIMITS = {
     maxAnnouncements: 5,
     hasPremiumIcon: true,
     canCreateBusiness: true,
+    canManageOwnMapPoint: true,   // 1 punto: su negocio
+    canManageAllMapPoints: false,
     canFollow: true,
     canReview: true,
     canReceiveNotifications: true,
@@ -38,6 +42,8 @@ export const PLAN_LIMITS = {
     maxAnnouncements: 10,
     hasPremiumIcon: true,
     canCreateBusiness: true,
+    canManageOwnMapPoint: true,   // 1 punto: su negocio
+    canManageAllMapPoints: false,
     canFollow: true,
     canReview: true,
     canReceiveNotifications: true,
@@ -47,6 +53,8 @@ export const PLAN_LIMITS = {
     maxAnnouncements: Infinity,
     hasPremiumIcon: true,
     canCreateBusiness: true,
+    canManageOwnMapPoint: true,
+    canManageAllMapPoints: true,  // Negocios, POI y sectores ilimitados
     canFollow: true,
     canReview: true,
     canReceiveNotifications: true,
@@ -87,15 +95,6 @@ export const canUserCreateEvent = async (userId: string): Promise<{
   
   const limits = PLAN_LIMITS[plan];
   const maxEvents = limits.maxEvents;
-  
-  if (maxEvents === 0) {
-    return { 
-      allowed: false, 
-      reason: 'PLAN_DOES_NOT_ALLOW_EVENTS',
-      currentCount: 0,
-      maxAllowed: 0
-    };
-  }
   
   if (maxEvents === Infinity) {
     return { allowed: true };

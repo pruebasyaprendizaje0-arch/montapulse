@@ -24,7 +24,7 @@ import {
 import { db } from '../firebase.config';
 import { getEcuadorDate } from './dateUtils';
 import { generateSlug } from '../utils/stringUtils';
-import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, ProfileReview, PulseNotification, Announcement, SubscriptionPlan } from '../types';
+import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, ProfileReview, PulseNotification, Announcement, SubscriptionPlan, Lead } from '../types';
 
 // Helper to sanitize data for Firestore
 const sanitizeData = (data: any): any => {
@@ -1535,3 +1535,60 @@ export const subscribeToActiveBoosts = (businessId: string, callback: (boosts: a
         callback(boosts);
     });
 };
+
+// ==================== LEADS & PROSPECTING ====================
+
+export const subscribeToLeads = (callback: (leads: Lead[]) => void) => {
+    const leadsRef = collection(db, 'leads');
+    const q = query(leadsRef, orderBy('createdAt', 'desc'));
+    return safeOnSnapshot(q, (snapshot) => {
+        const leads = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || getEcuadorDate(),
+            updatedAt: doc.data().updatedAt?.toDate() || getEcuadorDate()
+        })) as Lead[];
+        callback(leads);
+    }, 'subscribeToLeads');
+};
+
+export const createLead = async (lead: Omit<Lead, 'id'>): Promise<string> => {
+    try {
+        const leadsRef = collection(db, 'leads');
+        const docRef = await addDoc(leadsRef, {
+            ...sanitizeData(lead),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error('Error creating lead:', error);
+        throw error;
+    }
+};
+
+export const updateLead = async (id: string, data: Partial<Lead>): Promise<void> => {
+    try {
+        const leadRef = doc(db, 'leads', id);
+        const sanitized = sanitizeData(data);
+        if (sanitized.id) delete sanitized.id;
+        await updateDoc(leadRef, {
+            ...sanitized,
+            updatedAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Error updating lead:', error);
+        throw error;
+    }
+};
+
+export const deleteLead = async (id: string): Promise<void> => {
+    try {
+        const leadRef = doc(db, 'leads', id);
+        await deleteDoc(leadRef);
+    } catch (error) {
+        console.error('Error deleting lead:', error);
+        throw error;
+    }
+};
+

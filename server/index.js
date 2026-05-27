@@ -5,6 +5,9 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 
 // Load environment variables
+if (fs.existsSync('.env.local')) {
+    dotenv.config({ path: '.env.local' });
+}
 dotenv.config();
 
 const app = express();
@@ -81,6 +84,68 @@ app.post('/api/create-checkout', async (req, res) => {
     } catch (globalError) {
         console.error('[Server] Critical Error:', globalError);
         res.status(500).json({ success: false, message: globalError.message });
+    }
+});
+
+/**
+ * Route: AI Proxy for OpenRouter
+ */
+app.post('/api/ai/openrouter', async (req, res) => {
+    try {
+        const OPENROUTER_API_KEY = process.env.VITE_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
+        if (!OPENROUTER_API_KEY) return res.status(500).json({ error: 'OpenRouter key missing on server' });
+        
+        const { messages, model, jsonMode, stream } = req.body;
+
+        const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+            model: model || 'minimax/minimax-m2.5:free',
+            messages,
+            max_tokens: 1024,
+            temperature: 0.7,
+            stream: stream || false,
+            ...(jsonMode ? { response_format: { type: 'json_object' } } : {})
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'http://localhost:5173',
+                'X-Title': 'Montapulse Local',
+            },
+            responseType: stream ? 'stream' : 'json'
+        });
+
+        if (stream) {
+            response.data.pipe(res);
+        } else {
+            res.json(response.data);
+        }
+    } catch (err) {
+        console.error('[AI Proxy] OpenRouter Error:', err.response?.data || err.message);
+        res.status(500).json({ error: 'AI processing failed' });
+    }
+});
+
+/**
+ * Route: AI Proxy for Gemini
+ */
+app.post('/api/ai/gemini', async (req, res) => {
+    try {
+        const GEMINI_API_KEY = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+        if (!GEMINI_API_KEY) return res.status(500).json({ error: 'Gemini key missing on server' });
+
+        const { prompt } = req.body;
+        
+        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            contents: [{ parts: [{ text: prompt }] }]
+        }, {
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        res.json({ text });
+    } catch (err) {
+        console.error('[AI Proxy] Gemini Error:', err.response?.data || err.message);
+        res.status(500).json({ error: 'AI processing failed' });
     }
 });
 

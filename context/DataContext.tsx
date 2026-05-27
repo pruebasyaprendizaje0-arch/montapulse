@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef, useCallback } from 'react';
-import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings, Announcement } from '../types';
+import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings, Announcement, MapEntryType } from '../types';
 import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition } from '../constants';
 import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAllSettings,
@@ -17,7 +17,7 @@ import {
     subscribeToNotifications, createNotification, markNotificationRead, markAllNotificationsRead,
     subscribeToAnnouncements, createAnnouncement, deleteAnnouncement,
     incrementEventViewCount, incrementEventClickCount as serviceIncrementClick,
-    subscribeToChatRooms, markRoomAsRead, subscribeToMasterData
+    subscribeToChatRooms, markRoomAsRead, subscribeToMasterData, createMasterDataItem
 } from '../services/firestoreService';
 import { 
     subscribeToPublicCoupons, 
@@ -65,7 +65,11 @@ interface DataContextType {
         coordinates?: [number, number];
         plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
         isReference?: boolean;
+        mapType?: MapEntryType;
+        isPublished?: boolean;
+        isVerified?: boolean;
         email: string;
+        openingHours?: Record<string, any>;
         ownerId?: string;
     };
     setBizForm: React.Dispatch<React.SetStateAction<{
@@ -82,7 +86,11 @@ interface DataContextType {
         coordinates?: [number, number];
         plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
         isReference?: boolean;
+        mapType?: MapEntryType;
+        isPublished?: boolean;
+        isVerified?: boolean;
         email: string;
+        openingHours?: Record<string, any>;
         ownerId?: string;
     }>>;
     rsvpStatus: Record<string, boolean>;
@@ -115,9 +123,9 @@ interface DataContextType {
     setCalendarBaseDate: (date: Date) => void;
     showCalendarModal: boolean;
     setShowCalendarModal: (show: boolean) => void;
-    showPulseModal: boolean;
     showPulsePassModal: boolean;
     setShowPulsePassModal: (show: boolean) => void;
+    showPulseModal: boolean;
     setShowPulseModal: (show: boolean) => void;
     sectorPolygons: Record<Sector, [number, number][]>;
     setSectorPolygons: React.Dispatch<React.SetStateAction<Record<Sector, [number, number][]>>>;
@@ -159,6 +167,9 @@ interface DataContextType {
     masterTags: any[];
     masterSectors: any[];
     masterVibes: any[];
+    masterActivities: any[];
+    handleSeedVibes: () => Promise<void>;
+    handleSeedActivities: () => Promise<void>;
     toggleSector: (sector: Sector) => void;
     handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>, target: 'event' | 'business') => void;
 
@@ -291,7 +302,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         [SubscriptionPlan.PRO]: '5 Pulsos activos/mes',
         [SubscriptionPlan.ELITE]: '10 Pulsos activos/mes',
         [SubscriptionPlan.EXPERT]: 'Soporte VIP 24/7'
-    });    const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+    });    const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
     const [posts, setPosts] = useState<CommunityPost[]>([]);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [services, setServices] = useState<ServiceCategory[]>([]);
@@ -312,14 +323,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [masterCategories, setMasterCategories] = useState<any[]>([]);
     const [masterTags, setMasterTags] = useState<any[]>([]);
     const [masterSectors, setMasterSectors] = useState<any[]>([]);
-    const [masterVibes, setMasterVibes] = useState<any[]>([]);
+    // Default vibes matching the Admin Center canonical list — overwritten by Firestore once loaded
+    const CANONICAL_VIBES = [
+        { name: 'Aburrido', label: 'Aburrido', icon: 'HelpCircle', color: '#94a3b8' },
+        { name: 'Agradecido', label: 'Agradecido', icon: 'Heart', color: '#ec4899' },
+        { name: 'Cansado', label: 'Cansado', icon: 'Moon', color: '#38bdf8' },
+        { name: 'Curioso', label: 'Curioso', icon: 'Compass', color: '#a855f7' },
+        { name: 'Enfermo', label: 'Enfermo', icon: 'Thermometer', color: '#ef4444' },
+        { name: 'Feliz', label: 'Feliz', icon: 'Smile', color: '#f59e0b' },
+        { name: 'Hambriento', label: 'Hambriento', icon: 'Utensils', color: '#fb923c' },
+        { name: 'Inspirado', label: 'Inspirado', icon: 'Sparkles', color: '#c084fc' },
+        { name: 'Relajado', label: 'Relajado', icon: 'Wind', color: '#2dd4bf' },
+        { name: 'Triste', label: 'Triste', icon: 'Frown', color: '#64748b' },
+    ];
+    const [masterVibes, setMasterVibes] = useState<any[]>(CANONICAL_VIBES);
+    const [masterActivities, setMasterActivities] = useState<any[]>([]);
 
     const [agendaRange, setAgendaRange] = useState<'day' | 'week' | 'month'>('day');
     const [calendarBaseDate, setCalendarBaseDate] = useState(new Date());
     const [isCalendarFilterActive, setIsCalendarFilterActive] = useState(false);
     const [showCalendarModal, setShowCalendarModal] = useState(false);
-    const [showPulseModal, setShowPulseModal] = useState(false);
     const [showPulsePassModal, setShowPulsePassModal] = useState(false);
+    const [showPulseModal, setShowPulseModal] = useState(false);
 
     const [showBusinessEdit, setShowBusinessEdit] = useState(false);
     const [showProfileEdit, setShowProfileEdit] = useState(false);
@@ -348,6 +373,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         coordinates: null as any,
         plannerCategory: null,
         isReference: false,
+        mapType: MapEntryType.BUSINESS,
         isPublished: true,
         isVerified: false,
         email: '',
@@ -607,7 +633,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     isVerified: business.isVerified || false,
                     plannerCategory: (business as any).plannerCategory || null,
                     openingHours: business.openingHours || {},
-                    ownerId: business.ownerId || 'admin'
+                    ownerId: business.ownerId || 'admin',
+                    mapType: business.mapType || MapEntryType.BUSINESS
                 });
             }
         }
@@ -718,8 +745,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setMasterTags(data);
             });
             const unsubVibes = subscribeToMasterData('vibes', (data) => {
+                setMasterVibes(data);
+            });
+            const unsubSectors = subscribeToMasterData('sectors', (data) => {
+                setMasterSectors(data);
+            });
+            const unsubActivities = subscribeToMasterData('activities', (data) => {
                 if (active) {
-                    setMasterVibes(data);
+                    setMasterActivities(data);
                     masterDataLoaded = true;
                     checkInitialLoad();
                 }
@@ -813,6 +846,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 unsubCategories();
                 unsubTags();
                 unsubVibes();
+                unsubSectors();
+                unsubActivities();
                 unsubFavs();
                 unsubFollows();
                 unsubPublicCoupons();
@@ -1248,6 +1283,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleUpdateBusinessProfile = async (): Promise<boolean> => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return false;
+        }
         const targetBusinessId = editingBusinessId || user?.businessId;
         if (!targetBusinessId) return false;
 
@@ -1311,6 +1350,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleUpdatePaymentDetails = async () => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         try {
             await updateAppSettings('payment_info', paymentDetails);
             showToast('Información de pago actualizada correctamente', 'success');
@@ -1322,6 +1365,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleUpdatePlanPrices = async (prices: Record<SubscriptionPlan, number>) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         try {
             await updateAppSettings('plan_prices', { prices });
             showToast('Precios de planes actualizados correctamente', 'success');
@@ -1333,6 +1380,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleUpdatePlanFeatures = async (features: Record<SubscriptionPlan, PlanFeatureDefinition[]>) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         try {
             await updateAppSettings('plan_features', { features });
             setPlanFeatures(features);
@@ -1345,6 +1396,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleUpdatePlanLimits = async (limits: Record<SubscriptionPlan, number>) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         try {
             await updateAppSettings('plan_limits', { limits });
             setPlanLimits(limits);
@@ -1357,6 +1412,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleUpdatePlanNames = async (names: Record<SubscriptionPlan, string>) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         try {
             await updateAppSettings('plan_names', { names });
             setPlanNames(names);
@@ -1369,6 +1428,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleUpdatePlanSubtitles = async (subtitles: Record<SubscriptionPlan, string>) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         try {
             await updateAppSettings('plan_subtitles', { subtitles });
             setPlanSubtitles(subtitles);
@@ -1381,6 +1444,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleUpdateAppSettings = async (settings: Partial<AppSettings>) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         try {
             await updateAppSettings('app_config', settings);
             setAppSettings(prev => prev ? { ...prev, ...settings } : settings as AppSettings);
@@ -1392,6 +1459,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleUpdatePolicies = async (data: PolicyData) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         try {
             await updateAppSettings('policies', data);
             setPolicyData(data);
@@ -1404,6 +1475,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleRestoreBusiness = async (id: string) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         try {
             await restoreBusiness(id);
             const b = deletedBusinesses.find(db => db.id === id);
@@ -1415,6 +1490,78 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (error) {
             console.error('Error restoring business:', error);
             showToast('Error al restaurar negocio', 'error');
+        }
+    };
+
+    const handleSeedVibes = async () => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
+        if (!showConfirm("¿Cargar las vibras predeterminadas? (Fiesta, Relax, etc.)", "Cargar Vibras")) return;
+        
+        const defaults = [
+            { name: 'Aburrido', label: 'Aburrido', icon: 'HelpCircle', color: '#94a3b8' },
+            { name: 'Agradecido', label: 'Agradecido', icon: 'Heart', color: '#ec4899' },
+            { name: 'Cansado', label: 'Cansado', icon: 'Moon', color: '#38bdf8' },
+            { name: 'Curioso', label: 'Curioso', icon: 'Compass', color: '#a855f7' },
+            { name: 'Enfermo', label: 'Enfermo', icon: 'Thermometer', color: '#ef4444' },
+            { name: 'Feliz', label: 'Feliz', icon: 'Smile', color: '#f59e0b' },
+            { name: 'Hambriento', label: 'Hambriento', icon: 'Utensils', color: '#fb923c' },
+            { name: 'Inspirado', label: 'Inspirado', icon: 'Sparkles', color: '#c084fc' },
+            { name: 'Relajado', label: 'Relajado', icon: 'Wind', color: '#2dd4bf' },
+            { name: 'Triste', label: 'Triste', icon: 'Frown', color: '#64748b' }
+        ];
+
+        setLoading(true);
+        try {
+            for (const item of defaults) {
+                if (!masterVibes.some((v: any) => v.name === item.name)) {
+                    await createMasterDataItem('vibes', item);
+                }
+            }
+            showToast("Vibras cargadas correctamente", "success");
+        } catch (error) {
+            console.error("Error seeding vibes:", error);
+            showToast("Error al cargar vibras", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSeedActivities = async () => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
+        if (!showConfirm("¿Cargar las actividades predeterminadas? (Bailar, Comer, Surf, etc.)", "Cargar Actividades")) return;
+        
+        const defaults = [
+            { name: 'Bailar', vibe: 'Feliz' },
+            { name: 'Comer', vibe: 'Hambriento' },
+            { name: 'Cuidado Personal', vibe: 'Enfermo' },
+            { name: 'Deporte', vibe: 'Inspirado' },
+            { name: 'Descansar', vibe: 'Cansado' },
+            { name: 'Farrear', vibe: 'Feliz' },
+            { name: 'Plan Relax', vibe: 'Relajado' },
+            { name: 'Surf', vibe: 'Aventura' },
+            { name: 'Trabajar', vibe: 'Curioso' },
+            { name: 'Turismo', vibe: 'Curioso' }
+        ];
+
+        setLoading(true);
+        try {
+            for (const item of defaults) {
+                if (!masterActivities.some((a: any) => a.name.toLowerCase() === item.name.toLowerCase())) {
+                    await createMasterDataItem('activities', item);
+                }
+            }
+            showToast("Actividades cargadas correctamente", "success");
+        } catch (error) {
+            console.error("Error seeding activities:", error);
+            showToast("Error al cargar predeterminados", "error");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -1462,6 +1609,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleDeleteBusiness = async (id: string) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         const confirmed = await showConfirm('¿Eliminar este punto (negocio o referencia) permanentemente? Esta acción limpiará todos los duplicados ocultos.');
         if (confirmed) {
             try {
@@ -1501,6 +1652,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handlePurgeAllReferences = async () => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         // If they are not super admin or admin, they shouldn't see it, but we check here too
         if (!isSuperUser && !isAdmin) {
             showToast('No tienes permisos suficientes.', 'error');
@@ -1545,6 +1700,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleCreateBusinessOnMap = async (lat: number, lng: number, isReference?: boolean) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         const label = isReference ? 'punto de referencia' : 'negocio';
         const name = await showPrompt(
             `Introduce el nombre del nuevo ${label}:`,
@@ -1594,6 +1753,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleUpdateBusinessLocation = async (id: string, lat: number, lng: number) => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
         setBusinesses(prev => prev.map(b => b.id === id ? { ...b, coordinates: [lat, lng], location: { lat, lng } } : b));
         await updateBusiness(id, { coordinates: [lat, lng], location: { lat, lng } });
         showToast('Ubicación actualizada y guardada.', 'success');
@@ -1858,6 +2021,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             },
             handleDeleteEvent: async (id: string) => {
+                if (isAdmin && !isSuperUser) {
+                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                    return;
+                }
                 const confirmed = await showConfirm('¿Estás seguro de que quieres eliminar este pulso?');
                 if (confirmed) {
                     await deleteEvent(id);
@@ -1866,6 +2033,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             },
             handleSaveEvent: async () => {
+                if (isAdmin && !isSuperUser) {
+                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                    return;
+                }
                 if (!user) return;
                 
                 const userBusiness = user.businessId ? businesses.find(b => b.id === user.businessId) : null;
@@ -1991,6 +2162,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             },
             toggleSector,
             handleImageUpload,
+            handleSeedVibes,
+            handleSeedActivities,
             showMigrationPanel,
             setShowMigrationPanel,
             setPaymentDetails,
@@ -2218,10 +2391,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             },
             services,
             handleUpdateServices: async (newServices: ServiceCategory[]) => {
+                if (isAdmin && !isSuperUser) {
+                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                    return;
+                }
                 await updateAppSettings('services_guide', { categories: newServices });
             },
             helpSupport,
             handleUpdateHelpSupport: async (newItems: HelpSupportItem[]) => {
+                if (isAdmin && !isSuperUser) {
+                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                    return;
+                }
                 await updateAppSettings('help_support', { items: newItems });
             },
             handleToggleFollow: async (businessId: string) => {
@@ -2299,16 +2480,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             masterTags,
             masterSectors,
             masterVibes,
-            showPulseModal,
-            setShowPulseModal,
+            masterActivities,
             deletedBusinesses,
             showPulsePassModal,
             setShowPulsePassModal,
+            showPulseModal,
+            setShowPulseModal,
             showLocalityManager,
             setShowLocalityManager,
             customLocalities,
             customLocalitySectors,
             handleAddCustomLocality: async (name: string, coords: [number, number], hasBeach: boolean) => {
+                if (isAdmin && !isSuperUser) {
+                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                    return;
+                }
                 if (appSettings && appSettings.allowLocalityCreation === false) {
                     showToast('La creación de localidades está desactivada globalmente.', 'error');
                     return;
@@ -2332,6 +2518,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             },
             handleUpdateCustomLocality: async (id: string, name: string, coords: [number, number], hasBeach: boolean) => {
+                if (isAdmin && !isSuperUser) {
+                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                    return;
+                }
                 try {
                     const sectors = [Sector.CENTRO, Sector.NORTE, Sector.SUR];
                     if (hasBeach) sectors.push(Sector.PLAYA);
@@ -2350,6 +2540,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             },
             handleDeleteCustomLocality: async (id: string, name: string) => {
+                if (isAdmin && !isSuperUser) {
+                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                    return;
+                }
                 try {
                     await deleteCustomLocality(id);
                     setCustomLocalities(prev => prev.filter(l => l.id !== id));
@@ -2359,6 +2553,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             },
             handleDeletePost: async (postId: string) => {
+                if (isAdmin && !isSuperUser) {
+                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                    return;
+                }
                 try {
                     await deletePost(postId);
                     showToast("Post eliminado", "success");
@@ -2368,6 +2566,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             },
             createAnnouncement: async (announcement: Omit<Announcement, 'id' | 'timestamp'>) => {
+                if (isAdmin && !isSuperUser) {
+                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                    return;
+                }
                 await createAnnouncement(announcement);
             },
             handleObtainCoupon: async (couponId: string, couponCode: string, userId: string, userName: string, businessId: string) => {

@@ -7,10 +7,7 @@ service firebase.storage {
     }
     
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.admin == true || 
-        request.auth.token.expert == true
-      );
+      return isAuthenticated() && request.auth.token.admin == true;
     }
     
     function isOwner(userId) {
@@ -31,16 +28,16 @@ service firebase.storage {
       return isValidImage() || isValidVideo();
     }
     
-    // Eventos - Acceso público lectura, Admin o Auth escritura
-    match /events/{eventId}/{allPaths=**} {
+    // Eventos - Acceso público lectura, dueño o Admin escritura
+    match /events/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isAdmin() || (isAuthenticated() && isValidMedia());
+      allow write: if isAdmin() || (isOwner(userId) && isValidMedia());
     }
     
-    // Negocios
+    // Negocios (Deprecated upload path, now uses uploads/userId/businesses)
     match /businesses/{businessId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isAdmin() || (isAuthenticated() && isValidMedia());
+      allow write: if isAdmin();
     }
     
     // Usuarios (Avatares)

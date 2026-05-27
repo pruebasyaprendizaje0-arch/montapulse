@@ -248,6 +248,68 @@ app.post('/api/create-checkout', async (req, res) => {
     }
 });
 
+/**
+ * Route: AI Proxy for OpenRouter
+ */
+app.post('/api/ai/openrouter', async (req, res) => {
+    try {
+        const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+        if (!OPENROUTER_API_KEY) return res.status(500).json({ error: 'OpenRouter key missing on server' });
+        
+        const { messages, model, jsonMode, stream } = req.body;
+
+        const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+            model: model || 'minimax/minimax-m2.5:free',
+            messages,
+            max_tokens: 1024,
+            temperature: 0.7,
+            stream: stream || false,
+            ...(jsonMode ? { response_format: { type: 'json_object' } } : {})
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://montapulse.com',
+                'X-Title': 'Montapulse',
+            },
+            responseType: stream ? 'stream' : 'json'
+        });
+
+        if (stream) {
+            response.data.pipe(res);
+        } else {
+            res.json(response.data);
+        }
+    } catch (err) {
+        logger.error('[AI Proxy] OpenRouter Error:', err.response?.data || err.message);
+        res.status(500).json({ error: 'AI processing failed' });
+    }
+});
+
+/**
+ * Route: AI Proxy for Gemini
+ */
+app.post('/api/ai/gemini', async (req, res) => {
+    try {
+        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+        if (!GEMINI_API_KEY) return res.status(500).json({ error: 'Gemini key missing on server' });
+
+        const { prompt } = req.body;
+        
+        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            contents: [{ parts: [{ text: prompt }] }]
+        }, {
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        res.json({ text });
+    } catch (err) {
+        logger.error('[AI Proxy] Gemini Error:', err.response?.data || err.message);
+        res.status(500).json({ error: 'AI processing failed' });
+    }
+});
+
 // Exportamos la función bajo el nombre 'api'
 export const api = onRequest({
     region: "us-central1",
@@ -262,6 +324,19 @@ app.post('/api/webhook/dlocal', async (req, res) => {
     try {
         const { userId, planId } = req.query;
         const { status } = req.body;
+
+        // VERIFICACIÓN DE SEGURIDAD: Prevenir falsificación de pagos (Spoofing)
+        const expectedToken = process.env.DLOCAL_WEBHOOK_SECRET;
+        const authHeader = req.headers['authorization'];
+        
+        if (expectedToken) {
+            if (!authHeader || authHeader !== `Bearer ${expectedToken}`) {
+                logger.warn(`[Webhook dLocal] Intento de fraude bloqueado. Token inválido o ausente para user ${userId}`);
+                return res.status(401).json({ success: false, message: 'Firma de Webhook no válida' });
+            }
+        } else {
+            logger.warn(`[Webhook dLocal] ALERTA DE SEGURIDAD: DLOCAL_WEBHOOK_SECRET no está configurado. El endpoint es vulnerable a fraude.`);
+        }
 
         logger.info(`[Webhook dLocal] Recibido para user ${userId}, plan ${planId}, status: ${status}`);
 

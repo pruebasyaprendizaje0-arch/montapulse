@@ -58,6 +58,9 @@ export const PulseModal: React.FC = () => {
     const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
     const [publicCoupons, setPublicCoupons] = useState<Coupon[]>([]);
     const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null);
+    const [selectedMood, setSelectedMood] = useState<Vibe | null>(null);
+
+    // Modal is always mounted but shown/hidden via CSS
 
     const REFERENCE_CATEGORIES = [
         BusinessCategory.REFERENCIA,
@@ -98,14 +101,32 @@ export const PulseModal: React.FC = () => {
     }, [businesses, currentLocality, selectedCategory, showMilitaryOnly]);
 
     const premiumBusinesses = useMemo(() => {
-        return (businesses || []).filter((b: any) => 
+        let filtered = (businesses || []).filter((b: any) => 
             b.locality === currentLocality?.name && 
             b.plan === SubscriptionPlan.EXPERT &&
             (!selectedCategory || b.category === selectedCategory) &&
             (!showMilitaryOnly || b.hasMilitaryBenefit)
         );
-    }, [businesses, currentLocality, selectedCategory, showMilitaryOnly]);
+        
+        if (selectedMood) {
+            filtered = filtered.filter((b: any) => b.moods?.includes(selectedMood));
+        }
+        
+        return filtered;
+    }, [businesses, currentLocality, selectedCategory, showMilitaryOnly, selectedMood]);
     const [searchQuery, setSearchQuery] = useState('');
+
+    const MOOD_OPTIONS = [
+        { vibe: Vibe.FIESTA, emoji: '🎉', label: 'Fiesta' },
+        { vibe: Vibe.RELAX, emoji: '😌', label: 'Relax' },
+        { vibe: Vibe.SURF, emoji: '🏄', label: 'Surf' },
+        { vibe: Vibe.GASTRONOMIA, emoji: '🍴', label: 'Comida' },
+        { vibe: Vibe.ADRENALINA, emoji: '⚡', label: 'Acción' },
+        { vibe: Vibe.FAMILIA, emoji: '👨‍👩‍👧', label: 'Familia' },
+        { vibe: Vibe.ROMANCE, emoji: '💕', label: 'Romance' },
+        { vibe: Vibe.CULTURA, emoji: '🏛️', label: 'Cultura' },
+        { vibe: Vibe.WELLNESS, emoji: '🧘', label: 'Wellness' },
+    ];
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -160,8 +181,14 @@ export const PulseModal: React.FC = () => {
     }, [eventsWithLiveCounts]);
 
     const upcomingEvents = useMemo(() => {
-        return (eventsWithLiveCounts || [])
-            .filter((e: any) => new Date(e.startAt) >= tomorrow && e.status !== 'deactivated')
+        let events = (eventsWithLiveCounts || [])
+            .filter((e: any) => new Date(e.startAt) >= tomorrow && e.status !== 'deactivated');
+        
+        if (selectedMood) {
+            events = events.filter((e: any) => e.vibe === selectedMood || e.moods?.includes(selectedMood));
+        }
+        
+        return events
             .sort((a: any, b: any) => {
                 const aPremium = isPremiumEvent(a) ? 0 : 1;
                 const bPremium = isPremiumEvent(b) ? 0 : 1;
@@ -169,7 +196,7 @@ export const PulseModal: React.FC = () => {
                 return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
             })
             .slice(0, 10);
-    }, [eventsWithLiveCounts]);
+    }, [eventsWithLiveCounts, selectedMood]);
 
     const todayPosts = useMemo(() => {
         return (posts || []).filter((post: any) => new Date(post.timestamp) >= today);
@@ -262,6 +289,15 @@ export const PulseModal: React.FC = () => {
             feed = [];
         }
         
+        // Filter by selected mood/vibe
+        if (selectedMood) {
+            feed = feed.filter(item => {
+                const itemVibe = item.data?.vibe;
+                const itemMoods = item.data?.moods || [];
+                return itemVibe === selectedMood || itemMoods.includes(selectedMood);
+            });
+        }
+        
         const sq = searchQuery || '';
         if (sq.trim()) {
             const query = sq.toLowerCase();
@@ -304,8 +340,6 @@ export const PulseModal: React.FC = () => {
 
     const premiumInFiltered = filteredFeed.filter(i => i.type === 'event' && isPremiumEvent(i.data)).length;
 
-    if (!showPulseModal) return null;
-
     const onClose = () => setShowPulseModal(false);
 
     const handleItemClick = (item: PulseItem) => {
@@ -333,7 +367,10 @@ export const PulseModal: React.FC = () => {
 
     return (
         <>
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6 pb-24 md:pb-6">
+        <div 
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6 pb-24 md:pb-6"
+            style={{ display: showPulseModal ? 'flex' : 'none' }}
+        >
             <div
                 className="absolute inset-0 bg-black/60 animate-in fade-in duration-300"
                 onClick={onClose}
@@ -405,6 +442,99 @@ export const PulseModal: React.FC = () => {
                                 <X className="w-4 h-4" />
                             </button>
                         )}
+                    </div>
+                </div>
+
+                {/* Mood Selector - How user feels or what they want to do - UPDATED May 15 2026 */}
+                <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    {/* Simple visible indicator */}
+                    <h3 style={{ color: '#ec4899', fontSize: '14px', marginBottom: '12px', fontWeight: 'bold' }}>
+                        🎯 ¿Cómo te sientes? / ¿Qué quieres hacer?
+                    </h3>
+                    
+                    {/* Section 1 */}
+                    <div style={{ marginBottom: '12px' }}>
+                        <p style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '8px', fontWeight: 'bold', textTransform: 'uppercase' }}>¿Cómo te sientes?</p>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {MOOD_OPTIONS.slice(0, 5).map(({ vibe, emoji, label }) => (
+                                <button
+                                    key={vibe}
+                                    onClick={() => setSelectedMood(selectedMood === vibe ? null : vibe)}
+                                    style={{
+                                        backgroundColor: selectedMood === vibe ? '#ec4899' : 'rgba(255,255,255,0.1)',
+                                        color: selectedMood === vibe ? 'white' : '#94a3b8',
+                                        border: selectedMood === vibe ? '2px solid #f9a8d4' : '1px solid rgba(255,255,255,0.2)',
+                                        padding: '10px 16px',
+                                        borderRadius: '20px',
+                                        fontSize: '12px',
+                                        fontWeight: 'bold',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    {emoji} {label}
+                                    {selectedMood === vibe && <span>✓</span>}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Section 2 */}
+                    <div style={{ width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <Zap className="w-3.5 h-3.5 text-amber-400" />
+                            <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>¿Qué quieres hacer?</span>
+                            {selectedMood && (
+                                <button 
+                                    onClick={() => setSelectedMood(null)}
+                                    style={{ fontSize: '9px', color: '#fb7185', marginLeft: 'auto', cursor: 'pointer', background: 'none', border: 'none' }}
+                                >
+                                    Limpiar
+                                </button>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {MOOD_OPTIONS.slice(5).map(({ vibe, emoji, label }) => (
+                                <button
+                                    key={vibe}
+                                    onClick={() => setSelectedMood(selectedMood === vibe ? null : vibe)}
+                                    style={{
+                                        backgroundColor: selectedMood === vibe ? '#f59e0b' : 'rgba(255,255,255,0.05)',
+                                        color: selectedMood === vibe ? 'white' : '#94a3b8',
+                                        border: selectedMood === vibe ? '2px solid #fcd34d' : '1px solid rgba(255,255,255,0.1)',
+                                        padding: '8px 14px',
+                                        borderRadius: '20px',
+                                        fontSize: '11px',
+                                        fontWeight: 'bold',
+                                        textTransform: 'uppercase',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        cursor: 'pointer',
+                                        minWidth: 'fit-content'
+                                    }}
+                                >
+                                    <span style={{ fontSize: '14px' }}>{emoji}</span>
+                                    <span>{label}</span>
+                                    {selectedMood === vibe && (
+                                        <span style={{ 
+                                            display: 'inline-flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center',
+                                            width: '18px', 
+                                            height: '18px', 
+                                            borderRadius: '50%', 
+                                            backgroundColor: 'white', 
+                                            color: '#f59e0b',
+                                            fontSize: '10px',
+                                            fontWeight: 'bold'
+                                        }}>✓</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 

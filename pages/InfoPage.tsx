@@ -36,10 +36,6 @@ export const InfoPage: React.FC = () => {
 
     const [searchQuery, setSearchQuery] = useState('');
 
-    if (loading) {
-        return <PageLoader message="Cargando información local..." />;
-    }
-
     const localityName = currentLocality?.name || 'Montañita';
 
     const allBusinesses = useMemo(() => {
@@ -95,6 +91,10 @@ export const InfoPage: React.FC = () => {
         setPublicProfileType('business');
         setShowPublicProfile(true);
     }, [setShowPublicProfile]);
+
+    if (loading) {
+        return <PageLoader message="Cargando información local..." />;
+    }
 
     const getCategoryIcon = (category: string) => {
         if (category === BusinessCategory.PLAYA || category === 'Playa') return <Waves className="w-5 h-5 text-sky-400" />;

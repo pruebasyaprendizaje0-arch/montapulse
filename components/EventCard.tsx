@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, Users, Flame, Star, MapPin } from 'lucide-react';
+import { Clock, Users, Flame, Star, MapPin, Edit2, Trash2 } from 'lucide-react';
 import { MontanitaEvent, Sector, Vibe } from '../types';
 import { SECTOR_INFO } from '../constants';
 import { Skeleton } from './Skeleton';
@@ -12,9 +12,12 @@ interface EventCardProps {
   onClick: (event: MontanitaEvent) => void;
   onRsvp?: (id: string, e: React.MouseEvent) => void;
   isRsvp?: boolean;
+  isAdmin?: boolean;
+  onEdit?: (id: string, e: React.MouseEvent) => void;
+  onDelete?: (id: string, e: React.MouseEvent) => void;
 }
 
-export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp }: EventCardProps) => {
+export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp, isAdmin, onEdit, onDelete }: EventCardProps) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const sectorStyle = SECTOR_INFO[event.sector] || SECTOR_INFO[Sector.CENTRO];
@@ -101,6 +104,24 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp 
             <MapPin className="w-3 h-3 text-white/70" />
             <span className="truncate max-w-[120px]">{event.locality || locality || 'Montañita'}</span>
           </div>
+          {isAdmin && (
+            <div className="flex gap-2 ml-auto">
+              <button 
+                onClick={(e) => { e.stopPropagation(); onEdit?.(event.id, e); }}
+                className="p-2 bg-indigo-500 text-white rounded-lg shadow-lg hover:bg-indigo-400 transition-colors"
+                title="Editar Evento"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={(e) => { e.stopPropagation(); onDelete?.(event.id, e); }}
+                className="p-2 bg-rose-500 text-white rounded-lg shadow-lg hover:bg-rose-400 transition-colors"
+                title="Eliminar Evento"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

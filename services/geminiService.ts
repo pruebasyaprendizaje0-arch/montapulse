@@ -11,31 +11,23 @@ export interface PlannerSection {
   businessId?: string;
 }
 
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_URL = '/api/ai/openrouter';
 
 async function callOpenRouter(messages: { role: string; content: string }[], jsonMode?: boolean): Promise<string> {
-  if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key not configured');
-
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      'HTTP-Referer': window.location.origin,
-      'X-Title': 'Montapulse',
     },
     body: JSON.stringify({
-      model: 'minimax/minimax-m2.5:free',
       messages,
-      max_tokens: 1024,
-      temperature: 0.7,
+      jsonMode,
     }),
   });
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`OpenRouter error: ${response.status} - ${err}`);
+    throw new Error(`OpenRouter Proxy error: ${response.status} - ${err}`);
   }
 
   const data = await response.json();
