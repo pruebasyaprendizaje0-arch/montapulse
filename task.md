@@ -2,6 +2,25 @@
 
 Status: **In Progress** 🛠️
 
+## Resend API Integration
+- [x] **Configuración del Entorno y Dependencias**
+  - [x] Agregar `RESEND_API_KEY` a `.env`
+  - [x] Agregar `RESEND_API_KEY` y `VITE_RESEND_API_KEY` a `.env.local`
+  - [x] Agregar `RESEND_API_KEY` a `functions/.env`
+  - [x] Agregar dependencias de `resend` en `functions/package.json`
+- [x] **Desarrollo del Backend y Servicios**
+  - [x] Implementar `/api/send-email` en `server/index.js` y `functions/index.js`
+  - [x] Crear `services/newsletterService.js` (lotes de envío con `resend.batch.send`)
+  - [x] Crear `services/reporteMensualService.js` (B2B reportes con tablas y adjuntos PDF)
+- [x] **Desarrollo del Frontend**
+  - [x] Crear `services/emailService.ts`
+  - [x] Integrar botón de envío de correo en `components/Admin/panels/LeadsPanel.tsx`
+- [x] **Pruebas y Verificación**
+  - [x] Crear script de pruebas en `scratch/testResendServices.js`
+  - [x] Correr pruebas de integración locales satisfactoriamente
+
+
+
 ## Phase 8: Social Interaction & Life System
 - [x] **Interactive Pulse System**
   - [x] Add `likes` support to `Post` type in `types.ts`

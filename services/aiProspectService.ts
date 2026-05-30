@@ -17,7 +17,7 @@ export async function generateProspects(
   category: BusinessCategory,
   locality: string,
   focus?: string,
-  model: string = 'minimax/minimax-m2.5:free'
+  model: string = 'google/gemini-2.5-flash'
 ): Promise<ProspectSuggestion[]> {
   const sectorsList = Object.values(Sector).join(', ');
   
@@ -102,7 +102,7 @@ export async function generateCustomPitch(
   locality: string,
   notes?: string,
   instructions?: string,
-  model: string = 'minimax/minimax-m2.5:free'
+  model: string = 'google/gemini-2.5-flash'
 ): Promise<string> {
   const systemPrompt = `Eres un experto redactor comercial y agente de desarrollo de negocios para MontaPulse, la app líder de turismo y eventos de la costa ecuatoriana.
 Tu objetivo es redactar un mensaje de ventas persuasivo y atractivo para convencer a un negocio local de unirse a nuestra plataforma.`;

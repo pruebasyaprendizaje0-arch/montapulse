@@ -11,6 +11,8 @@ import {
 } from '../../../services/firestoreService';
 import { generateProspects, generateCustomPitch, ProspectSuggestion } from '../../../services/aiProspectService';
 import { useToast } from '../../../context/ToastContext';
+import { sendEmail } from '../../../services/emailService';
+
 
 interface LeadsPanelProps {
     appConfig: {
@@ -41,6 +43,8 @@ export const LeadsPanel: React.FC<LeadsPanelProps> = ({ appConfig }) => {
     const [activeFilter, setActiveFilter] = useState<'all' | 'new' | 'contacted' | 'interested' | 'converted' | 'rejected'>('all');
     const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+
 
     // Manual Lead Form States
     const [showManualModal, setShowManualModal] = useState(false);
@@ -292,6 +296,67 @@ export const LeadsPanel: React.FC<LeadsPanelProps> = ({ appConfig }) => {
             showToast('Error al regenerar pitch', 'error');
         } finally {
             setIsRegeneratingPitchId(null);
+        }
+    };
+
+    // Helper to extract email from contact info
+    const getEmailFromContact = (contact?: string): string | null => {
+        if (!contact) return null;
+        const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+        const match = contact.match(emailRegex);
+        return match ? match[0] : null;
+    };
+
+    // Send Sales Pitch via Email
+    const handleSendEmail = async (lead: Lead) => {
+        const targetEmail = getEmailFromContact(lead.contact);
+        if (!targetEmail) {
+            showToast('No se encontró un correo electrónico válido en el canal de contacto.', 'error');
+            return;
+        }
+
+        if (!lead.aiPitch) {
+            showToast('Genera un pitch comercial con IA antes de enviar el correo.', 'error');
+            return;
+        }
+
+        setSendingEmailId(lead.id!);
+        try {
+            const htmlContent = `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 12px; background-color: #fafafa;">
+                    <h2 style="color: #f97316; font-size: 20px; font-weight: bold; margin-bottom: 16px;">¡Hola, equipo de ${lead.name}!</h2>
+                    <p style="color: #334155; font-size: 14px; line-height: 1.6; margin-bottom: 20px; white-space: pre-line;">
+                        ${lead.aiPitch}
+                    </p>
+                    <hr style="border: 0; border-top: 1px solid #eaeaea; margin: 24px 0;" />
+                    <p style="color: #64748b; font-size: 11px; text-align: center;">
+                        Mensaje enviado automáticamente desde la administración de MontaPulse.
+                    </p>
+                </div>
+            `;
+
+            const res = await sendEmail({
+                to: targetEmail,
+                subject: `Propuesta Comercial para ${lead.name} - MontaPulse`,
+                html: htmlContent,
+                text: lead.aiPitch
+            });
+
+            if (res.success) {
+                showToast(`¡Correo enviado con éxito a ${targetEmail}!`, 'success');
+                // Update Lead notes with a log entry of email sent
+                const currentNotes = lead.notes ? lead.notes : '';
+                const updatedNotes = currentNotes + (currentNotes ? '\n' : '') + `[${new Date().toLocaleDateString()}] Pitch comercial enviado por correo a: ${targetEmail}`;
+                await updateLead(lead.id!, { notes: updatedNotes });
+            } else {
+                console.error('[SendEmail Error]', res);
+                showToast(res.message || 'Error al enviar el correo con Resend.', 'error');
+            }
+        } catch (error: any) {
+            console.error('[SendEmail Critical Error]', error);
+            showToast('Ocurrió un error inesperado al enviar el correo.', 'error');
+        } finally {
+            setSendingEmailId(null);
         }
     };
 
@@ -605,13 +670,30 @@ export const LeadsPanel: React.FC<LeadsPanelProps> = ({ appConfig }) => {
                                                                 <MessageSquare className="w-3.5 h-3.5 text-orange-500" />
                                                                 Pitch Comercial de IA
                                                             </span>
-                                                            <button 
-                                                                onClick={() => copyPitch(lead.aiPitch || '', lead.id!)}
-                                                                className="text-slate-500 hover:text-white p-1 rounded hover:bg-white/5 transition-all"
-                                                                title="Copiar pitch comercial"
-                                                            >
-                                                                {copiedId === lead.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                                            </button>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button 
+                                                                    onClick={() => copyPitch(lead.aiPitch || '', lead.id!)}
+                                                                    className="text-slate-500 hover:text-white p-1 rounded hover:bg-white/5 transition-all"
+                                                                    title="Copiar pitch comercial"
+                                                                >
+                                                                    {copiedId === lead.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                                                </button>
+                                                                {getEmailFromContact(lead.contact) && (
+                                                                    <button 
+                                                                        disabled={sendingEmailId === lead.id}
+                                                                        onClick={() => handleSendEmail(lead)}
+                                                                        className="text-slate-500 hover:text-white p-1 rounded hover:bg-white/5 transition-all disabled:opacity-50"
+                                                                        title={`Enviar pitch por correo a ${getEmailFromContact(lead.contact)}`}
+                                                                    >
+                                                                        {sendingEmailId === lead.id ? (
+                                                                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-orange-500" />
+                                                                        ) : (
+                                                                            <Mail className="w-3.5 h-3.5" />
+                                                                        )}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+
                                                         </div>
                                                         <p className="text-[10px] text-slate-300 leading-relaxed italic">
                                                             {lead.aiPitch ? `"${lead.aiPitch}"` : 'Sin pitch generado.'}

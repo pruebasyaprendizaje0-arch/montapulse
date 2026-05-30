@@ -3,6 +3,8 @@ import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import fs from 'fs';
+import { Resend } from 'resend';
+
 
 // Load environment variables
 if (fs.existsSync('.env.local')) {
@@ -98,7 +100,7 @@ app.post('/api/ai/openrouter', async (req, res) => {
         const { messages, model, jsonMode, stream } = req.body;
 
         const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-            model: model || 'minimax/minimax-m2.5:free',
+            model: model || 'google/gemini-2.5-flash',
             messages,
             max_tokens: 1024,
             temperature: 0.7,
@@ -135,7 +137,7 @@ app.post('/api/ai/gemini', async (req, res) => {
 
         const { prompt } = req.body;
         
-        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             contents: [{ parts: [{ text: prompt }] }]
         }, {
             headers: { 'Content-Type': 'application/json' }
@@ -149,7 +151,50 @@ app.post('/api/ai/gemini', async (req, res) => {
     }
 });
 
+/**
+ * Route: Send Email with Resend
+ */
+app.post('/api/send-email', async (req, res) => {
+    const { to, subject, html, text, from } = req.body;
+
+    console.log(`[Resend] Intentando enviar email a: ${to}, Asunto: ${subject}`);
+
+    try {
+        const apiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
+        if (!apiKey) {
+            console.error('[Resend] Error: RESEND_API_KEY no configurado en el servidor.');
+            return res.status(500).json({ success: false, message: 'La clave de API de Resend no está configurada.' });
+        }
+
+        const resendInstance = new Resend(apiKey);
+
+        if (!to || !subject || (!html && !text)) {
+            return res.status(400).json({ success: false, message: 'Faltan parámetros requeridos: to, subject, y html o text.' });
+        }
+
+        const data = await resendInstance.emails.send({
+            from: from || 'MontaPulse <onboarding@resend.dev>',
+            to,
+            subject,
+            html: html || text,
+            text: text || html
+        });
+
+        if (data.error) {
+            console.error('[Resend] Error devuelto por la API:', data.error);
+            return res.status(400).json({ success: false, error: data.error });
+        }
+
+        console.log('[Resend] ¡Email enviado con éxito!', data);
+        return res.json({ success: true, data });
+    } catch (error) {
+        console.error('[Resend] Error crítico al enviar email:', error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`\n🚀 Servidor de pagos activo en http://localhost:${PORT}`);
     console.log(`   - Si falla, revisa el archivo 'dlocal_error.log'\n`);
 });
+

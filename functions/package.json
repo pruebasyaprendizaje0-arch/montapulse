@@ -18,7 +18,8 @@
     "express": "^4.21.2",
     "cors": "^2.8.5",
     "axios": "^1.7.9",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "resend": "^6.12.4"
   },
   "devDependencies": {
     "firebase-functions-test": "^3.1.0"
