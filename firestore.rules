@@ -23,13 +23,6 @@ service cloud.firestore {
         (exists(/databases/$(database)/documents/users_v2/$(request.auth.uid)) && getUserData().role == 'admin')
       );
     }
-    
-    function isExpert() {
-      return isAuthenticated() && (
-        request.auth.token.expert == true || 
-        (exists(/databases/$(database)/documents/users_v2/$(request.auth.uid)) && getUserData().plan == 'Expert')
-      );
-    }
 
     // ========== REGLAS DE COLECCIONES ==========
 
