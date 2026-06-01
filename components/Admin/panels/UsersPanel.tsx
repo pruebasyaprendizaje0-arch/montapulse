@@ -78,22 +78,6 @@ export const UsersPanel: React.FC<UsersPanelProps> = ({ stats }) => {
         }
     };
 
-    const handleResetAllPoints = async () => {
-        if (await showConfirm("¿ESTÁS SEGURO? Esta acción reseteará los puntos de TODOS los usuarios a cero (0). Esta acción es IRREVERSIBLE.", "BORRAR PUNTOS (PELIGRO)")) {
-            setIsLoading(true);
-            try {
-                const usersWithPoints = allUsers.filter(u => (u.points || 0) > 0);
-                for (const u of usersWithPoints) {
-                    await updateUser(u.id, { points: 0 });
-                }
-                showToast(`${usersWithPoints.length} usuarios reseteados`, "success");
-            } catch (error) {
-                showToast("Error al resetear puntos", "error");
-            } finally {
-                setIsLoading(false);
-            }
-        }
-    };
 
     return (
         <div className="space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -153,17 +137,6 @@ export const UsersPanel: React.FC<UsersPanelProps> = ({ stats }) => {
                 </div>
             </div>
 
-            {/* Global Actions */}
-            <button 
-                onClick={handleResetAllPoints}
-                className="w-full flex items-center justify-between p-3 sm:p-4 bg-rose-500/5 border border-rose-500/20 rounded-xl sm:rounded-2xl hover:bg-rose-500/10 transition-all group"
-            >
-                <div className="flex items-center gap-2 sm:gap-3">
-                    <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 text-rose-500" />
-                    <span className="text-[8px] sm:text-[10px] font-black text-rose-500 uppercase tracking-widest">Borrar Puntos de todos</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-rose-500/30 group-hover:translate-x-1 transition-transform" />
-            </button>
 
             <div className="grid grid-cols-1 gap-3 sm:gap-4">
                 {filteredUsers.map(u => (

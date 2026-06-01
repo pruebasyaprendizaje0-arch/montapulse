@@ -113,6 +113,10 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                     if (canAddBusiness) {
                                         updateField('mapType', MapEntryType.BUSINESS);
                                         updateField('isReference', false);
+                                        const refCats = [BusinessCategory.PARQUE, BusinessCategory.CANCHA, BusinessCategory.MALECON, BusinessCategory.MERCADO, BusinessCategory.PARADA_TAXI, BusinessCategory.PLAYA, BusinessCategory.REFERENCIA];
+                                        if (refCats.includes(data.category)) {
+                                            updateField('category', BusinessCategory.OTRO);
+                                        }
                                     }
                                 }}
                                 className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${(!data.mapType && !data.isReference) || data.mapType === MapEntryType.BUSINESS ? 'bg-orange-500 text-white shadow-lg' : canAddBusiness ? 'text-slate-500 hover:text-slate-300' : 'text-slate-700 cursor-not-allowed'}`}
@@ -129,6 +133,10 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                     if (canAddReference) {
                                         updateField('mapType', MapEntryType.LANDMARK);
                                         updateField('isReference', true);
+                                        const refCatsWithOtro = [BusinessCategory.PARQUE, BusinessCategory.CANCHA, BusinessCategory.MALECON, BusinessCategory.MERCADO, BusinessCategory.PARADA_TAXI, BusinessCategory.PLAYA, BusinessCategory.REFERENCIA, BusinessCategory.OTRO];
+                                        if (!refCatsWithOtro.includes(data.category)) {
+                                            updateField('category', BusinessCategory.OTRO);
+                                        }
                                     }
                                 }}
                                 className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${(data.mapType === MapEntryType.LANDMARK || (!data.mapType && data.isReference)) ? 'bg-sky-500 text-white shadow-lg' : canAddReference ? 'text-slate-500 hover:text-slate-300' : 'text-slate-700 cursor-not-allowed'}`}
@@ -143,6 +151,7 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                 onClick={() => {
                                     updateField('mapType', MapEntryType.SECTOR);
                                     updateField('isReference', true);
+                                    updateField('category', BusinessCategory.OTRO);
                                 }}
                                 className={`flex flex-col items-center justify-center py-4 rounded-[1.5rem] transition-all gap-2 ${data.mapType === MapEntryType.SECTOR ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                                 title="Registrar como Sector/Barrio"

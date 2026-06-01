@@ -210,6 +210,7 @@ interface DataContextType {
     handleBusinessImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleDeleteBusiness: (id: string) => Promise<void>;
     handleCreateBusinessOnMap: (lat: number, lng: number, isReference?: boolean) => Promise<void>;
+    handleRegisterNewBusiness: () => void;
     handleUpdateBusinessLocation: (id: string, lat: number, lng: number) => Promise<void>;
     isPanelMinimized: boolean;
     setIsPanelMinimized: (min: boolean) => void;
@@ -716,23 +717,45 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const unsubBiz = subscribeToBusinesses((data) => {
                 if (!active) return;
                 rawBusinessesRef.current = data;
-                const unique: Business[] = [];
-                const seen = new Set<string>();
+                
+                // Separate active vs deleted points
+                const activeData = data.filter(b => !b.isDeleted);
+                const deletedData = data.filter(b => b.isDeleted);
 
-                data.forEach(b => {
+                // Deduplicate active points
+                const uniqueActive: Business[] = [];
+                const seenActive = new Set<string>();
+                activeData.forEach(b => {
                     const locality = b.locality || 'Montañita';
                     const lat = (b.location?.lat || b.coordinates?.[0] || 0).toFixed(3);
                     const lng = (b.location?.lng || b.coordinates?.[1] || 0).toFixed(3);
                     const normalizedPrefix = (b.name?.trim() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 5);
                     const key = `${normalizedPrefix}_${lat}_${lng}_${locality.toLowerCase()}`;
 
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                        unique.push(b);
+                    if (!seenActive.has(key)) {
+                        seenActive.add(key);
+                        uniqueActive.push(b);
                     }
                 });
 
-                setBusinesses(unique);
+                // Deduplicate deleted points
+                const uniqueDeleted: Business[] = [];
+                const seenDeleted = new Set<string>();
+                deletedData.forEach(b => {
+                    const locality = b.locality || 'Montañita';
+                    const lat = (b.location?.lat || b.coordinates?.[0] || 0).toFixed(3);
+                    const lng = (b.location?.lng || b.coordinates?.[1] || 0).toFixed(3);
+                    const normalizedPrefix = (b.name?.trim() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 5);
+                    const key = `${normalizedPrefix}_${lat}_${lng}_${locality.toLowerCase()}`;
+
+                    if (!seenDeleted.has(key)) {
+                        seenDeleted.add(key);
+                        uniqueDeleted.push(b);
+                    }
+                });
+
+                setBusinesses(uniqueActive);
+                setDeletedBusinesses(uniqueDeleted);
                 bizLoaded = true;
                 checkInitialLoad();
             });
@@ -1298,15 +1321,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const businessLocality = bizForm.locality || business.locality || 'Montañita';
 
         // Validation: Same name, same sector, same locality (Ignore if it's a reference point)
-        const isRef = bizForm.isReference || targetBusinessId.startsWith('ref-');
-        const duplicateNameSector = !isRef && businesses.some(b => 
-            b.id !== targetBusinessId &&
-            !b.isReference &&
-            !b.id.startsWith('ref-') &&
-            (b.name || '').toLowerCase().trim() === (businessName || '').toLowerCase().trim() && 
-            b.sector === businessSector &&
-            (b.locality || 'Montañita') === businessLocality
-        );
+        const isRef = bizForm.isReference || bizForm.mapType === MapEntryType.LANDMARK || bizForm.mapType === MapEntryType.SECTOR;
+        const duplicateNameSector = !isRef && businesses.some(b => {
+            const bIsRef = b.mapType 
+                ? (b.mapType === MapEntryType.LANDMARK || b.mapType === MapEntryType.SECTOR)
+                : (b.isReference || b.id.startsWith('ref-'));
+            return (
+                b.id !== targetBusinessId &&
+                !bIsRef &&
+                (b.name || '').toLowerCase().trim() === (businessName || '').toLowerCase().trim() && 
+                b.sector === businessSector &&
+                (b.locality || 'Montañita') === businessLocality
+            );
+        });
 
         if (duplicateNameSector) {
             showToast("Ya existe un negocio con este nombre en este sector.", "error");
@@ -1320,7 +1347,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             coordinates: bizForm.coordinates || business.coordinates || [-1.8253, -80.7523],
         };
 
-        if (!isAdminUser && !isSuperUser && !business.isReference && !business.id?.startsWith('ref-')) {
+        const originalIsRef = business.isReference || business.mapType === MapEntryType.LANDMARK || business.mapType === MapEntryType.SECTOR || business.id?.startsWith('ref-');
+        if (!isAdminUser && !isSuperUser && !originalIsRef) {
             delete updatePayload.isVerified;
         }
 
@@ -1727,7 +1755,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const newBiz: Omit<Business, 'id'> = {
             name,
-            ownerId: authUser?.uid || 'admin',
+            ownerId: isSuperUser ? 'admin' : (authUser?.uid || 'admin'),
             locality: currentLocality.name,
             sector: Sector.CENTRO,
             icon: isReference ? 'mappin' : 'palmtree',
@@ -1750,6 +1778,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setEditingBusinessId(id);
         setShowBusinessEdit(true);
         showToast(`${isReference ? 'Punto de referencia' : 'Negocio'} creado en el mapa.`, 'success');
+    };
+
+    const handleRegisterNewBusiness = () => {
+        setBizForm(INITIAL_BIZ_FORM);
+        setShowBusinessReg(true);
     };
 
     const handleUpdateBusinessLocation = async (id: string, lat: number, lng: number) => {
@@ -1915,6 +1948,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             handleBusinessRegister: async (e: React.FormEvent) => {
                 e.preventDefault();
                 if (!authUser) return;
+                if (isAdmin && !isSuperUser) {
+                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                    return;
+                }
                 const isSuperAdmin = user?.role === 'admin' || isSuperUser || isAdmin;
                 
                 // Same name, same sector, same locality (Ignore if it's a reference point)
@@ -1931,14 +1968,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
 
                 // Un correo un negocio (Ignore if it's a reference point or if user is superuser)
-                const isReferenceItem = !!bizForm.isReference;
-                const hasBusinessByOwner = businesses.some(b => b.ownerId === authUser.uid && !b.isReference && !b.id.startsWith('ref-'));
-                const hasBusinessByEmail = businesses.some(b => 
-                    b.email?.toLowerCase().trim() === user?.email?.toLowerCase().trim() && 
-                    !b.isReference && 
-                    !b.id.startsWith('ref-')
-                );
-                const hasReferenceByOwner = businesses.some(b => b.ownerId === authUser.uid && b.isReference);
+                const isReferenceItem = !!bizForm.isReference || bizForm.mapType === MapEntryType.LANDMARK || bizForm.mapType === MapEntryType.SECTOR;
+                const hasBusinessByOwner = businesses.some(b => {
+                    const bIsRef = b.mapType 
+                        ? (b.mapType === MapEntryType.LANDMARK || b.mapType === MapEntryType.SECTOR)
+                        : (b.isReference || b.id.startsWith('ref-'));
+                    return b.ownerId === authUser.uid && !bIsRef;
+                });
+                const hasBusinessByEmail = businesses.some(b => {
+                    const bIsRef = b.mapType 
+                        ? (b.mapType === MapEntryType.LANDMARK || b.mapType === MapEntryType.SECTOR)
+                        : (b.isReference || b.id.startsWith('ref-'));
+                    return b.email?.toLowerCase().trim() === user?.email?.toLowerCase().trim() && !bIsRef;
+                });
+                const hasReferenceByOwner = businesses.some(b => {
+                    const bIsRef = b.mapType 
+                        ? (b.mapType === MapEntryType.LANDMARK || b.mapType === MapEntryType.SECTOR)
+                        : (b.isReference || b.id.startsWith('ref-'));
+                    return b.ownerId === authUser.uid && bIsRef;
+                });
                 
                 if (!isReferenceItem) {
                     // Limitar a 1 negocio por usuario (excepto admins)
@@ -1958,7 +2006,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const userEmail = authUser?.email || user?.email || bizForm.email || '';
                 const businessData = {
                     ...bizForm,
-                    ownerId: isSuperAdmin ? 'admin' : authUser.uid,
+                    ownerId: isSuperAdmin ? (bizForm.ownerId || 'admin') : authUser.uid,
                     email: userEmail,
                     isVerified: isSuperAdmin,
                     isPublished: isSuperAdmin,
@@ -1986,7 +2034,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     };
                     await updateUser(authUser.uid, { businessId: newBusinessId, role: 'host' });
                     setUser(newUserProfile);
-                } else if (!user?.businessId) {
+                } else if (!isSuperUser && !user?.businessId) {
                     // If it's the first business for admin, we can still associate it if we want,
                     // but keeping admin role is crucial.
                     await updateUser(authUser.uid, { businessId: newBusinessId });
@@ -2206,6 +2254,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             handleBusinessImageUpload,
             handleDeleteBusiness,
             handleCreateBusinessOnMap,
+            handleRegisterNewBusiness,
             handleUpdateBusinessLocation,
             handleRestoreBusiness,
             handlePurgeAllReferences,

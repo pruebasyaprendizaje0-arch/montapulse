@@ -68,13 +68,19 @@ export const InfoPage: React.FC = () => {
     }, [allBusinesses]);
 
     const premiumBusinesses = useMemo(() => {
-        return allBusinesses.filter((b: any) => b.plan === SubscriptionPlan.EXPERT);
+        return allBusinesses.filter((b: any) => 
+            b.plan === SubscriptionPlan.EXPERT ||
+            b.plan === SubscriptionPlan.ELITE ||
+            b.plan === SubscriptionPlan.PRO
+        );
     }, [allBusinesses]);
 
     const otherBusinesses = useMemo(() => {
         return allBusinesses.filter((b: any) =>
             !REFERENCE_CATEGORIES.includes(b.category) &&
-            b.plan !== SubscriptionPlan.PRO && b.plan !== SubscriptionPlan.EXPERT
+            b.plan !== SubscriptionPlan.PRO &&
+            b.plan !== SubscriptionPlan.ELITE &&
+            b.plan !== SubscriptionPlan.EXPERT
         );
     }, [allBusinesses]);
 

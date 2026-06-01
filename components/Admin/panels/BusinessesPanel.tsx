@@ -9,7 +9,8 @@ import { LOCALITIES } from '../../../constants';
 export const BusinessesPanel: React.FC = () => {
     const { 
         businesses, deletedBusinesses, handleRestoreBusiness,
-        setEditingBusinessId, setShowBusinessEdit, customLocalities 
+        setEditingBusinessId, setShowBusinessEdit, customLocalities,
+        isSuperUser, handleRegisterNewBusiness
     } = useData();
     const { showToast, showConfirm } = useToast();
     
@@ -87,7 +88,7 @@ export const BusinessesPanel: React.FC = () => {
             <div className="flex flex-col gap-3 sm:gap-4 px-1">
                 
                 {/* View Mode Tabs (Active vs Trash) */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                     <button
                         onClick={() => setViewMode('active')}
                         className={`flex-1 py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all ${
@@ -108,6 +109,15 @@ export const BusinessesPanel: React.FC = () => {
                     >
                         Papelera ({deletedBusinesses.length})
                     </button>
+                    {isSuperUser && (
+                        <button
+                            onClick={handleRegisterNewBusiness}
+                            className="flex-1 py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500 hover:text-black hover:border-orange-500 transition-all flex items-center justify-center gap-2"
+                        >
+                            <Store className="w-3.5 h-3.5" />
+                            Añadir Negocio
+                        </button>
+                    )}
                 </div>
 
                 {/* Filter and Search Panel */}
@@ -273,6 +283,10 @@ export const BusinessesPanel: React.FC = () => {
                                         {getPointType(biz) === 'business' && (
                                             <button 
                                                 onClick={async () => {
+                                                    if (!isSuperUser) {
+                                                        showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                                                        return;
+                                                    }
                                                     const v = !biz.isVerified;
                                                     await updateBusiness(biz.id, { isVerified: v });
                                                     showToast(v ? "Negocio verificado" : "Verificación removida", "success");
@@ -287,6 +301,10 @@ export const BusinessesPanel: React.FC = () => {
                                         {/* Edit Button */}
                                         <button 
                                             onClick={() => {
+                                                if (!isSuperUser) {
+                                                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                                                    return;
+                                                }
                                                 setEditingBusinessId(biz.id);
                                                 setShowBusinessEdit(true);
                                             }}
@@ -295,10 +313,14 @@ export const BusinessesPanel: React.FC = () => {
                                         >
                                             <Edit3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                         </button>
-
+ 
                                         {/* Delete Button (Soft Delete) */}
                                         <button 
                                             onClick={async () => {
+                                                if (!isSuperUser) {
+                                                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                                                    return;
+                                                }
                                                 const pointTypeLabel = getPointType(biz) === 'sector' ? 'sector/barrio' : getPointType(biz) === 'landmark' ? 'referencia' : 'negocio';
                                                 if (await showConfirm(`¿Mover ${pointTypeLabel} "${biz.name}" a la papelera?`, "Papelera")) {
                                                     await deleteBusiness(biz.id, false);
@@ -316,6 +338,10 @@ export const BusinessesPanel: React.FC = () => {
                                         {/* Restore Button */}
                                         <button 
                                             onClick={async () => {
+                                                if (!isSuperUser) {
+                                                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                                                    return;
+                                                }
                                                 await handleRestoreBusiness(biz.id);
                                                 showToast("Punto restaurado con éxito", "success");
                                             }}
@@ -323,10 +349,14 @@ export const BusinessesPanel: React.FC = () => {
                                         >
                                             Restaurar
                                         </button>
-
+ 
                                         {/* Hard Delete Button */}
                                         <button 
                                             onClick={async () => {
+                                                if (!isSuperUser) {
+                                                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+                                                    return;
+                                                }
                                                 if (await showConfirm(`¿ELIMINAR PERMANENTEMENTE "${biz.name}"? Esta acción es irreversible.`, "¡PELIGRO!")) {
                                                     await deleteBusiness(biz.id, true);
                                                     showToast("Punto eliminado permanentemente", "error");

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2 } from 'lucide-react';
-import { Business, UserProfile, MontanitaEvent, ProfileReview, Coupon, Sector } from '../types';
+import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2, Compass } from 'lucide-react';
+import { Business, UserProfile, MontanitaEvent, ProfileReview, Coupon, Sector, MapEntryType } from '../types';
 import { useData } from '../context/DataContext';
 import { BASE_URL, SECTOR_INFO } from '../constants';
 import { subscribeToProfileReviews, addProfileReview, getUser, incrementBusinessViewCount } from '../services/firestoreService';
@@ -380,12 +380,29 @@ export const PublicProfileModal = React.memo(({
                     <div className="absolute top-6 left-6 flex items-center gap-1.5 flex-wrap">
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 backdrop-blur-sm">
                             {business
-                                ? <Store className="w-3.5 h-3.5 text-amber-400" />
-                                : <User className="w-3.5 h-3.5 text-sky-400" />
+                                ? (business.mapType === MapEntryType.SECTOR ? (
+                                    <>
+                                        <Compass className="w-3.5 h-3.5 text-emerald-400" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-white/80">Sector</span>
+                                    </>
+                                  ) : (business.mapType === MapEntryType.LANDMARK || business.isReference || business.id?.startsWith('ref-')) ? (
+                                    <>
+                                        <MapPin className="w-3.5 h-3.5 text-sky-400" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-white/80">Referencia</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                        <Store className="w-3.5 h-3.5 text-amber-400" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-white/80">Ubicame Socio</span>
+                                    </>
+                                  ))
+                                : (
+                                    <>
+                                        <User className="w-3.5 h-3.5 text-sky-400" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-white/80">Miembro</span>
+                                    </>
+                                )
                             }
-                            <span className="text-[9px] font-black uppercase tracking-widest text-white/80">
-                                {business ? 'Ubicame Socio' : 'Miembro'}
-                            </span>
                         </div>
                         {business && (
                             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm ${businessStatus.isOpen ? 'bg-emerald-500/30 border border-emerald-500/40' : 'bg-red-500/30 border border-red-500/40'}`}>
@@ -425,7 +442,13 @@ export const PublicProfileModal = React.memo(({
                             </div>
                             <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 transition-colors">
                                 {business
-                                    ? (business.isReference || business.id?.startsWith('ref-') ? 'Punto de Referencia Verificado' : 'Socio Verificado')
+                                    ? (business.mapType === MapEntryType.BUSINESS
+                                        ? 'Socio Verificado'
+                                        : (business.mapType === MapEntryType.LANDMARK || business.mapType === MapEntryType.SECTOR || business.isReference || business.id?.startsWith('ref-')
+                                            ? 'Punto de Referencia Verificado'
+                                            : 'Socio Verificado'
+                                          )
+                                      )
                                     : 'Explorador Pulse'
                                 }
                             </div>
