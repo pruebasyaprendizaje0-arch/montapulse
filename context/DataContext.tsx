@@ -678,22 +678,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const checkInitialLoad = () => {
             if (active && isLoading) {
-                if (eventsLoaded && bizLoaded && masterDataLoaded && favoritesLoaded && followsLoaded && publicCouponsLoaded && userWalletLoaded) {
-                    console.log('[DataContext] All core data loaded. Setting loading=false.');
+                // Desbloquear la UI en cuanto tengamos los datos críticos (eventos + negocios).
+                // El resto (master data, favoritos, follows, cupones) se carga en background.
+                if (eventsLoaded && bizLoaded) {
+                    console.log('[DataContext] Datos críticos listos (events + businesses). Mostrando UI.');
                     isLoading = false;
                     setLoading(false);
                 }
             }
         };
 
-        // Safety Timeout: Force loading to false after 6 seconds to prevent blank screens on slow mobile networks
+        // Safety Timeout: Forzar loading=false después de 2.5s máximo.
+        // Los datos críticos (events+businesses) deberían llegar en <1s en condiciones normales.
+        // En redes lentas este timeout actúa como última salvaguarda para evitar pantallas en blanco.
         const safetyTimeoutId = setTimeout(() => {
             if (active && isLoading) {
-                console.warn('[DataContext] Safety timeout reached. Forcing loading=false.');
+                console.warn('[DataContext] Safety timeout reached (2.5s). Forcing loading=false.');
                 isLoading = false;
                 setLoading(false);
             }
-        }, 6000);
+        }, 2500);
 
         const tCore = addStaggeredUnsub(50, () => {
             const unsubEvents = subscribeToEvents((data) => {
@@ -789,22 +793,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             });
 
-            // If a collection fails to load (e.g. permission denied), we should still move forward
-            // after a shorter local timeout for that specific subscription.
+            // Si alguna colección secundaria no llega en 3s, ignorarla para no bloquear la UI.
+            // Los datos críticos (events+businesses) tienen su propio safety timeout de 2.5s.
             const collectionLoadTimeout = setTimeout(() => {
                 if (active) {
                     let changed = false;
-                    if (!eventsLoaded) { console.warn('[DataContext] Events taking too long, skipping block.'); eventsLoaded = true; changed = true; }
-                    if (!bizLoaded) { console.warn('[DataContext] Businesses taking too long, skipping block.'); bizLoaded = true; changed = true; }
-                    if (!masterDataLoaded) { console.warn('[DataContext] Master data taking too long, skipping block.'); masterDataLoaded = true; changed = true; }
-                    if (!publicCouponsLoaded) { console.warn('[DataContext] Coupons taking too long, skipping block.'); publicCouponsLoaded = true; changed = true; }
-                    if (!favoritesLoaded) { console.warn('[DataContext] Favorites taking too long, skipping block.'); favoritesLoaded = true; changed = true; }
-                    if (!followsLoaded) { console.warn('[DataContext] Follows taking too long, skipping block.'); followsLoaded = true; changed = true; }
-                    if (!userWalletLoaded) { console.warn('[DataContext] Wallet taking too long, skipping block.'); userWalletLoaded = true; changed = true; }
+                    if (!eventsLoaded) { console.warn('[DataContext] Events taking too long, skipping.'); eventsLoaded = true; changed = true; }
+                    if (!bizLoaded) { console.warn('[DataContext] Businesses taking too long, skipping.'); bizLoaded = true; changed = true; }
                     
                     if (changed) checkInitialLoad();
                 }
-            }, 5000);
+            }, 3000);
 
             let unsubFavs = () => {};
             if (authUser) {

@@ -2,10 +2,11 @@ import { initializeApp } from 'firebase/app';
 import {
     initializeFirestore,
     getFirestore,
-    CACHE_SIZE_UNLIMITED,
     terminate,
     clearIndexedDbPersistence,
-    memoryLocalCache
+    memoryLocalCache,
+    persistentLocalCache,
+    persistentMultipleTabManager
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
@@ -22,20 +23,33 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with settings only if not already initialized
+// Initialize Firestore con caché persistente (IndexedDB) para carga rápida en visitas repetidas.
+// Jerarquía de fallbacks: IndexedDB → MemoryCache → Firestore base (sin caché)
 let db: any;
 try {
-    // Optimization: Using memoryLocalCache to avoid the "Persistent cache corruption" issues
-    // reported with Firestore 11.0.1 in some environments.
+    // Prioridad 1: Persistencia IndexedDB — visitas repetidas cargan desde disco, no red.
+    // Nota: CACHE_SIZE_UNLIMITED fue eliminado en Firebase 12+; se maneja automáticamente.
+    // experimentalForceLongPolling fue removido → usa WebSockets (más rápido).
     db = initializeFirestore(app, {
-        localCache: memoryLocalCache(),
-        experimentalForceLongPolling: true,
+        localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager()
+        }),
         ignoreUndefinedProperties: true
     });
-    console.log('Firestore initialized with Memory Cache and Long Polling');
-} catch (error) {
-    console.warn("Firestore already initialized, retrieving existing instance");
-    db = getFirestore(app);
+    console.log('Firestore: Persistent IndexedDB cache + WebSockets activos.');
+} catch (persistenceError) {
+    // Fallback 2: Si IndexedDB falla (ej. Safari privado, storage lleno), usar memoria
+    console.warn('Firestore: IndexedDB no disponible, usando Memory Cache.', persistenceError);
+    try {
+        db = initializeFirestore(app, {
+            localCache: memoryLocalCache(),
+            ignoreUndefinedProperties: true
+        });
+    } catch (error) {
+        // Fallback 3: Firestore ya inicializado
+        console.warn("Firestore: ya inicializado, obteniendo instancia existente.");
+        db = getFirestore(app);
+    }
 }
 
 const storage = getStorage(app);

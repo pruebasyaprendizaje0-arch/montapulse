@@ -34,12 +34,46 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: 'esnext',
+      chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor': ['react', 'react-dom', 'react-router-dom'],
-            'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
-            'leaflet': ['leaflet']
+          manualChunks(id) {
+            // Firebase — cargado inmediatamente, chunk propio para caché
+            if (id.includes('node_modules/firebase')) {
+              return 'firebase';
+            }
+            // React core — siempre necesario
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router-dom')) {
+              return 'vendor-react';
+            }
+            // Leaflet — solo necesario en la vista del mapa
+            if (id.includes('node_modules/leaflet')) {
+              return 'leaflet';
+            }
+            // i18n — puede cambiar independientemente
+            if (id.includes('node_modules/i18next') || id.includes('node_modules/react-i18next')) {
+              return 'i18n';
+            }
+            // Utilidades de fecha
+            if (id.includes('node_modules/date-fns')) {
+              return 'date-fns';
+            }
+            // Librerías de IA (pesadas, raramente cambian)
+            if (id.includes('node_modules/@google/genai') || id.includes('node_modules/@google/generative-ai')) {
+              return 'ai-sdk';
+            }
+            // Markdown renderer
+            if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark') || id.includes('node_modules/rehype')) {
+              return 'markdown';
+            }
+            // QR code
+            if (id.includes('node_modules/qrcode') || id.includes('node_modules/html5-qrcode')) {
+              return 'qr';
+            }
+            // Iconos — tree-shaking debe manejarlo, pero separamos para caché
+            if (id.includes('node_modules/lucide-react') || id.includes('node_modules/react-icons')) {
+              return 'icons';
+            }
           }
         }
       }

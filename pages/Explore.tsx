@@ -20,6 +20,33 @@ import { LocalityManagerModal } from '../components/Modals/LocalityManagerModal'
 import { useSEO } from '../hooks/useSEO';
 import { Skeleton } from '../components/Skeleton';
 
+const ACTIVITY_TO_CATEGORIES: Record<string, BusinessCategory[]> = {
+  "Bailar": [BusinessCategory.BAR, BusinessCategory.DISCOTECA, BusinessCategory.BAR_DISCOTECA],
+  "Comer": [BusinessCategory.RESTAURANTE, BusinessCategory.MERCADO],
+  "Cuidado Personal": [BusinessCategory.HOSPITAL, BusinessCategory.OTRO],
+  "Deporte": [BusinessCategory.CANCHA, BusinessCategory.ESCUELA_SURF, BusinessCategory.CENTRO_SURF],
+  "Descansar": [BusinessCategory.HOSTAL, BusinessCategory.HOTEL, BusinessCategory.HOSPAJE],
+  "Farrear": [BusinessCategory.BAR, BusinessCategory.DISCOTECA, BusinessCategory.BAR_DISCOTECA],
+  "Plan Relax": [BusinessCategory.HOTEL, BusinessCategory.HOSTAL, BusinessCategory.HOSPAJE, BusinessCategory.PLAYA, BusinessCategory.PARQUE],
+  "Surf": [BusinessCategory.ESCUELA_SURF, BusinessCategory.CENTRO_SURF, BusinessCategory.PLAYA],
+  "Trabajar": [BusinessCategory.HOTEL, BusinessCategory.HOSTAL, BusinessCategory.HOSPAJE, BusinessCategory.OTRO],
+  "Turismo": [BusinessCategory.TOUR_OPERATOR, BusinessCategory.REFERENCIA, BusinessCategory.PLAYA, BusinessCategory.PARQUE, BusinessCategory.MALECON]
+};
+
+const getDistance = (coords1: [number, number], coords2: [number, number]): number => {
+    const [lat1, lon1] = coords1;
+    const [lat2, lon2] = coords2;
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+};
+
 interface ExploreProps {
     onEditBusiness?: (id: string) => void;
     userBusinessId?: string;
@@ -103,6 +130,20 @@ export const Explore: React.FC<ExploreProps> = ({
     const [focusedBusinessId, setFocusedBusinessId] = useState<string | null>(null);
     const [showingDirections, setShowingDirections] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+
+    useEffect(() => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    setUserLocation([pos.coords.latitude, pos.coords.longitude]);
+                },
+                (err) => {
+                    console.log("Geolocation error or denied:", err);
+                },
+                { enableHighAccuracy: true, timeout: 5000 }
+            );
+        }
+    }, []);
 
 
     // SEO Hook
@@ -258,6 +299,40 @@ export const Explore: React.FC<ExploreProps> = ({
     const handleUpdateSectorGeometry = (sector: Sector, coords: [number, number][]) => {
         setSectorPolygons(prev => ({ ...prev, [sector]: coords }));
     };
+
+    const recommendedBusinesses = useMemo(() => {
+        if (!selectedMood) return [];
+        const categories = ACTIVITY_TO_CATEGORIES[selectedMood];
+        if (!categories) return [];
+
+        let result = businesses.filter(b => 
+            categories.includes(b.category) &&
+            b.locality === currentLocality.name &&
+            !b.isReference &&
+            b.category !== BusinessCategory.REFERENCIA &&
+            (b.mapType === MapEntryType.BUSINESS || !b.mapType)
+        );
+
+        const refCoords = userLocation || currentLocality.coords;
+
+        const planWeight = (plan: SubscriptionPlan) => {
+            if (plan === SubscriptionPlan.EXPERT) return 4;
+            if (plan === SubscriptionPlan.ELITE) return 3;
+            if (plan === SubscriptionPlan.PRO) return 2;
+            return 1;
+        };
+
+        return result.sort((a, b) => {
+            const weightA = planWeight(a.plan);
+            const weightB = planWeight(b.plan);
+            if (weightA !== weightB) {
+                return weightB - weightA;
+            }
+            const distA = getDistance(refCoords, a.coordinates);
+            const distB = getDistance(refCoords, b.coordinates);
+            return distA - distB;
+        });
+    }, [selectedMood, businesses, currentLocality, userLocation]);
 
     const filteredEvents = useMemo(() => {
         let result = [...eventsWithLiveCounts];
@@ -1002,6 +1077,71 @@ export const Explore: React.FC<ExploreProps> = ({
                                 )}
                             </div>
                         </div>
+
+                        {/* Recommended Businesses for selected Activity */}
+                        {selectedMood && ACTIVITY_TO_CATEGORIES[selectedMood] && recommendedBusinesses.length > 0 && (
+                            <div className="mb-8">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+                                        <h3 className="text-sm font-black text-amber-500 uppercase tracking-widest italic">
+                                            Locales de {selectedMood} recomendados
+                                        </h3>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                        Por Cercanía y Plan
+                                    </span>
+                                </div>
+                                <div className="flex gap-4 overflow-x-auto no-scrollbar -mx-6 px-6">
+                                    {recommendedBusinesses.map(biz => {
+                                        const refCoords = userLocation || currentLocality.coords;
+                                        const distance = getDistance(refCoords, biz.coordinates);
+                                        const status = biz.openingHours ? isBusinessOpen(biz.openingHours) : null;
+                                        const isExpert = biz.plan === SubscriptionPlan.EXPERT;
+                                        const isElite = biz.plan === SubscriptionPlan.ELITE;
+
+                                        return (
+                                            <div 
+                                                key={biz.id} 
+                                                onClick={() => {
+                                                    setPublicProfileId(biz.id);
+                                                    setPublicProfileType('business');
+                                                    setShowPublicProfile(true);
+                                                }}
+                                                className={`min-w-[280px] w-[280px] shrink-0 relative overflow-hidden rounded-[2rem] border p-4 cursor-pointer hover:-translate-y-1 transition-all duration-300 ${
+                                                    isExpert ? 'glass-expert expert-glow' :
+                                                    isElite ? 'glass-premium premium-glow' :
+                                                    'bg-[#0f172a]/40 border-white/5'
+                                                }`}
+                                                style={{
+                                                    borderColor: isExpert ? '#f59e0b33' : 
+                                                                 isElite ? '#38bdf833' : 'rgba(255,255,255,0.05)'
+                                                }}
+                                            >
+                                                <div className="h-28 rounded-xl overflow-hidden mb-3 relative">
+                                                    <img src={biz.imageUrl} className="w-full h-full object-cover" alt={biz.name} />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
+                                                    {biz.plan !== SubscriptionPlan.FREE && (
+                                                        <span className={`absolute top-2 right-2 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-full border backdrop-blur-md ${
+                                                            isExpert ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' :
+                                                            'bg-sky-500/20 border-sky-500/30 text-sky-400'
+                                                        }`}>
+                                                            ⭐ {biz.plan}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-[9px] font-black text-sky-400 uppercase tracking-wider">{biz.category}</span>
+                                                    <span className="text-[9px] font-bold text-slate-400">📍 {distance.toFixed(2)} km</span>
+                                                </div>
+                                                <h4 className="text-sm font-black text-white truncate uppercase italic">{biz.name}</h4>
+                                                <p className="text-[10px] text-slate-400 line-clamp-2 mt-1 leading-relaxed">{biz.description}</p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Flash Offers Carousel */}
                         {(loading || deferredFilteredEvents.some(e => e.isFlashOffer)) && (
