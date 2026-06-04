@@ -1142,7 +1142,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const filteredBusinesses = useMemo(() => {
         return businesses.filter(b => {
             const locality = b.locality || 'Montañita';
-            const matchesLocality = locality === currentLocality.name;
+            const matchesLocality = locality === currentLocality.name || b.name?.toLowerCase().includes('ubicame.info');
             const matchesSector = !selectedSector || b.sector === selectedSector;
             const matchesSearch = !searchQuery || (b.name ?? '').toLowerCase().includes(searchQuery.toLowerCase());
             const matchesFilter = activeFilter === 'All' || b.category === activeFilter;
@@ -2068,10 +2068,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             },
             handleDeleteEvent: async (id: string) => {
-                if (isAdmin && !isSuperUser) {
-                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
-                    return;
-                }
                 const confirmed = await showConfirm('¿Estás seguro de que quieres eliminar este pulso?');
                 if (confirmed) {
                     await deleteEvent(id);
@@ -2080,10 +2076,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             },
             handleSaveEvent: async () => {
-                if (isAdmin && !isSuperUser) {
-                    showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
-                    return;
-                }
                 if (!user) return;
                 
                 const userBusiness = user.businessId ? businesses.find(b => b.id === user.businessId) : null;

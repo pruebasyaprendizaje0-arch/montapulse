@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, ChevronRight, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck, Palmtree, Mountain, Activity, Users, Sun, Moon } from 'lucide-react';
+import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, ChevronRight, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck, Palmtree, Mountain, Activity, Users, Sun, Moon, Eye } from 'lucide-react';
 import { getToken } from 'firebase/messaging';
 import { messaging } from './firebase.config';
-import { saveFCMToken, getUser, createUser, updateUser, createBusiness, updateBusiness, deleteBusiness, subscribeToEvents, createEvent, updateEvent, deleteEvent, subscribeToBusinesses, updateAppSettings, toggleRSVP, subscribeToUserRSVPs } from './services/firestoreService';
+import { saveFCMToken, getUser, createUser, updateUser, createBusiness, updateBusiness, deleteBusiness, subscribeToEvents, createEvent, updateEvent, deleteEvent, subscribeToBusinesses, updateAppSettings, toggleRSVP, subscribeToUserRSVPs, incrementVisitCount, subscribeToVisitCount } from './services/firestoreService';
 import { PageLoader as PremiumLoader } from './components/common/PageLoader';
 import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan, BusinessCategory } from './types';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -146,6 +146,17 @@ const Dashboard: React.FC = () => {
 
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiRecData, setAiRecData] = useState<any>(null);
+  const [visitCount, setVisitCount] = useState<number>(0);
+
+  useEffect(() => {
+    // Increment visit count on mount
+    incrementVisitCount();
+    // Subscribe to visit count updates
+    const unsubscribe = subscribeToVisitCount((count) => {
+      setVisitCount(count);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleUpdatePlan = (plan: SubscriptionPlan) => {
     if (!user) return;
@@ -590,32 +601,13 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                if (isAuto) {
-                  setIsAuto(false);
-                  setTheme('light');
-                } else if (theme === 'light') {
-                  setTheme('dark');
-                } else if (theme === 'dark') {
-                  setTheme('night');
-                } else {
-                  setIsAuto(true);
-                }
-              }}
-              className="p-3 bg-[var(--glass)] hover:bg-orange-500/10 text-orange-500 rounded-xl transition-all border border-[var(--glass-border)] flex items-center gap-2 group relative"
-              title={`Cambiar Tema (Actual: ${isAuto ? 'Auto' : theme})`}
+            <div 
+              className="px-3.5 py-2.5 bg-orange-500/10 text-orange-500 rounded-xl border border-orange-500/20 flex items-center gap-2 font-mono font-bold text-sm shadow-sm"
+              title="Contador de visitas"
             >
-              {isAuto ? (
-                <Clock className="w-5 h-5 animate-pulse" />
-              ) : theme === 'light' ? (
-                <Sun className="w-5 h-5 text-amber-500" />
-              ) : theme === 'dark' ? (
-                <Moon className="w-5 h-5" />
-              ) : (
-                <Moon className="w-5 h-5 fill-slate-900 text-slate-400" />
-              )}
-            </button>
+              <Eye className="w-5 h-5 animate-pulse" />
+              <span>{visitCount.toLocaleString()}</span>
+            </div>
 
             {user && (
               <div className="flex items-center gap-2.5 pr-2">

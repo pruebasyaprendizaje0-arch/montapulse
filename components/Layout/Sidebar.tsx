@@ -1,10 +1,11 @@
-import React from 'react';
-import { Compass, Calendar, User, Bell, Home, Heart, History, Star, Users, Layout, Info, Building2, Clock, Sun, Moon, LogOut, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Compass, Calendar, User, Bell, Home, Heart, History, Star, Users, Layout, Info, Building2, Clock, Sun, Moon, LogOut, Sparkles, Eye } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useData } from '../../context/DataContext';
 import { useTheme } from '../../hooks/useTheme';
+import { subscribeToVisitCount } from '../../services/firestoreService';
 
 export const Sidebar: React.FC = () => {
     const { user, isSuperAdmin, logout } = useAuthContext();
@@ -14,6 +15,14 @@ export const Sidebar: React.FC = () => {
     const { isNearbyMinimized, setIsNearbyMinimized, setActiveView } = useData();
     const { theme, setTheme, isAuto, setIsAuto } = useTheme();
     const currentPath = location.pathname;
+    const [visitCount, setVisitCount] = useState<number>(0);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToVisitCount((count) => {
+            setVisitCount(count);
+        });
+        return () => unsubscribe();
+    }, []);
 
     const navItems = [
         { id: 'explore', icon: Compass, label: 'MAPA PULSE', path: '/explore', action: null },
@@ -119,18 +128,13 @@ export const Sidebar: React.FC = () => {
                     )}
 
                     <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => {
-                            if (isAuto) { setIsAuto(false); setTheme('light'); }
-                            else if (theme === 'light') { setTheme('dark'); }
-                            else if (theme === 'dark') { setTheme('night'); }
-                            else { setIsAuto(true); }
-                          }}
-                          className="p-2 bg-white/5 hover:bg-orange-500/10 text-orange-500 rounded-xl transition-all border border-white/5"
-                          title="Cambiar Tema"
+                        <div 
+                          className="px-2.5 py-1.5 bg-white/5 text-orange-500 rounded-xl border border-white/5 flex items-center gap-1.5 font-mono font-bold text-xs"
+                          title="Contador de visitas"
                         >
-                          {isAuto ? <Clock className="w-4 h-4 animate-pulse" /> : theme === 'light' ? <Sun className="w-4 h-4 text-amber-500" /> : theme === 'dark' ? <Moon className="w-4 h-4" /> : <Moon className="w-4 h-4 fill-slate-900 text-slate-400" />}
-                        </button>
+                          <Eye className="w-4 h-4 animate-pulse" />
+                          <span>{visitCount.toLocaleString()}</span>
+                        </div>
                         
                         {isSuperAdmin && (
                             <button

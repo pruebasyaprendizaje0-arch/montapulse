@@ -155,6 +155,7 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
+      allow update: if settingId == 'visits' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count']);
     }
 
     // Cupones: Público read, owner/admin manage

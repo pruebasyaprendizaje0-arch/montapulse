@@ -41,9 +41,9 @@ export const InfoPage: React.FC = () => {
     const allBusinesses = useMemo(() => {
         let all = businesses || [];
 
-        // Filter by current locality
+        // Filter by current locality (keep 'ubicame.info' always visible for contact/buying services)
         const currentLocName = currentLocality?.name || 'Montañita';
-        all = all.filter((b: any) => (b.locality || 'Montañita') === currentLocName);
+        all = all.filter((b: any) => (b.locality || 'Montañita') === currentLocName || b.name?.toLowerCase().includes('ubicame.info'));
 
         const sq = searchQuery || '';
         if (sq.trim()) {
@@ -64,15 +64,23 @@ export const InfoPage: React.FC = () => {
     }, [businesses, searchQuery, currentLocality]);
 
     const referencePoints = useMemo(() => {
-        return allBusinesses.filter((b: any) => REFERENCE_CATEGORIES.includes(b.category));
+        return allBusinesses.filter((b: any) => REFERENCE_CATEGORIES.includes(b.category) && !b.name?.toLowerCase().includes('ubicame.info'));
     }, [allBusinesses]);
 
     const premiumBusinesses = useMemo(() => {
-        return allBusinesses.filter((b: any) => 
+        const filtered = allBusinesses.filter((b: any) => 
             b.plan === SubscriptionPlan.EXPERT ||
             b.plan === SubscriptionPlan.ELITE ||
-            b.plan === SubscriptionPlan.PRO
+            b.plan === SubscriptionPlan.PRO ||
+            b.name?.toLowerCase().includes('ubicame.info')
         );
+        return [...filtered].sort((a: any, b: any) => {
+            const aIsUbicame = a.name?.toLowerCase().includes('ubicame.info');
+            const bIsUbicame = b.name?.toLowerCase().includes('ubicame.info');
+            if (aIsUbicame && !bIsUbicame) return -1;
+            if (!aIsUbicame && bIsUbicame) return 1;
+            return 0;
+        });
     }, [allBusinesses]);
 
     const otherBusinesses = useMemo(() => {
@@ -80,7 +88,8 @@ export const InfoPage: React.FC = () => {
             !REFERENCE_CATEGORIES.includes(b.category) &&
             b.plan !== SubscriptionPlan.PRO &&
             b.plan !== SubscriptionPlan.ELITE &&
-            b.plan !== SubscriptionPlan.EXPERT
+            b.plan !== SubscriptionPlan.EXPERT &&
+            !b.name?.toLowerCase().includes('ubicame.info')
         );
     }, [allBusinesses]);
 

@@ -833,6 +833,34 @@ export const subscribeToAppSettings = (settingId: string, callback: (data: any) 
     }, `subscribeToAppSettings:${settingId}`);
 };
 
+export const incrementVisitCount = async () => {
+    try {
+        const visitsRef = doc(db, 'settings', 'visits');
+        await updateDoc(visitsRef, {
+            count: increment(1)
+        });
+    } catch (error) {
+        // If document doesn't exist or is not initialized, set it
+        try {
+            const visitsRef = doc(db, 'settings', 'visits');
+            await setDoc(visitsRef, { count: 1 }, { merge: true });
+        } catch (err) {
+            handleFirestoreError(err, 'incrementVisitCount');
+        }
+    }
+};
+
+export const subscribeToVisitCount = (callback: (count: number) => void) => {
+    const visitsRef = doc(db, 'settings', 'visits');
+    return safeOnSnapshot(visitsRef, (docSnap) => {
+        if (docSnap.exists()) {
+            callback(docSnap.data().count || 0);
+        } else {
+            callback(0);
+        }
+    }, 'subscribeToVisitCount');
+};
+
 /**
  * Consolidates all configuration listeners into one to reduce SDK target count.
  * This is a major optimization to prevent "Unexpected state" assertions.

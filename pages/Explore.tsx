@@ -23,7 +23,7 @@ import { Skeleton } from '../components/Skeleton';
 const ACTIVITY_TO_CATEGORIES: Record<string, BusinessCategory[]> = {
   "Bailar": [BusinessCategory.BAR, BusinessCategory.DISCOTECA, BusinessCategory.BAR_DISCOTECA],
   "Comer": [BusinessCategory.RESTAURANTE, BusinessCategory.MERCADO],
-  "Cuidado Personal": [BusinessCategory.HOSPITAL, BusinessCategory.OTRO],
+  "Cuidado Personal": [BusinessCategory.HOSPITAL],
   "Deporte": [BusinessCategory.CANCHA, BusinessCategory.ESCUELA_SURF, BusinessCategory.CENTRO_SURF],
   "Descansar": [BusinessCategory.HOSTAL, BusinessCategory.HOTEL, BusinessCategory.HOSPAJE],
   "Farrear": [BusinessCategory.BAR, BusinessCategory.DISCOTECA, BusinessCategory.BAR_DISCOTECA],
@@ -302,16 +302,37 @@ export const Explore: React.FC<ExploreProps> = ({
 
     const recommendedBusinesses = useMemo(() => {
         if (!selectedMood) return [];
-        const categories = ACTIVITY_TO_CATEGORIES[selectedMood];
-        if (!categories) return [];
+        const categories = ACTIVITY_TO_CATEGORIES[selectedMood] || [];
+        
+        let plannerCat: string | null = null;
+        let vibeEnum: Vibe | null = null;
+        
+        if (selectedMood === "Plan Relax" || selectedMood === "Descansar" || selectedMood === "Trabajar") {
+            plannerCat = "hospedaje";
+            vibeEnum = Vibe.RELAX;
+        } else if (selectedMood === "Comer") {
+            plannerCat = "comida";
+            vibeEnum = Vibe.GASTRONOMIA;
+        } else if (selectedMood === "Bailar" || selectedMood === "Farrear") {
+            plannerCat = "baile";
+            vibeEnum = Vibe.FIESTA;
+        } else if (selectedMood === "Surf") {
+            plannerCat = "surf";
+            vibeEnum = Vibe.SURF;
+        } else if (selectedMood === "Deporte") {
+            plannerCat = "surf";
+            vibeEnum = Vibe.ADRENALINA;
+        }
 
-        let result = businesses.filter(b => 
-            categories.includes(b.category) &&
-            b.locality === currentLocality.name &&
-            !b.isReference &&
-            b.category !== BusinessCategory.REFERENCIA &&
-            (b.mapType === MapEntryType.BUSINESS || !b.mapType)
-        );
+        let result = businesses.filter(b => {
+            const matchesCategory = categories.includes(b.category) || b.category?.toLowerCase() === selectedMood.toLowerCase();
+            const matchesPlanner = plannerCat && b.plannerCategory === plannerCat;
+            const matchesVibe = (vibeEnum && b.moods?.includes(vibeEnum)) || b.moods?.includes(selectedMood as Vibe);
+
+            return (matchesCategory || matchesPlanner || matchesVibe) &&
+                b.locality === currentLocality.name &&
+                b.mapType !== MapEntryType.SECTOR;
+        });
 
         const refCoords = userLocation || currentLocality.coords;
 
@@ -365,8 +386,8 @@ export const Explore: React.FC<ExploreProps> = ({
     const filteredBusinesses = useMemo(() => {
         let result = [...businesses];
 
-        // Filter by locality
-        result = result.filter(b => b.locality === currentLocality.name);
+        // Filter by locality (keep 'ubicame.info' always visible for contact/buying services)
+        result = result.filter(b => b.locality === currentLocality.name || b.name?.toLowerCase().includes('ubicame.info'));
 
         if (activeTab === 'directory') {
             // Only show actual businesses in directory
@@ -392,7 +413,7 @@ export const Explore: React.FC<ExploreProps> = ({
             });
         }
         if (selectedMood) {
-            result = result.filter(b => b.moods?.includes(selectedMood));
+            result = result.filter(b => b.moods?.includes(selectedMood) || b.category?.toLowerCase() === selectedMood.toLowerCase());
         }
         if (selectedSector) {
             result = result.filter(b => b.sector === selectedSector);

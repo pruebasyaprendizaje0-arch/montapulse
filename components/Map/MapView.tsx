@@ -412,7 +412,7 @@ activeTab,
         tabMatch = isReference || isSector;
       }
 
-      const matchesLocality = (business.locality || 'Montañita') === localityName;
+      const matchesLocality = (business.locality || 'Montañita') === localityName || business.name?.toLowerCase().includes('ubicame.info');
       
       let isActuallyVisible = false;
 
