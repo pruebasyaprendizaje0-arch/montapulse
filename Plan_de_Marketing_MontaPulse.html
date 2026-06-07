@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan de Marketing - MontaPulse</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --primary: #00f2fe;
+      --primary-dark: #4facfe;
+      --accent: #ff007f;
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: rgba(15, 23, 42, 0.4);
+      border-radius: 24px;
+      border: 1px solid var(--card-border);
+      padding: 3rem;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    header {
+      border-bottom: 2px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 2rem;
+      margin-bottom: 3rem;
+      position: relative;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 150px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+    }
+
+    .badge {
+      display: inline-block;
+      background: rgba(0, 242, 254, 0.1);
+      border: 1px solid rgba(0, 242, 254, 0.2);
+      color: var(--primary);
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.8rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      margin-top: 2.5rem;
+      margin-bottom: 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-top: 1.5rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .meta-subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      font-weight: 300;
+    }
+
+    p {
+      margin-bottom: 1.2rem;
+      color: #cbd5e1;
+      font-size: 1.05rem;
+    }
+
+    ul, ol {
+      margin-bottom: 1.5rem;
+      padding-left: 1.5rem;
+    }
+
+    li {
+      margin-bottom: 0.6rem;
+      color: #cbd5e1;
+    }
+
+    strong {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    /* Highlight box style */
+    .callout {
+      background: rgba(79, 70, 229, 0.1);
+      border-left: 4px solid var(--primary-dark);
+      padding: 1.5rem;
+      border-radius: 0 16px 16px 0;
+      margin: 2rem 0;
+    }
+
+    .callout-title {
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+    }
+
+    /* Cards Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .container {
+        padding: 1.5rem;
+      }
+      h1 {
+        font-size: 2.2rem;
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      transition: all 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(0, 242, 254, 0.3);
+      box-shadow: 0 10px 20px -10px rgba(0, 242, 254, 0.2);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-icon {
+      color: var(--primary);
+    }
+
+    /* Table styling */
+    .table-container {
+      overflow-x: auto;
+      margin: 2rem 0;
+      border-radius: 16px;
+      border: 1px solid var(--card-border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: rgba(30, 41, 59, 0.4);
+      text-align: left;
+      font-size: 0.95rem;
+    }
+
+    th {
+      background: rgba(15, 23, 42, 0.8);
+      color: #ffffff;
+      font-weight: 600;
+      padding: 1rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    td {
+      padding: 1.2rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: #cbd5e1;
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .text-highlight {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    /* Floating Print Button */
+    .print-btn {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #0f172a;
+      border: none;
+      padding: 1rem 1.8rem;
+      border-radius: 9999px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      box-shadow: 0 10px 25px -5px rgba(0, 242, 254, 0.4);
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      z-index: 100;
+    }
+
+    .print-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 15px 30px -5px rgba(0, 242, 254, 0.6);
+    }
+
+    /* Print styling overrides */
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        padding: 0;
+      }
+      .container {
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+        max-width: 100% !important;
+      }
+      h1, h2, h3, p, li, td, th, strong {
+        color: #000000 !important;
+      }
+      h1 {
+        background: none !important;
+        -webkit-text-fill-color: initial !important;
+      }
+      .print-btn {
+        display: none !important;
+      }
+      .card {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #000000 !important;
+        box-shadow: none !important;
+        page-break-inside: avoid;
+      }
+      .callout {
+        background: #f1f5f9 !important;
+        border-left: 4px solid #475569 !important;
+        color: #000000 !important;
+      }
+      table {
+        background: transparent !important;
+        page-break-inside: avoid;
+      }
+      th {
+        background: #e2e8f0 !important;
+        color: #000000 !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+      }
+      td {
+        border-bottom: 1px solid #cbd5e1 !important;
+      }
+      .badge {
+        border: 1px solid #cbd5e1 !important;
+        color: #475569 !important;
+        background: #f1f5f9 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <button class="print-btn" onclick="window.print()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 6 2 18 2 18 9"></polyline>
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+      <rect x="6" y="14" width="12" height="8"></rect>
+    </svg>
+    Guardar PDF / Imprimir
+  </button>
+
+  <div class="container">
+    <header>
+      <span class="badge">Estrategia Comercial</span>
+      <h1>Plan de Marketing: MontaPulse</h1>
+      <p class="meta-subtitle">Estrategias de venta realistas y aplicadas a la cosmovisión de Montañita, Ecuador</p>
+    </header>
+
+    <main>
+      <section>
+        <h2>1. Resumen Ejecutivo</h2>
+        <p>
+          MontaPulse no es solo una aplicación turística; es el <strong>pulso dinámico de Montañita</strong>. Su propuesta de valor se basa en conectar en tiempo real a los turistas (locales y extranjeros) con la oferta comercial e interactiva de la comuna. Este documento detalla cómo introducir la app en el mercado ecuatoriano de forma viable, adaptándose al comportamiento real del comerciante costero y a las necesidades críticas del turista actual.
+        </p>
+      </section>
+
+      <section>
+        <h2>2. La Realidad y Cosmovisión Ecuatoriana</h2>
+        <p>
+          Para vender en Montañita se debe entender cómo opera la costa ecuatoriana. El marketing tradicional "desde un escritorio" fallará si no considera estos cuatro pilares culturales y económicos:
+        </p>
+
+        <div class="grid">
+          <div class="card">
+            <div class="card-title">
+              <span class="card-icon">⚡</span>
+              Contacto Directo y WhatsApp
+            </div>
+            <p style="font-size: 0.95rem; color: var(--text-muted);">
+              En Ecuador, los negocios cierran ventas conversando. La integración directa a <strong>WhatsApp</strong> en el perfil del negocio es indispensable. Los procesos automatizados complejos ahuyentan tanto a los locales como a los turistas nacionales.
+            </p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span class="card-icon">📊</span>
+              El Ritmo de la Estacionalidad
+            </div>
+            <p style="font-size: 0.95rem; color: var(--text-muted);">
+              El flujo turístico varía drásticamente. De enero a abril llega el turista de la Costa (sol y farra). De julio a septiembre llega el de la Sierra (buscando relax y deporte). El mensaje promocional y los eventos destacados de la app deben rotar según este ciclo.
+            </p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span class="card-icon">🛡️</span>
+              Seguridad y Confianza Viva
+            </div>
+            <p style="font-size: 0.95rem; color: var(--text-muted);">
+              En el contexto nacional actual, el turista valora saber a dónde va antes de salir. El mapa de MontaPulse funciona como una <strong>garantía de zonas vivas y seguras</strong>: al ver RSVP y eventos activos en tiempo real, el usuario decide salir con confianza.
+            </p>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span class="card-icon">💵</span>
+              Billetera Digital Local
+            </div>
+            <p style="font-size: 0.95rem; color: var(--text-muted);">
+              Los comerciantes locales prefieren métodos directos y sin comisiones abusivas. Toda la monetización de suscripciones (PRO/ELITE) debe dar prioridad a transferencias de <strong>Banco Pichincha, Banco Guayaquil, Deuna!</strong> o cobro físico directo.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>3. Puntos Fuertes de la App y Potencial de Venta</h2>
+        <p>
+          Para venderle MontaPulse a los dueños de negocios (Hosts), hay que traducir las funciones de código en beneficios monetarios concretos:
+        </p>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Funcionalidad</th>
+                <th>Potencial de Venta (Beneficio)</th>
+                <th>Argumento Cara a Cara</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-highlight">Mapa Leaflet Interactivo</td>
+                <td>Visibilidad en callejones secundarios y sectores apartados (ej. La Punta, Tigrillo).</td>
+                <td><em>"Don Juan, su local está tres cuadras adentro y no recibe el flujo de la principal. En nuestro mapa, aparecerá destacado con GPS directo".</em></td>
+              </tr>
+              <tr>
+                <td class="text-highlight">Pulse Feed & RSVP en vivo</td>
+                <td>Prueba social instantánea. Al turista no le gusta ir a locales que parecen vacíos.</td>
+                <td><em>"Si la gente ve en la tarde que ya hay 15 personas confirmadas para su happy hour, se animarán a venir de largo sin pensarlo".</em></td>
+              </tr>
+              <tr>
+                <td class="text-highlight">Copiloto IA (AI Writer)</td>
+                <td>Ahorro de tiempo en redactar copys atractivos y traducidos al inglés.</td>
+                <td><em>"No se complique pensando qué poner en el anuncio. Nuestra IA le redacta la invitación perfecta en español e inglés en segundos".</em></td>
+              </tr>
+              <tr>
+                <td class="text-highlight">Mensajes Masivos (Broadcast)</td>
+                <td>Acceso directo a las pantallas de todos los usuarios en Montañita hoy.</td>
+                <td><em>"En temporada baja, podemos mandar un aviso instantáneo a todos los que están en el pueblo para avisar de su menú del día a $3.50".</em></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="callout">
+        <div class="callout-title">Táctica Clave de Venta Terrestre (Guerrilla)</div>
+        <p style="margin-bottom: 0; font-size: 0.95rem;">
+          La venta en Montañita se hace caminando. El equipo comercial debe registrar previamente los negocios locales más populares bajo el plan <strong>FREE</strong> para validar el mapa. Al mostrarles visualizaciones reales en el mapa tras 15 días, el "up-sell" a los planes de pago será una conversión natural respaldada con datos reales de la comunidad.
+        </p>
+      </section>
+
+      <section>
+        <h2>4. Estructura de Planes y Precios</h2>
+        <ul>
+          <li><strong>Plan FREE ($0):</strong> Ideal para poblar el mapa. Presencia básica y visibilidad de eventos comunitarios.</li>
+          <li><strong>Plan PRO ($15 / mes o $40 el trimestre):</strong> Acceso a enlaces de WhatsApp directo, menú/catálogo, estadísticas de clics y ayuda de IA para 1 post semanal.</li>
+          <li><strong>Plan ELITE ($30 / mes o $80 el trimestre):</strong> Marcadores parpadeantes para eventos destacados en vivo, posicionamiento prioritario en búsquedas e IA ilimitada.</li>
+          <li><strong>Plan EXPERT ($60 / mes o $160 el trimestre):</strong> Permite el uso de notificaciones push globales mensuales, banners destacados en el feed y asesoría directa de marketing.</li>
+        </ul>
+      </section>
+
+      <section style="margin-top: 3rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 2rem;">
+        <p style="font-size: 0.9rem; color: var(--text-muted);">
+          MontaPulse App &copy; 2026. Diseñado para potenciar el turismo y comercio local en Montañita, Ecuador.
+        </p>
+      </section>
+    </main>
+  </div>
+
+</body>
+</html>

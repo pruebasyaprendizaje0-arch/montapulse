@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Mail, Key, LogIn, X, AlertCircle, UserPlus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useData } from '../context/DataContext';
 import { loginWithGoogle, loginWithEmail } from '../services/authService';
 import { RegisterForm } from './RegisterForm';
 
@@ -13,6 +15,9 @@ export const LoginScreen: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [termsAccepted, setTermsAccepted] = useState(false);
 
+    const { setShowLogin, setActiveView } = useData();
+    const navigate = useNavigate();
+
     const handleGoogleLogin = async () => {
         if (!termsAccepted) {
             setError('Debes aceptar los términos y condiciones antes de continuar');
@@ -22,6 +27,9 @@ export const LoginScreen: React.FC = () => {
         setError('');
         try {
             await loginWithGoogle();
+            setShowLogin(false);
+            setActiveView('favorites');
+            navigate('/passport');
         } catch (err: any) {
             setError(err.message || 'Failed to login with Google');
         } finally {
@@ -35,6 +43,9 @@ export const LoginScreen: React.FC = () => {
         setError('');
         try {
             await loginWithEmail(email, password);
+            setShowLogin(false);
+            setActiveView('favorites');
+            navigate('/passport');
         } catch (err: any) {
             if (err.code === 'auth/user-not-found') {
                 setError('No account found with this email');
@@ -210,7 +221,9 @@ export const LoginScreen: React.FC = () => {
                         <RegisterForm
                             onBack={resetToLogin}
                             onSuccess={() => {
-                                // User will be automatically logged in after registration
+                                setShowLogin(false);
+                                setActiveView('favorites');
+                                navigate('/passport');
                             }}
                         />
                     )}

@@ -306,20 +306,20 @@ export const Explore: React.FC<ExploreProps> = ({
         
         let plannerCat: string | null = null;
         let vibeEnum: Vibe | null = null;
-        
-        if (selectedMood === "Plan Relax" || selectedMood === "Descansar" || selectedMood === "Trabajar") {
+        const moodStr = selectedMood as string;
+        if (moodStr === "Plan Relax" || moodStr === "Descansar" || moodStr === "Trabajar") {
             plannerCat = "hospedaje";
             vibeEnum = Vibe.RELAX;
-        } else if (selectedMood === "Comer") {
+        } else if (moodStr === "Comer") {
             plannerCat = "comida";
             vibeEnum = Vibe.GASTRONOMIA;
-        } else if (selectedMood === "Bailar" || selectedMood === "Farrear") {
+        } else if (moodStr === "Bailar" || moodStr === "Farrear") {
             plannerCat = "baile";
             vibeEnum = Vibe.FIESTA;
-        } else if (selectedMood === "Surf") {
+        } else if (moodStr === "Surf") {
             plannerCat = "surf";
             vibeEnum = Vibe.SURF;
-        } else if (selectedMood === "Deporte") {
+        } else if (moodStr === "Deporte") {
             plannerCat = "surf";
             vibeEnum = Vibe.ADRENALINA;
         }

@@ -921,7 +921,7 @@ const Dashboard: React.FC = () => {
 
       {/* Global Login Modal Overlay */}
       {showLogin && !user && (
-        <div className="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[5000] bg-slate-900/90 backdrop-blur-xl animate-in fade-in duration-300 overflow-y-auto">
           <Suspense fallback={<PageLoader />}>
             <LoginScreen />
           </Suspense>

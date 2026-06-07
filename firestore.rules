@@ -24,14 +24,31 @@ service cloud.firestore {
       );
     }
 
+    function isSuperAdminEmail() {
+      return isAuthenticated() && (
+        request.auth.token.email.lower() == 'pruebasyaprendizaje0@gmail.com' ||
+        request.auth.token.email.lower() == 'fhernandezcalle@gmail.com' ||
+        request.auth.token.email.lower() == 'ubicameinformacion@gmail.com'
+      );
+    }
+
     // ========== REGLAS DE COLECCIONES ==========
 
     // Users V2: Público para perfiles, pero solo dueño/admin escribe
     match /users_v2/{userId} {
       allow read: if true;
-      allow create: if isOwner(userId) && !request.resource.data.keys().hasAny(['role', 'plan']);
-      allow update: if isAdmin() || (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'plan']));
-      allow delete: if isAdmin();
+      allow create: if isOwner(userId) && (
+        isSuperAdminEmail() ||
+        (
+          (!request.resource.data.keys().hasAny(['role']) || request.resource.data.role == 'visitor' || request.resource.data.role == 'host') &&
+          (!request.resource.data.keys().hasAny(['plan']) || request.resource.data.plan == 'Free')
+        )
+      );
+      allow update: if isAdmin() || isSuperAdminEmail() || (
+        isOwner(userId) && 
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'plan'])
+      );
+      allow delete: if isAdmin() || isSuperAdminEmail();
     }
     
     // Negocios: Público read, incrementos de vista permitidos para todos

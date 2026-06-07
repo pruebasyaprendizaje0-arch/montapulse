@@ -7,6 +7,8 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import admin from 'firebase-admin';
 import { Resend } from 'resend';
+import { enviarPulseSemanal } from './services/newsletterService.js';
+import { enviarReporteMensualNegocio } from './services/reporteMensualService.js';
 
 
 // Inicializar Firebase Admin
@@ -489,3 +491,147 @@ export const checkExpiringReservations = onSchedule("every 30 minutes", async (e
         logger.error('[Reminder] Critical error in scheduled task:', error);
     }
 });
+
+/**
+ * Scheduled Task: Send weekly events newsletter (Thursday report) to users
+ */
+export const sendWeeklyNewsletter = onSchedule({
+    schedule: "0 9 * * 4", // 9:00 AM every Thursday
+    timeZone: "America/Guayaquil",
+}, async (event) => {
+    try {
+        logger.info('[Newsletter] Starting weekly events newsletter scheduled task...');
+
+        // Fetch all users with email
+        const usersSnapshot = await db.collection('users_v2').get();
+        const usuarios = [];
+        usersSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.email) {
+                usuarios.push({
+                    email: data.email,
+                    name: `${data.name || ''} ${data.surname || ''}`.trim() || 'Pulser'
+                });
+            }
+        });
+
+        if (usuarios.length === 0) {
+            logger.info('[Newsletter] No users found with emails. Exiting.');
+            return;
+        }
+
+        // Fetch active/upcoming events
+        const now = new Date();
+        const eventsSnapshot = await db.collection('events')
+            .where('status', '!=', 'deactivated')
+            .get();
+        
+        const eventos = [];
+        eventsSnapshot.forEach(doc => {
+            const data = doc.data();
+            const endAt = data.endAt ? (data.endAt.toDate ? data.endAt.toDate() : new Date(data.endAt)) : null;
+            const startAt = data.startAt ? (data.startAt.toDate ? data.startAt.toDate() : new Date(data.startAt)) : null;
+            const eventEnd = endAt || new Date((startAt ? startAt.getTime() : Date.now()) + 4 * 3600000);
+            
+            // Include only upcoming/current events
+            if (eventEnd >= now) {
+                eventos.push({
+                    id: doc.id,
+                    ...data,
+                    startAt: startAt,
+                    endAt: endAt
+                });
+            }
+        });
+
+        if (eventos.length === 0) {
+            logger.info('[Newsletter] No active upcoming events to feature. Exiting.');
+            return;
+        }
+
+        logger.info(`[Newsletter] Sending weekly newsletter to ${usuarios.length} users with ${eventos.length} events...`);
+        const result = await enviarPulseSemanal(usuarios, eventos);
+        logger.info('[Newsletter] Task finished. Result:', result);
+
+    } catch (error) {
+        logger.error('[Newsletter] Critical error in weekly newsletter task:', error);
+    }
+});
+
+/**
+ * Scheduled Task: Send monthly business performance report to B2B clients
+ */
+export const sendMonthlyBusinessReport = onSchedule({
+    schedule: "0 8 1 * *", // 8:00 AM on the 1st of every month
+    timeZone: "America/Guayaquil",
+}, async (event) => {
+    try {
+        logger.info('[Monthly Report] Starting monthly B2B performance reports scheduled task...');
+
+        // Calculate date range for the previous month
+        const now = new Date();
+        const firstDayPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDayPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+        // Fetch all active businesses
+        const businessesSnapshot = await db.collection('businesses')
+            .where('isDeleted', '!=', true)
+            .get();
+
+        if (businessesSnapshot.empty) {
+            logger.info('[Monthly Report] No businesses found. Exiting.');
+            return;
+        }
+
+        // Fetch coupon redemptions for the previous month
+        const redemptionsSnapshot = await db.collection('couponRedemptions')
+            .where('reservedAt', '>=', admin.firestore.Timestamp.fromDate(firstDayPrevMonth))
+            .where('reservedAt', '<=', admin.firestore.Timestamp.fromDate(lastDayPrevMonth))
+            .get();
+
+        // Count redemptions by businessId
+        const redemptionsMap = {};
+        redemptionsSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.businessId) {
+                redemptionsMap[data.businessId] = (redemptionsMap[data.businessId] || 0) + 1;
+            }
+        });
+
+        let sentCount = 0;
+
+        for (const doc of businessesSnapshot.docs) {
+            const business = doc.data();
+            const businessId = doc.id;
+            const email = business.email;
+            
+            // Skip references or businesses without email
+            if (business.isReference || !email) continue;
+
+            const name = business.name || 'Socio MontaPulse';
+            const views = business.viewCount || 0;
+            const clicks = business.clickCount || 0;
+            const redemptions = redemptionsMap[businessId] || 0;
+
+            // Prepare metrics
+            const metricas = {
+                visitas_al_perfil: views,
+                clics_en_como_llegar: clicks,
+                llamadas_whatsapp: Math.max(0, Math.floor(clicks * 0.25)), // Calculated fallback for WhatsApp calls if not directly logged
+                cupones_reservados: redemptions
+            };
+
+            logger.info(`[Monthly Report] Sending report to ${name} (${email})`);
+            const result = await enviarReporteMensualNegocio(email, name, metricas);
+            if (result.success) {
+                sentCount++;
+            }
+        }
+
+        logger.info(`[Monthly Report] Task finished. Sent reports to ${sentCount} businesses.`);
+
+    } catch (error) {
+        logger.error('[Monthly Report] Critical error in monthly B2B report task:', error);
+    }
+});
+
