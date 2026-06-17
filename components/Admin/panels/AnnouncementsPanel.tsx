@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { subscribeToLatestAnnouncements, deleteAnnouncement } from '../../../services/firestoreService';
 import { 
     Megaphone, Send, Target, Users, MapPin, 
     Sparkles, AlertTriangle, Info, Bell, Trash2, 
@@ -26,6 +27,40 @@ export const AnnouncementsPanel: React.FC = () => {
         allUsers, createAnnouncement, customLocalities, showToast 
     } = useData();
     const { showConfirm } = useToast();
+
+    const [latestAnnouncements, setLatestAnnouncements] = useState<Announcement[]>([]);
+
+    useEffect(() => {
+        const unsub = subscribeToLatestAnnouncements(5, setLatestAnnouncements);
+        return () => unsub();
+    }, []);
+
+    const formatTime = (ts: any) => {
+        if (!ts) return '';
+        const d = ts instanceof Date ? ts : new Date(ts);
+        if (isNaN(d.getTime())) return '';
+        const now = new Date();
+        const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+        if (diff < 60) return `${diff}s`;
+        if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+        return `${Math.floor(diff / 86400)}d`;
+    };
+
+    const handleDelete = async (ann: Announcement) => {
+        const confirmed = await showConfirm(
+            '¿Seguro que deseas eliminar este anuncio? También se eliminarán los mensajes enviados a los chats de los usuarios.',
+            'Eliminar Anuncio'
+        );
+        if (confirmed && ann.id) {
+            try {
+                await deleteAnnouncement(ann.id, ann.roomMessages);
+                showToast('Anuncio eliminado correctamente', 'success');
+            } catch (error) {
+                showToast('Error al eliminar el anuncio', 'error');
+            }
+        }
+    };
 
     // State for New Announcement
     const [isCreating, setIsCreating] = useState(false);
@@ -334,16 +369,93 @@ export const AnnouncementsPanel: React.FC = () => {
                     </div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-4">
-                    <div className="bg-white/5 border border-white/5 rounded-[2.5rem] p-12 flex flex-col items-center justify-center text-center space-y-4">
-                        <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-2">
-                            <MessageSquare className="w-10 h-10 text-slate-700" />
+                <div className="space-y-6">
+                    <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                        <MessageSquare className="w-5 h-5 text-orange-500" />
+                        Historial de Anuncios (Últimos 5)
+                    </h3>
+                    
+                    {latestAnnouncements.length === 0 ? (
+                        <div className="bg-white/5 border border-white/5 rounded-[2.5rem] p-12 flex flex-col items-center justify-center text-center space-y-4">
+                            <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-2">
+                                <MessageSquare className="w-10 h-10 text-slate-700" />
+                            </div>
+                            <h3 className="text-lg font-black text-slate-500 uppercase tracking-tight">Historial de Anuncios</h3>
+                            <p className="text-slate-600 text-sm max-w-sm">
+                                Aquí aparecerán los anuncios enviados recientemente.
+                            </p>
                         </div>
-                        <h3 className="text-lg font-black text-slate-500 uppercase tracking-tight">Historial de Anuncios</h3>
-                        <p className="text-slate-600 text-sm max-w-sm">
-                            Aquí aparecerán los anuncios enviados recientemente.
-                        </p>
-                    </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {latestAnnouncements.map((ann) => {
+                                const style = ANNOUNCEMENT_TYPE_STYLES[ann.type || 'info'] || ANNOUNCEMENT_TYPE_STYLES.info;
+                                const Icon = style.icon;
+                                const isExpired = ann.expiresAt && new Date(ann.expiresAt) < new Date();
+
+                                return (
+                                    <div 
+                                        key={ann.id}
+                                        className="bg-white/5 border border-white/10 rounded-3xl p-5 flex items-start gap-4 transition-all hover:bg-white/[0.07]"
+                                    >
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${style.bg} border`}>
+                                            <Icon className={`w-5 h-5 ${style.color}`} />
+                                        </div>
+                                        
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                <span className="text-xs font-black text-white">{ann.senderName}</span>
+                                                <span className="text-[9px] font-bold text-slate-500">•</span>
+                                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                                                    {ann.target === 'all' ? 'Global' : `Segmentado (${ann.locality || 'Loc.'})`}
+                                                </span>
+                                                {ann.recipientCount !== undefined && (
+                                                    <>
+                                                        <span className="text-[9px] font-bold text-slate-500">•</span>
+                                                        <span className="text-[9px] font-bold text-slate-400">
+                                                            {ann.recipientCount} rec.
+                                                        </span>
+                                                    </>
+                                                )}
+                                                {isExpired && (
+                                                    <span className="px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[8px] font-black uppercase tracking-widest">
+                                                        Expirado
+                                                    </span>
+                                                )}
+                                            </div>
+                                            
+                                            <p className="text-sm text-slate-300 leading-relaxed break-words font-medium">
+                                                {ann.text}
+                                            </p>
+
+                                            {ann.imageUrl && (
+                                                <div className="mt-3 relative rounded-2xl overflow-hidden border border-white/10 max-w-md">
+                                                    <img 
+                                                        src={ann.imageUrl} 
+                                                        alt="Anuncio" 
+                                                        className="w-full max-h-48 object-cover"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            <div className="flex items-center gap-2 mt-3 text-[10px] text-slate-600 font-bold uppercase tracking-widest">
+                                                <span>{formatTime(ann.timestamp)}</span>
+                                                <span>·</span>
+                                                <span>{style.label}</span>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={() => handleDelete(ann)}
+                                            className="p-2.5 rounded-xl bg-white/5 hover:bg-red-500/10 text-slate-400 hover:text-red-400 border border-white/5 hover:border-red-500/20 transition-all active:scale-95 shrink-0"
+                                            title="Eliminar Anuncio"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
         </div>

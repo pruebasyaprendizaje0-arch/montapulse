@@ -28,7 +28,18 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "redirects": [
+      {
+        "source": "/index.html",
+        "destination": "/",
+        "type": 301
+      }
+    ],
     "rewrites": [
+      {
+        "source": "/",
+        "function": "api"
+      },
       {
         "source": "/api/**",
         "function": "api"
@@ -39,6 +50,10 @@
       },
       {
         "source": "/negocio/**",
+        "function": "api"
+      },
+      {
+        "source": "/localidad/**",
         "function": "api"
       },
       {

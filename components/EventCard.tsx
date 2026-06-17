@@ -133,7 +133,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
           </span>
           <div className="flex flex-col items-end">
             <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Interés</span>
-            <span className="text-lg font-black text-white">{event.interestedCount}</span>
+            <span className="text-lg font-black text-white">{Math.max(0, event.interestedCount || 0)}</span>
           </div>
         </div>
         <h3 className="text-xl font-black text-white leading-tight">{event.title}</h3>
@@ -154,7 +154,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
               ))}
             </div>
             <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
-              +{event.interestedCount} ASISTIRÁN
+              +{Math.max(0, event.interestedCount || 0)} ASISTIRÁN
             </span>
           </div>
 

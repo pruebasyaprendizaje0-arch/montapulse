@@ -7,7 +7,7 @@ interface AIMarketingModalProps {
     isOpen: boolean;
     onClose: () => void;
     business: Business;
-    metrics: { weeklyViews: number, totalClicks: number, impactCount: number, followers: number };
+    metrics: { monthlyViews: number, totalClicks: number, impactCount: number, followers: number };
 }
 
 const MARKETING_OPTIONS: { id: MarketingQueryType, label: string, icon: React.ElementType, description: string }[] = [
@@ -95,8 +95,8 @@ export const AIMarketingModal: React.FC<AIMarketingModalProps> = ({ isOpen, onCl
                                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Contexto Actual (Usado por la IA)</h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                     <div className="p-2 bg-black/50 rounded-xl">
-                                        <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">Vistas Semanales</div>
-                                        <div className="font-black text-orange-400">{metrics.weeklyViews}</div>
+                                        <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">Vistas Mensuales</div>
+                                        <div className="font-black text-orange-400">{metrics.monthlyViews}</div>
                                     </div>
                                     <div className="p-2 bg-black/50 rounded-xl">
                                         <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">Clicks Eventos</div>

@@ -203,21 +203,6 @@ export const Explore: React.FC<ExploreProps> = ({
         setIsAiLoading(false);
     };
 
-    const handleAskAnything = async (initialQuery?: string) => {
-        const question = initialQuery || await showPrompt('¿Qué estás buscando hoy?', 'Ej: Un lugar tranquilo para ver el atardecer', 'Pregunta a la IA');
-        if (!question) return;
-
-        setIsAskLoading(true);
-        setShowAskModal(true);
-        try {
-            const results = await getRecommendationForUser(events, businesses, question);
-            setAskRecData(results);
-        } catch (error) {
-            console.error("AI Ask error:", error);
-        } finally {
-            setIsAskLoading(false);
-        }
-    };
 
     const focusBusinessOnMap = (businessId: string) => {
         const business = businesses.find(b => b.id === businessId);
@@ -753,23 +738,6 @@ export const Explore: React.FC<ExploreProps> = ({
                                             ))
                                         }
 
-                                        <div className="px-2 pt-2 border-t border-white/5">
-                                            <button 
-                                                onClick={() => handleAskAnything(searchQuery)}
-                                                className="w-full p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-between group/ai transition-all hover:bg-sky-500/20"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="p-2 bg-sky-500 rounded-lg shadow-lg shadow-sky-500/20">
-                                                        <Sparkles className="w-3.5 h-3.5 text-white" />
-                                                    </div>
-                                                    <div className="text-left">
-                                                        <p className="text-[10px] font-black text-white uppercase tracking-widest">Pulse IA</p>
-                                                        <p className="text-[9px] text-sky-400 font-bold">Consultar sobre "{searchQuery}"</p>
-                                                    </div>
-                                                </div>
-                                                <ArrowRight className="w-4 h-4 text-sky-500 group-hover/ai:translate-x-1 transition-transform" />
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
                             </div>

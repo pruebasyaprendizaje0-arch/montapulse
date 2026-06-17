@@ -345,7 +345,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                 </div>
                                 <div>
                                     <p className="text-[10px] text-orange-400 font-black uppercase tracking-widest">Personas Interesadas</p>
-                                    <p className="text-3xl font-black text-white mt-1">{event.interestedCount}</p>
+                                    <p className="text-3xl font-black text-white mt-1">{Math.max(0, event.interestedCount || 0)}</p>
                                 </div>
                             </div>
                         </div>

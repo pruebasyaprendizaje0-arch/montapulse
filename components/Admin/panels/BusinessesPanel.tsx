@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, Trash2, CheckCircle, Edit3, MapPin, Compass, Store, Filter, RotateCcw } from 'lucide-react';
+import { Search, ShieldCheck, Trash2, CheckCircle, Edit3, MapPin, Compass, Store, Filter, RotateCcw, Eye } from 'lucide-react';
 import { useData } from '../../../context/DataContext';
 import { useToast } from '../../../context/ToastContext';
 import { updateBusiness, deleteBusiness } from '../../../services/firestoreService';
@@ -242,11 +242,14 @@ export const BusinessesPanel: React.FC = () => {
                                     </div>
 
                                     {/* Location details (Locality & Physical Sector) */}
-                                    <div className="flex items-center gap-1 text-[8px] sm:text-[10px] text-slate-400 mt-1 font-medium">
+                                    <div className="flex items-center gap-1.5 text-[8px] sm:text-[10px] text-slate-400 mt-1 font-medium flex-wrap">
                                         <MapPin className="w-2.5 h-2.5 text-orange-500 shrink-0" />
                                         <span>{biz.locality || 'Sin Localidad'}</span>
                                         <span className="text-slate-700 font-bold">•</span>
                                         <span>{biz.sector || 'Sin Sector'}</span>
+                                        <span className="text-slate-700 font-bold">•</span>
+                                        <Eye className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                                        <span>{biz.viewCount || 0} visitas</span>
                                     </div>
 
                                     <p className="text-[8px] sm:text-[9px] text-slate-500 mt-1 truncate">Dueño ID: {biz.ownerId?.slice(0, 8)}...</p>

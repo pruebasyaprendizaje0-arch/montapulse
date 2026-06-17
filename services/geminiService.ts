@@ -145,7 +145,7 @@ export type MarketingQueryType = 'social_media' | 'lightning_offer' | 'keywords'
 
 export async function getMarketingRecommendations(
   business: Business,
-  metrics: { weeklyViews: number, totalClicks: number, impactCount: number, followers: number },
+  metrics: { monthlyViews: number, totalClicks: number, impactCount: number, followers: number },
   queryType: MarketingQueryType
 ): Promise<{ text: string }> {
   
@@ -182,7 +182,7 @@ Información del Negocio:
 - Descripción: ${business.description || 'No especificada'}
 
 Métricas Actuales en la App:
-- Vistas esta semana: ${metrics.weeklyViews}
+- Vistas este mes: ${metrics.monthlyViews}
 - Clicks totales en eventos: ${metrics.totalClicks}
 - Nivel de interés (Impacto): ${metrics.impactCount}
 - Seguidores: ${metrics.followers}

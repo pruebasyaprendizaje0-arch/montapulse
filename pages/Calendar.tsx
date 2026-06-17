@@ -93,7 +93,7 @@ const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
                     </button>
                     <div className="text-right">
                         <p className="text-[9px] font-black text-white/60 uppercase tracking-widest">Interest</p>
-                        <p className="text-2xl font-black text-white leading-none">{event.interestedCount}</p>
+                        <p className="text-2xl font-black text-white leading-none">{Math.max(0, event.interestedCount || 0)}</p>
                     </div>
                 </div>
             </div>

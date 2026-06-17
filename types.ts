@@ -147,6 +147,7 @@ export interface Business {
   subscriptionEndDate?: string;
   monthlyEventCount?: number;
   lastResetDate?: string;
+  createdAt?: any;
   isPublished?: boolean;
   followerCount?: number;
   reviewCount?: number;
@@ -159,7 +160,7 @@ export interface Business {
   deletedAt?: any;
   viewCount?: number;
   clickCount?: number;
-  weeklyViews?: number;
+  monthlyViews?: number;
   paymentStatus?: 'pending' | 'completed' | 'active' | 'expired';
   hasMilitaryBenefit?: boolean;
   emblematicServices?: string[];
@@ -168,6 +169,8 @@ export interface Business {
   };
   moods?: Vibe[];
   mapType?: MapEntryType;
+  referredBy?: string;
+  lastMonthlyResetDate?: any;
 }
 
 export interface ProfileReview {
@@ -206,7 +209,7 @@ export interface MontanitaEvent {
   status?: 'active' | 'readonly' | 'deactivated';
   clickCount?: number;
   weeklyClicks?: number;
-  weeklyViews?: number;
+  monthlyViews?: number;
 }
 
 export interface ChatMessage {
@@ -397,4 +400,17 @@ export interface Lead {
   createdAt: any;
   updatedAt?: any;
 }
+
+// ==================== TRANSACTIONS ====================
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  planId: string;
+  status: string;
+  gateway: string;
+  timestamp: any;
+  rawBody?: any;
+}
+
 

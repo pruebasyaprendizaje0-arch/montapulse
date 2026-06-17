@@ -59,7 +59,7 @@ service cloud.firestore {
                     request.resource.data.keys().hasAll(['name', 'category']) &&
                     request.resource.data.name is string;
       allow update: if 
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount', 'weeklyViews'])) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount', 'monthlyViews', 'lastMonthlyResetDate'])) ||
         (isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin()));
       allow delete: if isAdmin();
     }
@@ -72,7 +72,7 @@ service cloud.firestore {
                     request.resource.data.keys().hasAll(['title', 'date']) &&
                     request.resource.data.title is string;
       allow update: if 
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['interestedCount', 'viewCount', 'clickCount', 'weeklyViews'])) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['interestedCount', 'viewCount', 'clickCount', 'monthlyViews'])) ||
         (isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin()));
       allow delete: if isAdmin() || (isAuthenticated() && resource.data.ownerId == request.auth.uid);
     }

@@ -762,7 +762,7 @@ export const PulseModal: React.FC = () => {
                                                                 </div>
                                                                 <div className="flex items-center gap-1 text-[10px] text-pink-400">
                                                                     <Heart className="w-3 h-3 fill-current" />
-                                                                    {item.data.interestedCount || 0}
+                                                                    {Math.max(0, item.data.interestedCount || 0)}
                                                                 </div>
                                                             </div>
                                                         </div>

@@ -217,6 +217,27 @@ const Dashboard: React.FC = () => {
   }, [user]);
 
   React.useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const refParam = searchParams.get('ref');
+    if (refParam) {
+      sessionStorage.setItem('referredBy', refParam);
+    } else {
+      const path = window.location.pathname;
+      if (path.startsWith('/ref=')) {
+        const refVal = path.split('/ref=')[1];
+        if (refVal) {
+          sessionStorage.setItem('referredBy', refVal);
+        }
+      } else if (path.startsWith('/ref/')) {
+        const refVal = path.split('/ref/')[1];
+        if (refVal) {
+          sessionStorage.setItem('referredBy', refVal);
+        }
+      }
+    }
+  }, []);
+
+  React.useEffect(() => {
     const path = location.pathname;
     if (path === '/' || path === '/explore' || path.startsWith('/evento/')) setActiveView('explore');
     else if (path.startsWith('/negocio/')) setActiveView('services');

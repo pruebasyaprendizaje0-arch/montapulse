@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
     Shield, LayoutDashboard, Building2, Users, Bot, 
-    Settings, ShieldAlert, X, Globe, Megaphone
+    Settings, ShieldAlert, X, Globe, Megaphone, CreditCard
 } from 'lucide-react';
 import { useAuthContext } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -17,8 +17,9 @@ import { SystemPanel } from './panels/SystemPanel';
 import { MasterDataPanel } from './panels/MasterDataPanel';
 import { AnnouncementsPanel } from './panels/AnnouncementsPanel';
 import { ModerationPanel } from './panels/ModerationPanel';
+import { PaymentsPanel } from './panels/PaymentsPanel';
 
-type AdminTab = 'dashboard' | 'businesses' | 'users' | 'announcements' | 'ai' | 'moderation' | 'masterData';
+type AdminTab = 'dashboard' | 'businesses' | 'users' | 'payments' | 'announcements' | 'ai' | 'moderation' | 'masterData';
 
 interface SuperAdminCenterProps {
     onClose: () => void;
@@ -78,6 +79,8 @@ export const SuperAdminCenter: React.FC<SuperAdminCenterProps> = ({ onClose }) =
                 return <DashboardPanel stats={stats} appConfig={appConfig} setActiveTab={setActiveTab} />;
             case 'users':
                 return <UsersPanel stats={stats} />;
+            case 'payments':
+                return <PaymentsPanel />;
             case 'businesses':
                 return <BusinessesPanel />;
             case 'announcements':
@@ -96,6 +99,7 @@ export const SuperAdminCenter: React.FC<SuperAdminCenterProps> = ({ onClose }) =
     const tabs = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'users', label: 'Usuarios', icon: Users },
+        { id: 'payments', label: 'Pagos', icon: CreditCard },
         { id: 'businesses', label: 'Negocios', icon: Building2 },
         { id: 'announcements', label: 'Anuncios', icon: Megaphone },
         { id: 'masterData', label: 'Datos', icon: Globe },

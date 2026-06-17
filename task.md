@@ -37,6 +37,22 @@ Status: **In Progress** 🛠️
 - [x] **Micro-animations & Polish**
   - [x] Add transition effects to tab switching in `BottomNav.tsx`
 
+## Phase 9: Sugeridos Button & Referral Network
+- [x] **Añadir botón "Mis Sugeridos" en Passport.tsx**
+  - [x] Extraer `setCommunityTab` del hook `useData`
+  - [x] Implementar el botón "Mis Sugeridos" en la barra de acciones de negocio de `Passport.tsx`
+- [x] **Sistema de Referidos y Rastreo de URL**
+  - [x] Modificar `types.ts` para soportar `referredBy` en el tipo `Business`
+  - [x] Implementar detector de `ref` en `App.tsx` para almacenar en `sessionStorage`
+  - [x] Capturar el referido en `DataContext.tsx` al registrar nuevos negocios
+  - [x] Diseñar y programar el modal "Mi Red de Sugeridos" en `Passport.tsx` con enlaces de invitación y estadísticas de referidos
+- [x] **Panel de Administración de Referidos**
+  - [x] Crear pestaña "Red de Referidos" en `AdminUsers.tsx`
+  - [x] Agregar Tarjetas KPI ("Total Registrados", "Conversiones", "Beneficios Otorgados")
+  - [x] Implementar Tabla de Historial de Referidos
+  - [x] Agregar botón "Forzar Recompensa" con actualización a Firestore de créditos (+50)
+
+
 ## Completed Tasks
 - [x] **Implement Premium Toast System**
 - [x] **Replace Native Dialogs in Components**

@@ -1,4 +1,14 @@
 User-agent: *
 Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
 Sitemap: https://www.ubicame.info/sitemap.xml
 Sitemap: https://montapulse-app.web.app/sitemap.xml

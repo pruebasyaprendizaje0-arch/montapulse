@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef, useCallback } from 'react';
-import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings, Announcement, MapEntryType } from '../types';
+import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings, Announcement, MapEntryType, Transaction } from '../types';
 import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition } from '../constants';
 import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAllSettings,
-    incrementViewCount, updateAppSettings, subscribeToUsers,
+    incrementViewCount, updateAppSettings, subscribeToUsers, subscribeToTransactions,
     getUserByEmail, getBusinessById, createUser, createBusiness, updateBusiness, deleteBusiness, updateUser,
     toggleRSVP, deleteEvent, updateEvent, createEvent, cleanupOldEvents,
     subscribeToPosts, createPost, toggleLikePost, addCommentToPost, deletePost,
@@ -43,6 +43,7 @@ interface DataContextType {
     setBusinesses: React.Dispatch<React.SetStateAction<Business[]>>;
     allUsers: UserProfile[];
     setAllUsers: React.Dispatch<React.SetStateAction<UserProfile[]>>;
+    transactions: Transaction[];
     favorites: string[];
     setFavorites: React.Dispatch<React.SetStateAction<string[]>>;
     favoritedEvents: MontanitaEvent[];
@@ -287,6 +288,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [businesses, setBusinesses] = useState<Business[]>([]);
     const rawBusinessesRef = useRef<Business[]>([]);
     const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [favorites, setFavorites] = useState<string[]>([]);
     const [paymentDetails, setPaymentDetails] = useState(DEFAULT_PAYMENT_DETAILS);
     const [planPrices, setPlanPrices] = useState<Record<SubscriptionPlan, number>>(PLAN_PRICES);
@@ -1028,21 +1030,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const hostPlan = user.businessId ? businesses.find(b => b.id === user.businessId)?.plan : null;
         const isPremiumHost = hostPlan === SubscriptionPlan.ELITE;
         
-        let unsub: (() => void) | undefined;
+        let unsubUsers: (() => void) | undefined;
+        let unsubTransactions: (() => void) | undefined;
         let t: NodeJS.Timeout | undefined;
 
         if (isAdmin || isPremiumHost) {
             // Give it a small delay to avoid congestion during boot
             t = setTimeout(() => {
-                unsub = subscribeToUsers(setAllUsers);
+                unsubUsers = subscribeToUsers(setAllUsers);
+                if (isAdmin) {
+                    unsubTransactions = subscribeToTransactions(setTransactions);
+                }
             }, 5000);
         } else {
             setAllUsers([]);
+            setTransactions([]);
         }
 
         return () => {
             if (t) clearTimeout(t);
-            if (unsub) unsub();
+            if (unsubUsers) unsubUsers();
+            if (unsubTransactions) unsubTransactions();
         };
     }, [authLoading, isAdmin, user?.businessId, businesses.find(b => b.id === user?.businessId)?.plan]);
 
@@ -1057,7 +1065,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return events.map(event => {
             const rsvp = !!rsvpStatus[event.id];
             const pulse = pulsingEvents[event.id];
-            let count = event.interestedCount || 0;
+            let count = Math.max(0, event.interestedCount || 0);
             
             // Apply optimistic UI adjustments based on transient pulsing state
             if (pulse === 'adding' && !rsvp) count += 1;
@@ -2003,6 +2011,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 const locObj = LOCALITIES.find(l => l.name === bizForm.locality) || LOCALITIES[0];
                 const userEmail = authUser?.email || user?.email || bizForm.email || '';
+                const referredBy = sessionStorage.getItem('referredBy') || null;
                 const businessData = {
                     ...bizForm,
                     ownerId: isSuperAdmin ? (bizForm.ownerId || 'admin') : authUser.uid,
@@ -2014,7 +2023,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     monthlyEventCount: 0,
                     lastResetDate: new Date().toISOString(),
                     plannerCategory: bizForm.plannerCategory || null,
-                    isReference: !!bizForm.isReference
+                    isReference: !!bizForm.isReference,
+                    referredBy: referredBy || undefined
                 };
                 
                 // Firestore rejects undefined values — strip them before saving
@@ -2638,6 +2648,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setCustomLocalities,
             publicCoupons,
             userActiveCoupons,
+            transactions,
         }}>
             {children}
         </DataContext.Provider>

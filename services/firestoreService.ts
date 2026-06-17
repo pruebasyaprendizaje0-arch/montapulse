@@ -24,7 +24,7 @@ import {
 import { db } from '../firebase.config';
 import { getEcuadorDate } from './dateUtils';
 import { generateSlug } from '../utils/stringUtils';
-import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, ProfileReview, PulseNotification, Announcement, SubscriptionPlan, Lead } from '../types';
+import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, ProfileReview, PulseNotification, Announcement, SubscriptionPlan, Lead, Transaction } from '../types';
 
 // Helper to sanitize data for Firestore
 const sanitizeData = (data: any): any => {
@@ -292,7 +292,7 @@ export const incrementEventViewCount = async (eventId: string) => {
         const eventRef = doc(db, 'events', eventId);
         await updateDoc(eventRef, {
             viewCount: increment(1),
-            weeklyViews: increment(1)
+            monthlyViews: increment(1)
         });
     } catch (error) {
         handleFirestoreError(error, 'incrementEventViewCount');
@@ -508,12 +508,39 @@ export const subscribeToBusinesses = (callback: (businesses: Business[]) => void
 export const incrementBusinessViewCount = async (businessId: string) => {
     try {
         const bizRef = doc(db, 'businesses', businessId);
-        // We increment both total and weekly. 
-        // Note: A real weekly reset would need a Cloud Function or lazy reset on first view of the week.
-        await updateDoc(bizRef, {
-            viewCount: increment(1),
-            weeklyViews: increment(1)
-        });
+        const bizSnap = await getDoc(bizRef);
+        if (bizSnap.exists()) {
+            const data = bizSnap.data();
+            const now = new Date();
+            let shouldReset = false;
+            
+            if (data.lastMonthlyResetDate) {
+                const lastReset = data.lastMonthlyResetDate.toDate ? data.lastMonthlyResetDate.toDate() : new Date(data.lastMonthlyResetDate);
+                if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
+                    shouldReset = true;
+                }
+            } else {
+                shouldReset = true;
+            }
+            
+            if (shouldReset) {
+                await updateDoc(bizRef, {
+                    viewCount: increment(1),
+                    monthlyViews: 1,
+                    lastMonthlyResetDate: serverTimestamp()
+                });
+            } else {
+                await updateDoc(bizRef, {
+                    viewCount: increment(1),
+                    monthlyViews: increment(1)
+                });
+            }
+        } else {
+            await updateDoc(bizRef, {
+                viewCount: increment(1),
+                monthlyViews: increment(1)
+            });
+        }
     } catch (error) {
         handleFirestoreError(error, 'incrementBusinessViewCount');
     }
@@ -607,6 +634,19 @@ export const subscribeToUsers = (callback: (users: UserProfile[]) => void) => {
         })) as UserProfile[];
         callback(users);
     }, 'subscribeToUsers');
+};
+
+export const subscribeToTransactions = (callback: (transactions: Transaction[]) => void) => {
+    const transactionsRef = collection(db, 'transactions');
+    const q = query(transactionsRef, orderBy('timestamp', 'desc'), limit(500));
+    return safeOnSnapshot(q, (snapshot) => {
+        const transactions = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate() || new Date()
+        })) as Transaction[];
+        callback(transactions);
+    }, 'subscribeToTransactions');
 };
 
 // ==================== POINTS & PASS ====================
@@ -745,10 +785,16 @@ export const toggleRSVP = async (userId: string, eventId: string) => {
 
         // Usamos una transacción para asegurar que el rsvp y el conteo sean atómicos
         return await runTransaction(db, async (transaction) => {
+            const eventSnap = await transaction.get(eventRef);
+            let currentCount = 0;
+            if (eventSnap.exists()) {
+                currentCount = eventSnap.data().interestedCount || 0;
+            }
+
             if (!snapshot.empty) {
                 transaction.delete(snapshot.docs[0].ref);
                 transaction.update(eventRef, {
-                    interestedCount: increment(-1)
+                    interestedCount: Math.max(0, currentCount - 1)
                 });
                 return false;
             } else {
@@ -759,7 +805,7 @@ export const toggleRSVP = async (userId: string, eventId: string) => {
                     createdAt: serverTimestamp()
                 });
                 transaction.update(eventRef, {
-                    interestedCount: increment(1)
+                    interestedCount: currentCount + 1
                 });
                 return true;
             }
@@ -1491,6 +1537,24 @@ export const subscribeToAnnouncements = (senderId: string, callback: (announceme
         }) as Announcement[];
         callback(announcements);
     }, 'subscribeToAnnouncements');
+};
+
+export const subscribeToLatestAnnouncements = (limitCount: number, callback: (announcements: Announcement[]) => void) => {
+    const announcementsRef = collection(db, 'announcements');
+    const q = query(announcementsRef, orderBy('timestamp', 'desc'), limit(limitCount));
+    return safeOnSnapshot(q, (snapshot) => {
+        const announcements = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const expiresAt = data.expiresAt?.toDate();
+            return {
+                id: doc.id,
+                ...data,
+                timestamp: data.timestamp?.toDate() || getEcuadorDate(),
+                expiresAt
+            };
+        }) as Announcement[];
+        callback(announcements);
+    }, 'subscribeToLatestAnnouncements');
 };
 
 export const deleteAnnouncement = async (announcementId: string, roomMessages?: { roomId: string, messageId: string }[]) => {

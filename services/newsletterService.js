@@ -1,7 +1,13 @@
 import { Resend } from 'resend';
 
-// Initialize Resend with the API key from environment variables
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazily initialize Resend client to avoid environment variable hoisting issues
+let resend;
+const getResendClient = () => {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key');
+  }
+  return resend;
+};
 
 /**
  * Formats a date object/timestamp/string into a readable format for Ecuador
@@ -155,7 +161,7 @@ export async function enviarPulseSemanal(usuarios, eventos) {
 
     try {
       console.log(`[Newsletter] Enviando lote ${j + 1}/${batches.length} con ${currentBatch.length} correos...`);
-      const response = await resend.batch.send(emailObjects);
+      const response = await getResendClient().batch.send(emailObjects);
       
       if (response.error) {
         console.error(`[Newsletter] Error en lote ${j + 1}:`, response.error);

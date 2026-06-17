@@ -1,7 +1,13 @@
 import { Resend } from 'resend';
 
-// Initialize Resend with the API key from environment variables
-const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key');
+// Lazily initialize Resend client to avoid ESM environment variable hoisting issues
+let resend;
+const getResendClient = () => {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key');
+  }
+  return resend;
+};
 
 /**
  * Generates a clean, corporate HTML layout showing performance metrics for the business
@@ -148,7 +154,7 @@ export async function enviarReporteMensualNegocio(email, nombreNegocio, metricas
   }
 
   try {
-    const data = await resend.emails.send({
+    const data = await getResendClient().emails.send({
       from: 'socios@ubicame.info',
       to: email,
       subject: `📊 Reporte Mensual de Rendimiento - ${nombreNegocio}`,

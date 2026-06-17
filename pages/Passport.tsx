@@ -5,7 +5,7 @@ import {
     ChevronLeft, Edit3, LogOut, CheckCircle, MapPin, Store, Palmtree, Mountain,
     Zap, Star, Sparkles, MessageCircle, Navigation, CreditCard, Banknote, Mail, Ticket,
     BarChart2, Eye, Users, TrendingUp, Award, Phone, User, X, Camera, ImageIcon, Upload, ShieldCheck, Plus, Activity,
-    Info, FileText, ExternalLink, Trash2, Save, HelpCircle, Globe, Shield, Instagram, Facebook, Twitter, Link
+    Info, FileText, ExternalLink, Trash2, Save, HelpCircle, Globe, Shield, Instagram, Facebook, Twitter, Link, Copy
 } from 'lucide-react';
 import { UserProfile, Business, MontanitaEvent, Vibe, SubscriptionPlan, Sector, BusinessCategory, Coupon, CouponRedemption } from '../types';
 import { Calendar, Clock } from 'lucide-react';
@@ -73,10 +73,13 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
         showLogin,
         setShowLogin,
         planNames,
-        masterVibes
+        masterVibes,
+        setCommunityTab
     } = useData();
     const { showToast, showConfirm } = useToast();
     const [showProfileEdit, setShowProfileEdit] = useState(false);
+    const [showReferralsModal, setShowReferralsModal] = useState(false);
+    const [copiedReferral, setCopiedReferral] = useState(false);
     const [showAllPulses, setShowAllPulses] = useState(false);
     const [showAllFollowers, setShowAllFollowers] = useState(false);
     const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -140,6 +143,12 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
     const userBusiness = user?.businessId ? businesses.find(b => b.id === user.businessId) : null;
 
+    const referredBusinesses = useMemo(() => {
+        if (!userBusiness) return [];
+        const referrerId = userBusiness.slug || userBusiness.id;
+        return businesses.filter(b => b.referredBy === referrerId);
+    }, [businesses, userBusiness]);
+
     const businessEvents = useMemo(() => {
         if (!userBusiness) return [];
         return events.filter(e => e.businessId === userBusiness.id);
@@ -148,7 +157,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const userStats = useMemo(() => {
         const eventsCount = favoritedEvents.length;
         const friendsCount = followedBusinessIds.length;
-        const impactCount = businessEvents.reduce((sum, e) => sum + (e.interestedCount || 0), 0);
+        const impactCount = businessEvents.reduce((sum, e) => sum + Math.max(0, e.interestedCount || 0), 0);
         const totalClicks = businessEvents.reduce((sum, e) => sum + (e.clickCount || 0), 0);
         return { eventsCount, friendsCount, impactCount, totalClicks };
     }, [favoritedEvents, followedBusinessIds, businessEvents]);
@@ -753,10 +762,10 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-1 hover:bg-white/10 transition-colors">
                                             <div className="flex items-center gap-2 text-orange-400 mb-1">
                                                 <Eye className="w-4 h-4" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Vistas / Semana</span>
+                                                <span className="text-[10px] font-black uppercase tracking-widest">Vistas / Mes</span>
                                             </div>
                                             <div className="flex items-end gap-2">
-                                                <span className="text-2xl font-black text-white leading-none">{biz.weeklyViews || 0}</span>
+                                                <span className="text-2xl font-black text-white leading-none">{biz.monthlyViews || 0}</span>
                                                 <span className="text-[10px] text-slate-500 font-bold mb-0.5 uppercase">Totales: {biz.viewCount || 0}</span>
                                             </div>
                                         </div>
@@ -808,6 +817,16 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                             >
                                                 <Ticket className="w-3.5 h-3.5" />
                                                 Cupones
+                                            </button>
+                                            <button
+                                                 onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowReferralsModal(true);
+                                                }}
+                                                className="px-4 py-1.5 bg-gradient-to-r from-pink-500 to-rose-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-pink-500/10 flex items-center gap-1.5 shrink-0"
+                                            >
+                                                <Users className="w-3.5 h-3.5" />
+                                                Mis Sugeridos
                                             </button>
                                             <button
                                                  onClick={(e) => {
@@ -1624,7 +1643,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     onClose={() => setShowAIMarketing(false)}
                     business={userBusiness}
                     metrics={{ 
-                        weeklyViews: Math.round((userStats.totalClicks || 0) / 4), // Simple estimate
+                        monthlyViews: userBusiness.monthlyViews || 0,
                         totalClicks: userStats.totalClicks || 0,
                         impactCount: userStats.impactCount || 0,
                         followers: userBusiness.followerCount || 0
@@ -1650,6 +1669,134 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     userId={user.id}
                     initialRedemptionId={initialWalletRedemptionId}
                 />
+            )}
+
+            {showReferralsModal && userBusiness && (
+                <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in-zoom duration-300">
+                        {/* Modal Header */}
+                        <div className="p-6 pb-4 border-b border-white/5 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center">
+                                    <Users className="w-5 h-5 text-pink-500" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-black text-white uppercase tracking-tight">
+                                        Mi Red de Sugeridos
+                                    </h2>
+                                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-0.5">
+                                        Recomienda MontaPulse y gana beneficios
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowReferralsModal(false)} className="p-2 text-slate-400 hover:text-white transition-colors">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            {/* Invitar section */}
+                            <div className="space-y-3">
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Invitar a un Negocio Vecino</h3>
+                                
+                                {/* Invitation link block */}
+                                <div className="bg-slate-950/60 border border-white/5 rounded-2xl p-4 flex items-center justify-between gap-4">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-1">Link de Invitación</p>
+                                        <p className="text-xs font-mono text-slate-300 truncate">
+                                            {`${window.location.origin}/?ref=${userBusiness.slug || userBusiness.id}`}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const link = `${window.location.origin}/?ref=${userBusiness.slug || userBusiness.id}`;
+                                            navigator.clipboard.writeText(link);
+                                            setCopiedReferral(true);
+                                            showToast('¡Link copiado al portapapeles!', 'success');
+                                            setTimeout(() => setCopiedReferral(false), 2000);
+                                        }}
+                                        className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 text-slate-400 hover:text-white transition-all active:scale-95 shrink-0"
+                                    >
+                                        {copiedReferral ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                                    </button>
+                                </div>
+
+                                {/* Share to WhatsApp Button */}
+                                <button
+                                    onClick={() => {
+                                        const link = `${window.location.origin}/?ref=${userBusiness.slug || userBusiness.id}`;
+                                        const text = `¡Hola! Te recomiendo registrar tu negocio en MontaPulse para que los turistas te encuentren en el mapa interactivo de la costa. Regístrate aquí: ${link}`;
+                                        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+                                    }}
+                                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/10"
+                                >
+                                    <MessageCircle className="w-4 h-4 fill-current" />
+                                    Compartir en WhatsApp
+                                </button>
+                            </div>
+
+                            {/* Referrals list section */}
+                            <div className="space-y-4 pt-4 border-t border-white/5">
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Negocios que has Sugerido</h3>
+
+                                {referredBusinesses.length === 0 ? (
+                                    <div className="text-center py-10 bg-slate-950/20 border border-dashed border-white/5 rounded-2xl">
+                                        <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Sin sugeridos registrados</p>
+                                        <p className="text-[10px] text-slate-600">Envía tu enlace de invitación para ver a tus referidos aquí.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {referredBusinesses.map((bizItem) => {
+                                            const isPremium = [SubscriptionPlan.PRO, SubscriptionPlan.ELITE, SubscriptionPlan.EXPERT].includes(bizItem.plan);
+                                            // Alternate benefits based on plan
+                                            const benefitLabel = bizItem.plan === SubscriptionPlan.PRO 
+                                                ? '+50 Créditos' 
+                                                : '-50% Próxima Cuota';
+
+                                            return (
+                                                <div key={bizItem.id} className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-2xl hover:bg-white/[0.04] transition-all">
+                                                    <div className="w-10 h-10 rounded-xl bg-slate-800 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                                        {bizItem.imageUrl ? (
+                                                            <img src={bizItem.imageUrl} className="w-full h-full object-cover" alt={bizItem.name} />
+                                                        ) : (
+                                                            <Store className="w-5 h-5 text-slate-500" />
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-xs font-black text-white truncate uppercase tracking-tight">{bizItem.name}</p>
+                                                        <div className="mt-1 flex">
+                                                            {isPremium ? (
+                                                                <span className="inline-flex items-center gap-1 text-[8px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider">
+                                                                    <CheckCircle className="w-2.5 h-2.5" />
+                                                                    Premium Activo ({benefitLabel})
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 text-[8px] bg-slate-800 border border-white/5 text-slate-400 px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider">
+                                                                    <Clock className="w-2.5 h-2.5" />
+                                                                    Registrado
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-6 pt-0 border-t border-white/5 mt-4">
+                            <button
+                                onClick={() => setShowReferralsModal(false)}
+                                className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );
