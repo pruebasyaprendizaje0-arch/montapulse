@@ -31,8 +31,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from './AuthContext';
 import { useToast } from './ToastContext';
 import { resetFirestoreCache } from '../firebase.config';
-import { compressImage } from '../utils/imageUtils';
 import { getDefaultOpeningHours, getEcuadorDate } from '../utils/timeUtils';
+import { guardarSitiosEnLocal, obtenerSitiosLocales } from '../utils/db';
 
 export type CommunityTab = 'chats' | 'updates' | 'communities' | 'calls' | 'notifications' | 'profile';
 
@@ -62,6 +62,7 @@ interface DataContextType {
         whatsapp: string;
         phone: string;
         instagram: string;
+        address?: string;
         category: BusinessCategory;
         coordinates?: [number, number];
         plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
@@ -83,6 +84,7 @@ interface DataContextType {
         whatsapp: string;
         phone: string;
         instagram: string;
+        address?: string;
         category: BusinessCategory;
         coordinates?: [number, number];
         plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
@@ -372,6 +374,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         whatsapp: '',
         phone: '',
         instagram: '',
+        address: '',
         category: BusinessCategory.RESTAURANTE,
         coordinates: null as any,
         plannerCategory: null,
@@ -392,6 +395,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isPanelMinimized, setIsPanelMinimized] = useState(false);
     const [isNearbyMinimized, setIsNearbyMinimized] = useState(true);
     const [isEditorFocus, setIsEditorFocus] = useState(false);
+    const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+    useEffect(() => {
+        const handleOnline = () => {
+            setIsOffline(false);
+            showToast('Conexión restablecida. Sincronizando datos...', 'success');
+        };
+        const handleOffline = () => {
+            setIsOffline(true);
+            showToast('Sin conexión a Internet. Operando en Modo Offline con datos locales.', 'warning');
+        };
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, [showToast]);
 
     // Coupons State
     const [publicCoupons, setPublicCoupons] = useState<Coupon[]>([]);
@@ -627,6 +650,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     whatsapp: business.whatsapp || '',
                     phone: business.phone || '',
                     instagram: business.instagram || '',
+                    address: business.address || '',
                     category: business.category || BusinessCategory.RESTAURANTE,
                     imageUrl: business.imageUrl || '',
                     coordinates: business.coordinates || [-1.8253, -80.7523],
@@ -701,6 +725,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         }, 2500);
 
+        // Cargar datos de IndexedDB como respaldo inmediato (Modo Offline)
+        obtenerSitiosLocales().then((locales) => {
+            if (active && locales && locales.length > 0) {
+                console.log('[DataContext] Cargados sitios locales de IndexedDB:', locales.length);
+                setBusinesses(locales);
+                if (!navigator.onLine) {
+                    bizLoaded = true;
+                    checkInitialLoad();
+                }
+            }
+        }).catch(err => console.error('Error al precargar IndexedDB:', err));
+
         const tCore = addStaggeredUnsub(50, () => {
             const unsubEvents = subscribeToEvents((data) => {
                 if (active) {
@@ -764,6 +800,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setDeletedBusinesses(uniqueDeleted);
                 bizLoaded = true;
                 checkInitialLoad();
+
+                // Guardar en local de forma asíncrona para acceso offline posterior
+                if (navigator.onLine && uniqueActive.length > 0) {
+                    guardarSitiosEnLocal(uniqueActive).catch(err => {
+                        console.error('Error guardando sitios en IndexedDB:', err);
+                    });
+                }
             });
 
             // Master data with error handling

@@ -144,7 +144,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
             >
                 <div className="flex-1 overflow-y-auto no-scrollbar">
                 {/* Header with Image */}
-                <div className="relative h-96">
+                <div className="relative h-64 sm:h-96">
                     {/* Fallback gradient - always visible */}
                     <div className="absolute inset-0 bg-gradient-to-br from-violet-900/60 via-slate-900 to-pink-900/40" />
 
@@ -164,7 +164,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                     ) : null}
 
                     {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent" />
 
                     {/* Action Buttons */}
                     <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex gap-2 z-[2010]">
@@ -173,7 +173,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                 <button
                                     onClick={() => onEdit?.(event)}
                                     className="w-10 h-10 sm:w-14 sm:h-14 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform border-2 sm:border-4 border-slate-900"
-                                >
+                                  >
                                     <Edit3 className="w-5 h-5 sm:w-6 sm:h-6" />
                                 </button>
                                 <button
@@ -193,9 +193,9 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                 e.stopPropagation();
                                 handleShare();
                             }}
-                            className="w-10 h-10 sm:w-14 sm:h-14 bg-white/10 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all border-2 sm:border-4 border-slate-900 group"
+                            className="w-10 h-10 sm:w-14 sm:h-14 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all border-2 sm:border-4 border-slate-900"
                         >
-                            <Share2 className="w-5 h-5 sm:w-6 sm:h-6 group-hover:text-orange-400 transition-colors" />
+                            <Share2 className="w-5 h-5 sm:w-6 sm:h-6" />
                         </button>
                         <button
                             onClick={onClose}
@@ -241,22 +241,25 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                             {Object.values(Sector).includes(event.sector as any) ? event.sector : (business?.sector || '')}
                         </div>
                     </div>
+                </div>
 
-                    {/* Event Title and Description at Bottom */}
-                    <div className="absolute bottom-0 left-0 right-0 p-8 pt-20 bg-gradient-to-t from-slate-900 via-slate-900/80 to-transparent flex flex-col items-center text-center">
-                        <h1 className="text-4xl font-black text-white mb-3 leading-tight tracking-tight max-w-[80%]">
+                {/* Content - SIN ANIMACIONES PARA EVITAR PROBLEMAS EN MOVIL */}
+                <div className="p-8 pt-6">
+                    {/* Event Title, Description, and Author */}
+                    <div className="flex flex-col items-center text-center mb-8">
+                        <h1 className="text-3xl sm:text-4xl font-black text-white mb-4 leading-tight tracking-tight">
                             {event.title}
                         </h1>
 
                         {event.description && (
-                            <p className="text-slate-200 text-sm font-medium leading-relaxed max-w-[70%] mb-6">
+                            <p className="text-slate-300 text-sm sm:text-base font-medium leading-relaxed max-w-[90%] mb-6">
                                 {event.description}
                             </p>
                         )}
 
                         {business ? (
                             <div 
-                                className="flex items-center gap-3 mb-2 cursor-pointer hover:bg-white/5 p-2 -mx-2 rounded-2xl transition-colors"
+                                className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 px-4 rounded-2xl transition-colors border border-white/5 bg-slate-800/20"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     if (onClose) onClose();
@@ -296,7 +299,7 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                 </div>
                             </div>
                         ) : dataLoading ? (
-                            <div className="flex items-center gap-3 mb-2">
+                            <div className="flex items-center gap-3">
                                 <Skeleton className="w-10 h-10 rounded-full" />
                                 <div className="flex flex-col gap-1">
                                     <Skeleton className="w-16 h-2" />
@@ -305,10 +308,6 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                             </div>
                         ) : null}
                     </div>
-                </div>
-
-                {/* Content - SIN ANIMACIONES PARA EVITAR PROBLEMAS EN MOVIL */}
-                <div className="p-8 pt-4">
                     <div className="grid grid-cols-2 gap-4 mb-6">
                         <div className="bg-slate-800/50 rounded-2xl p-4 border border-white/5">
                             <div className="flex items-center gap-3 mb-2">

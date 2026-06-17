@@ -141,6 +141,7 @@ export interface Business {
   whatsapp?: string;
   phone?: string;
   instagram?: string;
+  address?: string;
   ownerId?: string;
   plan: SubscriptionPlan;
   eventCredits?: number;

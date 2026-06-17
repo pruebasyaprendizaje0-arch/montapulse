@@ -388,6 +388,17 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                         </div>
                     </div>
 
+                    <div>
+                        <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Dirección</label>
+                        <input
+                            type="text"
+                            value={data.address || ''}
+                            onChange={(e) => updateField('address', e.target.value)}
+                            className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                            placeholder="Ej: Av. Principal y Calle de la Playa"
+                        />
+                    </div>
+
                     {!data.isReference && (
                         <>
                             <div className="grid grid-cols-2 gap-4">

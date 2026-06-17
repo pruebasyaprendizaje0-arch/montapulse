@@ -538,6 +538,12 @@ export const PublicProfileModal = React.memo(({
                                         <span className="text-[10px] font-black text-slate-400 tracking-widest uppercase truncate">{contactEmail}</span>
                                     </div>
                                 )}
+                                {business?.address && (
+                                    <div className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl">
+                                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span className="text-[10px] font-black text-slate-300 tracking-wider uppercase truncate">{business.address}</span>
+                                    </div>
+                                )}
                             </div>
                             
                             {/* Horario de atención */}

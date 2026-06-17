@@ -228,19 +228,8 @@ export const EventEditorModal: React.FC = () => {
                     </div>
 
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between pl-2">
+                        <div className="pl-2">
                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Descripción</label>
-                            <button
-                                type="button"
-                                onClick={handleGenerateAIEvent}
-                                disabled={isGeneratingDesc || !newEvent.title}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-full transition-all border border-orange-500/20 disabled:opacity-50"
-                            >
-                                <Sparkles className={`w-3 h-3 ${isGeneratingDesc ? 'animate-spin' : ''}`} />
-                                <span className="text-[10px] font-black uppercase tracking-widest">
-                                    {isGeneratingDesc ? 'Generando...' : 'AI Generar'}
-                                </span>
-                            </button>
                         </div>
                         <textarea
                             rows={4}
