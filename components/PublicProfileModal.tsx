@@ -487,7 +487,7 @@ export const PublicProfileModal = React.memo(({
                                         className="w-full flex items-center justify-center gap-2 px-4 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/20 group border border-white/10"
                                     >
                                         <Share2 className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
-                                        <span className="text-[10px] font-black text-white uppercase tracking-[0.1em]">WhatsApp</span>
+                                        <span className="text-[10px] font-black text-white uppercase tracking-[0.1em]">Compartir Negocio</span>
                                     </button>
                                 </div>
                             )}
