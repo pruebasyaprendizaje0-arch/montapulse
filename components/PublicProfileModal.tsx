@@ -481,21 +481,10 @@ export const PublicProfileModal = React.memo(({
 
                             {/* Compartir por WhatsApp button */}
                             {business && (
-                                <div className="flex gap-3 w-full">
-                                    <button
-                                        onClick={() => {
-                                            const shareUrl = `${window.location.origin}/negocio/${business.slug || business.id}`;
-                                            navigator.clipboard.writeText(shareUrl);
-                                            showToast("¡Enlace copiado al portapapeles!", 'success');
-                                        }}
-                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-4 bg-slate-700/80 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-lg border border-white/10"
-                                    >
-                                        <Share2 className="w-4 h-4 text-sky-400" />
-                                        <span className="text-[10px] font-black text-white uppercase tracking-[0.1em]">Copiar Enlace</span>
-                                    </button>
+                                <div className="w-full">
                                     <button
                                         onClick={handleShareWhatsApp}
-                                        className="flex-[2] flex items-center justify-center gap-2 px-4 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/20 group border border-white/10"
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/20 group border border-white/10"
                                     >
                                         <Share2 className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
                                         <span className="text-[10px] font-black text-white uppercase tracking-[0.1em]">WhatsApp</span>
