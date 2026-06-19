@@ -707,7 +707,6 @@ export const Explore: React.FC<ExploreProps> = ({
                                                     onClick={() => {
                                                         setSearchQuery('');
                                                         if ('name' in item) {
-                                                            incrementBusinessViewCount(item.id);
                                                             setPublicProfileId(item.id);
                                                             setPublicProfileType('business');
                                                             setShowPublicProfile(true);

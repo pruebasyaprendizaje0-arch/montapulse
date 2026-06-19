@@ -290,44 +290,78 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
     if (!user) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-6 text-center">
-                {/* Logo grande */}
-                <div className="w-24 h-24 bg-gradient-to-br from-orange-500 to-amber-500 rounded-[3rem] flex items-center justify-center mb-8 shadow-2xl shadow-orange-500/30 animate-pulse">
-                    <Sparkles className="w-12 h-12 text-white" />
+            <div className="min-h-screen bg-gradient-to-b from-[#081021] via-[#050a14] to-[#020409] flex flex-col items-center justify-between pt-8 pb-28 px-6 text-center select-none">
+                {/* Main Body Content */}
+                <div className="flex-1 flex flex-col items-center justify-center w-full max-w-sm my-auto">
+                    {/* Glowing Center Emblem */}
+                    <div className="w-24 h-24 bg-gradient-to-b from-orange-500 to-amber-600 rounded-full flex items-center justify-center mb-6 shadow-2xl shadow-orange-500/30 relative">
+                        <svg viewBox="0 0 100 100" fill="none" className="w-14 h-14 text-white">
+                            {/* 4-point sparkle star in center */}
+                            <path 
+                                d="M50 20 C50 40 40 50 20 50 C40 50 50 60 50 80 C50 60 60 50 80 50 C60 50 50 40 50 20 Z" 
+                                stroke="currentColor" 
+                                strokeWidth="6" 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round"
+                                fill="none"
+                            />
+                            {/* Small circle in bottom-left */}
+                            <circle cx="34" cy="66" r="4.5" fill="currentColor" />
+                            {/* Plus sign at top-right */}
+                            <path d="M68 32 H76 M72 28 V36" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+                        </svg>
+                    </div>
+
+                    {/* Title */}
+                    <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Mi Passport</h1>
+                    
+                    {/* Subtitle */}
+                    <p className="text-slate-300 text-sm font-semibold mb-6 max-w-[280px] leading-relaxed">
+                        Regístrate gratis y obtén beneficios.<br />
+                        Accede a tu perfil, eventos <strong className="text-white font-extrabold">guardados</strong> y beneficios exclusivos.
+                    </p>
+
+                    {/* Business Banner Card */}
+                    <div className="w-full max-w-[320px] bg-[#0c1626]/80 backdrop-blur-md border border-[#1d2d44] rounded-[2rem] p-6 mb-8 shadow-xl">
+                        <h2 className="text-base font-extrabold text-white mb-2 flex items-center justify-center gap-1.5">
+                            <span>💥</span> ¿Tienes un Negocio? <span>💥</span>
+                        </h2>
+                        <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                            Si tienes un negocio o emprendimiento regístralo y tendrás un perfil de negocio gratis
+                        </p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-col gap-3.5 w-full max-w-[280px]">
+                        <button
+                            onClick={() => setShowLogin(true)}
+                            className="w-full bg-[#ff8000] hover:bg-[#e67300] text-white font-extrabold px-8 py-4 rounded-3xl active:scale-95 transition-all flex items-center justify-center gap-2.5 text-base shadow-[0_4px_20px_rgba(255,128,0,0.3)]"
+                        >
+                            <User className="w-5 h-5 text-white stroke-[2.5]" /> Iniciar Sesión
+                        </button>
+                        <button
+                            onClick={() => navigate('/')}
+                            className="w-full bg-[#182337]/50 border border-white/5 text-slate-300 hover:text-white font-bold px-8 py-4 rounded-3xl active:scale-95 transition-all flex items-center justify-center text-sm"
+                        >
+                            Explorar sin cuenta
+                        </button>
+                    </div>
                 </div>
 
-                <h1 className="text-4xl font-black text-white mb-3 tracking-tight">Mi Passport</h1>
-                <p className="text-slate-400 mb-10 max-w-sm text-sm leading-relaxed">
-                    Accede a tu perfil, eventos guardados y beneficios exclusivos
-                </p>
-
-                <div className="flex flex-col gap-4 w-full max-w-xs">
-                    <button
-                        onClick={() => setShowLogin(true)}
-                        className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black px-8 py-5 rounded-3xl shadow-2xl shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 text-lg tracking-wide"
-                    >
-                        <User className="w-6 h-6" /> Iniciar Sesión
-                    </button>
-                    <button
-                        onClick={() => navigate('/')}
-                        className="w-full bg-white/5 text-slate-300 font-bold px-8 py-4 rounded-3xl border border-white/10 hover:bg-white/10 hover:text-white transition-all"
-                    >
-                        Explorar sin cuenta
-                    </button>
-                </div>
-
-                {/* Features */}
-                <div className="mt-16 grid grid-cols-3 gap-6 px-4">
+                {/* Footer Features Row */}
+                <div className="grid grid-cols-3 gap-8 w-full max-w-[300px] px-2 shrink-0">
                     {[
-                        { icon: MapPin, label: 'Eventos', color: 'text-orange-400' },
-                        { icon: Star, label: 'Favoritos', color: 'text-amber-400' },
-                        { icon: Award, label: 'Premios', color: 'text-yellow-400' }
+                        { icon: MapPin, label: 'EVENTOS' },
+                        { icon: Star, label: 'FAVORITOS' },
+                        { icon: Award, label: 'PREMIOS' }
                     ].map((f, i) => (
                         <div key={i} className="flex flex-col items-center gap-2">
-                            <div className={`w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center ${f.color}`}>
-                                <f.icon className="w-6 h-6" />
+                            <div className="w-12 h-12 rounded-xl bg-[#0f1b2d] border border-[#1d2d44] flex items-center justify-center shadow-lg">
+                                <f.icon className="w-5 h-5 text-[#f59e0b] stroke-[2]" />
                             </div>
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{f.label}</span>
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none mt-1">
+                                {f.label}
+                            </span>
                         </div>
                     ))}
                 </div>

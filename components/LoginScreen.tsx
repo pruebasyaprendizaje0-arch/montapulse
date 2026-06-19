@@ -7,6 +7,50 @@ import { RegisterForm } from './RegisterForm';
 
 type ViewMode = 'login' | 'email-login' | 'register';
 
+const LogoSVG = () => (
+    <svg viewBox="0 0 120 120" fill="none" className="w-28 h-28 mx-auto mb-4 drop-shadow-[0_4px_15px_rgba(0,0,0,0.5)]">
+        {/* Outer dark blue circle */}
+        <circle cx="60" cy="60" r="50" fill="#0d162d" stroke="#25355a" strokeWidth="2" />
+        
+        {/* Radar/grid lines */}
+        <circle cx="60" cy="60" r="42" stroke="#485c8d" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+        <circle cx="60" cy="60" r="35" stroke="#485c8d" strokeWidth="1" opacity="0.4" />
+        
+        {/* Crosshair lines */}
+        <line x1="60" y1="18" x2="60" y2="102" stroke="#485c8d" strokeWidth="1.5" opacity="0.5" />
+        <line x1="18" y1="60" x2="102" y2="60" stroke="#485c8d" strokeWidth="1.5" opacity="0.5" />
+
+        {/* Globe continent shapes inside */}
+        <path d="M78 40 C88 45 92 60 88 72 C85 78 80 82 74 85 C68 82 68 76 65 72 C62 68 56 65 52 65 C48 65 42 68 38 72 C32 68 30 58 35 50 C40 42 50 45 55 42 C60 38 65 30 72 30 C75 30 76 36 78 40 Z" fill="#b4834b" opacity="0.3" />
+
+        {/* Wave/Road curves at the bottom */}
+        <path d="M38 76 C50 82 70 82 82 76" stroke="#c08643" strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M34 82 C50 89 70 89 86 82" stroke="#e0a35c" strokeWidth="2.5" strokeLinecap="round" />
+
+        {/* Large central White Map Pin */}
+        <g filter="url(#pin-shadow)">
+            {/* Outer white path of the pin */}
+            <path 
+                d="M60 28 C48 28 39 37 39 49 C39 62 60 85 60 85 C60 85 81 62 81 49 C81 37 72 28 60 28 Z" 
+                fill="#ffffff" 
+            />
+            {/* Cutout hole inside the pin */}
+            <circle cx="60" cy="49" r="7" fill="#0d162d" />
+        </g>
+
+        {/* Small surrounding dots/stars */}
+        <circle cx="30" cy="40" r="1.2" fill="#ffffff" opacity="0.8" />
+        <circle cx="92" cy="50" r="1.5" fill="#ffffff" opacity="0.6" />
+        <circle cx="85" cy="80" r="1" fill="#ffffff" opacity="0.7" />
+
+        <defs>
+            <filter id="pin-shadow" x="30" y="20" width="60" height="75" filterUnits="userSpaceOnUse">
+                <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000000" floodOpacity="0.5" />
+            </filter>
+        </defs>
+    </svg>
+);
+
 export const LoginScreen: React.FC = () => {
     const [viewMode, setViewMode] = useState<ViewMode>('login');
     const [email, setEmail] = useState('');
@@ -69,27 +113,27 @@ export const LoginScreen: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#091124] via-[#070b16] to-[#04060c] p-6 relative select-none">
             {/* Background Pattern */}
-            <div className="absolute inset-0 opacity-10" style={{
+            <div className="absolute inset-0 opacity-[0.03]" style={{
                 backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
                 backgroundSize: '32px 32px'
             }}></div>
 
             <div className="relative w-full max-w-md">
-                {/* Lock Icon Header */}
+                {/* Logo & Brand Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-600 rounded-3xl shadow-2xl shadow-orange-500/30 mb-4">
-                        <Lock className="w-10 h-10 text-white" />
-                    </div>
-                    <h1 translate="no" className="text-4xl font-black text-white tracking-tight mb-2 notranslate uppercase font-mono">ubicame.info Pulse</h1>
-                    <p className="text-slate-400 font-medium">
-                        {viewMode === 'register' ? 'Create your account' : 'Welcome back'}
+                    <LogoSVG />
+                    <p className="text-sm font-light text-slate-300 tracking-wide mb-1 leading-relaxed">
+                        tu guía local de la Ruta del Spondylus
                     </p>
+                    <h1 translate="no" className="text-2xl font-black text-white tracking-widest notranslate">
+                        ubicame.info
+                    </h1>
                 </div>
 
                 {/* Login/Register Card */}
-                <div className="bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
+                <div className="bg-[#0c1424]/90 backdrop-blur-2xl border border-[#17243c] rounded-[2rem] p-8 shadow-2xl">
                     {viewMode === 'login' && (
                         <>
                             {/* Google Login Button */}
@@ -108,27 +152,27 @@ export const LoginScreen: React.FC = () => {
                             </button>
 
                             {/* Terms and Conditions for Google */}
-                            <div className="flex items-start gap-3 mt-4 mb-2 p-2 bg-white/5 rounded-2xl border border-white/5">
+                            <div className="flex items-start gap-3 mt-4 mb-2 p-2 bg-transparent rounded-2xl">
                                 <div className="flex items-center h-5">
                                     <input
                                         id="terms-google"
                                         type="checkbox"
                                         checked={termsAccepted}
                                         onChange={(e) => setTermsAccepted(e.target.checked)}
-                                        className="w-4 h-4 bg-slate-800 border-slate-700 rounded text-orange-500 focus:ring-orange-500/20"
+                                        className="w-4 h-4 bg-transparent border-white/20 rounded text-orange-500 focus:ring-orange-500/20 cursor-pointer"
                                     />
                                 </div>
                                 <label htmlFor="terms-google" className="text-[10px] text-slate-400 leading-tight select-none">
                                     Acepto los <button
                                         type="button"
                                         onClick={() => window.open('/policies', '_blank')}
-                                        className="text-orange-500 hover:text-orange-400 font-bold"
+                                        className="text-[#c08643] hover:underline font-bold"
                                     >
                                         términos del servicio
                                     </button> y la <button
                                         type="button"
                                         onClick={() => window.open('/policies', '_blank')}
-                                        className="text-orange-500 hover:text-orange-400 font-bold"
+                                        className="text-[#c08643] hover:underline font-bold"
                                     >
                                         política de privacidad
                                     </button> de ubicame.info Pulse.
@@ -145,7 +189,7 @@ export const LoginScreen: React.FC = () => {
                             {/* Email Login Button */}
                             <button
                                 onClick={() => setViewMode('email-login')}
-                                className="w-full bg-slate-800 border border-white/10 text-white font-bold py-4 px-6 rounded-2xl hover:bg-slate-700 transition-all flex items-center justify-center gap-3 mb-3"
+                                className="w-full bg-[#182339]/50 border border-white/10 text-white font-bold py-4 px-6 rounded-2xl hover:bg-[#182339]/80 transition-all flex items-center justify-center gap-3 mb-3"
                             >
                                 <Mail className="w-5 h-5" />
                                 <span>Sign in with Email</span>
@@ -238,9 +282,12 @@ export const LoginScreen: React.FC = () => {
                 </div>
 
                 {/* Footer */}
-                <p className="text-center text-slate-500 text-sm mt-6">
-                    🌊 Discover the best events with ubicame.info Pulse
-                </p>
+                <div className="flex items-center justify-center gap-2 mt-8 text-slate-500 text-xs">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-sky-400/80">
+                        <path d="M17.5 19A3.5 3.5 0 0 0 21 15.5c0-2.79-2.54-4.5-5-4.5-.42 0-.83.05-1.22.14A7 7 0 0 0 3 11.5c0 3.59 2.91 6.5 6.5 6.5h8Z" />
+                    </svg>
+                    <span>Discover the best events with ubicame.info Pulse</span>
+                </div>
             </div>
         </div>
     );

@@ -507,39 +507,50 @@ export const subscribeToBusinesses = (callback: (businesses: Business[]) => void
 
 export const incrementBusinessViewCount = async (businessId: string) => {
     try {
-        const bizRef = doc(db, 'businesses', businessId);
-        const bizSnap = await getDoc(bizRef);
-        if (bizSnap.exists()) {
-            const data = bizSnap.data();
-            const now = new Date();
-            let shouldReset = false;
-            
-            if (data.lastMonthlyResetDate) {
-                const lastReset = data.lastMonthlyResetDate.toDate ? data.lastMonthlyResetDate.toDate() : new Date(data.lastMonthlyResetDate);
-                if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
-                    shouldReset = true;
-                }
-            } else {
-                shouldReset = true;
+        // 1. Guard check for client-side environment
+        if (typeof window === 'undefined') return;
+
+        // 2. Filter out search bots, crawlers, lighthouse/headless browsers
+        const userAgent = window.navigator.userAgent || '';
+        const isBot = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|headless/i.test(userAgent);
+        if (isBot) {
+            console.log(`[incrementBusinessViewCount] Ignored view count update for bot/crawler: ${userAgent}`);
+            return;
+        }
+
+        // 3. LocalStorage check for 24-hour rate limit
+        const storageKey = `last_view_biz_${businessId}`;
+        const lastViewTimeStr = localStorage.getItem(storageKey);
+        const nowMs = Date.now();
+        const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+        if (lastViewTimeStr) {
+            const lastViewTime = parseInt(lastViewTimeStr, 10);
+            if (!isNaN(lastViewTime) && (nowMs - lastViewTime < TWENTY_FOUR_HOURS)) {
+                // Already viewed in the last 24 hours - skip database write
+                console.log(`[incrementBusinessViewCount] Skip increment for business ${businessId} (viewed recently).`);
+                return;
             }
-            
-            if (shouldReset) {
-                await updateDoc(bizRef, {
-                    viewCount: increment(1),
-                    monthlyViews: 1,
-                    lastMonthlyResetDate: serverTimestamp()
-                });
-            } else {
-                await updateDoc(bizRef, {
-                    viewCount: increment(1),
-                    monthlyViews: increment(1)
-                });
-            }
+        }
+
+        // 4. Call Cloud Function to process unique IP checks and update Firestore safely
+        const response = await fetch('/api/business/visit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ businessId })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server returned status ${response.status}`);
+        }
+        
+        const resData = await response.json();
+        if (resData.success) {
+            // Update timestamp in LocalStorage only if successfully verified or logged by the server
+            localStorage.setItem(storageKey, nowMs.toString());
+            console.log(`[incrementBusinessViewCount] Server response:`, resData);
         } else {
-            await updateDoc(bizRef, {
-                viewCount: increment(1),
-                monthlyViews: increment(1)
-            });
+            console.warn(`[incrementBusinessViewCount] Server failed to register visit:`, resData.message);
         }
     } catch (error) {
         handleFirestoreError(error, 'incrementBusinessViewCount');

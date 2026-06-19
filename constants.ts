@@ -19,51 +19,51 @@ export const LOCALITY_SECTORS: Record<string, Sector[]> = {
 
 export const SECTOR_INFO = {
   [Sector.PLAYA]: {
-    color: 'text-amber-500',
+    color: 'text-amber-400',
     hex: '#f59e0b',
-    bg: 'bg-amber-500/20',
+    bg: 'bg-amber-950/90 backdrop-blur-sm',
     symbol: '🏖️',
     description: 'Sol, brisa y relax frente al mar'
   },
   [Sector.CENTRO]: {
-    color: 'text-orange-500',
+    color: 'text-orange-400',
     hex: '#f97316',
-    bg: 'bg-orange-500/20',
+    bg: 'bg-orange-950/90 backdrop-blur-sm',
     symbol: '🍹',
     description: 'El corazón del movimiento y la cultura local'
   },
   [Sector.MONTANA]: {
-    color: 'text-yellow-600',
+    color: 'text-yellow-400',
     hex: '#ca8a04',
-    bg: 'bg-yellow-600/20',
+    bg: 'bg-yellow-950/90 backdrop-blur-sm',
     symbol: '🌿',
     description: 'Paz, senderos y reconexión ambiental'
   },
   [Sector.NORTE]: {
-    color: 'text-sky-500',
+    color: 'text-sky-400',
     hex: '#0ea5e9',
-    bg: 'bg-sky-500/20',
+    bg: 'bg-sky-950/90 backdrop-blur-sm',
     symbol: '🧭',
     description: 'Sector Norte de la localidad'
   },
   [Sector.SUR]: {
-    color: 'text-emerald-500',
+    color: 'text-emerald-400',
     hex: '#10b981',
-    bg: 'bg-emerald-500/20',
+    bg: 'bg-emerald-950/90 backdrop-blur-sm',
     symbol: '🧭',
     description: 'Sector Sur de la localidad'
   },
   [Sector.ESTE]: {
-    color: 'text-rose-500',
+    color: 'text-rose-400',
     hex: '#f43f5e',
-    bg: 'bg-rose-500/20',
+    bg: 'bg-rose-950/90 backdrop-blur-sm',
     symbol: '🧭',
     description: 'Sector Este de la localidad'
   },
   [Sector.OESTE]: {
-    color: 'text-indigo-500',
+    color: 'text-indigo-400',
     hex: '#6366f1',
-    bg: 'bg-indigo-500/20',
+    bg: 'bg-indigo-950/90 backdrop-blur-sm',
     symbol: '🧭',
     description: 'Sector Oeste de la localidad'
   }

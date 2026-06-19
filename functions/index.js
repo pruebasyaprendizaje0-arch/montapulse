@@ -886,6 +886,175 @@ app.post('/api/send-email', async (req, res) => {
     }
 });
 
+/**
+ * Route: One-time Admin cleanup tool to recalibrate exaggerated viewCount values.
+ * Security: Requires a secret query parameter ?secret=montapulse_clean_2026
+ */
+app.get('/api/admin/cleanup-views', async (req, res) => {
+    const { secret } = req.query;
+    if (secret !== 'montapulse_clean_2026') {
+        return res.status(401).send('No autorizado.');
+    }
+
+    try {
+        logger.info('[Cleanup API] Iniciando limpieza de visitas exageradas...');
+        const businessesRef = db.collection('businesses');
+        const snapshot = await businessesRef.get();
+        
+        if (snapshot.empty) {
+            return res.send('No se encontraron negocios.');
+        }
+
+        let totalReviewed = 0;
+        let totalUpdated = 0;
+        let batch = db.batch();
+        let batchCount = 0;
+        const details = [];
+
+        for (const doc of snapshot.docs) {
+            const data = doc.data();
+            const viewCount = data.viewCount || 0;
+            const clickCount = data.clickCount || 0;
+            const monthlyViews = data.monthlyViews || 0;
+
+            totalReviewed++;
+
+            if (viewCount > 5000) {
+                let newViews = clickCount > 0 ? clickCount * 15 : 120;
+                let newMonthlyViews = Math.min(newViews, monthlyViews > 0 && monthlyViews < 5000 ? monthlyViews : 120);
+
+                details.push({
+                    name: data.name,
+                    id: doc.id,
+                    oldViews: viewCount,
+                    newViews,
+                    clicks: clickCount
+                });
+
+                batch.update(doc.ref, {
+                    viewCount: newViews,
+                    monthlyViews: newMonthlyViews,
+                    lastViewCleanupDate: admin.firestore.FieldValue.serverTimestamp(),
+                    isRecalibrated: true
+                });
+
+                batchCount++;
+                totalUpdated++;
+
+                if (batchCount === 400) {
+                    await batch.commit();
+                    batch = db.batch();
+                    batchCount = 0;
+                }
+            }
+        }
+
+        if (batchCount > 0) {
+            await batch.commit();
+        }
+
+        logger.info(`[Cleanup API] Proceso completado. Corregidos: ${totalUpdated}`);
+        return res.json({
+            success: true,
+            totalReviewed,
+            totalUpdated,
+            updatedBusinesses: details
+        });
+    } catch (error) {
+        logger.error('[Cleanup API] Error crítico:', error);
+        return res.status(500).send(`Error: ${error.message}`);
+    }
+});
+
+/**
+ * Route: Register Business Visit (Anti-spam / Bot Filtering / Unique IPs)
+ */
+app.post('/api/business/visit', async (req, res) => {
+    const { businessId } = req.body;
+    let userIp = req.body.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+
+    if (!businessId) {
+        return res.status(400).json({ success: false, message: 'Falta businessId en el cuerpo.' });
+    }
+
+    try {
+        // Clean IP representation (handle comma-separated proxy lists, IPv6 maps, etc.)
+        if (typeof userIp === 'string') {
+            userIp = userIp.split(',')[0].trim();
+        } else {
+            userIp = 'unknown';
+        }
+
+        // Filter out search bots/crawlers on the server side as well
+        const userAgent = req.headers['user-agent'] || '';
+        const isBot = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|headless/i.test(userAgent);
+        if (isBot) {
+            logger.info(`[Visit API] Ignored bot/crawler request for business: ${businessId}, UA: ${userAgent}`);
+            return res.json({ success: true, incremented: false, message: 'Bots are not counted.' });
+        }
+
+        const sanitizedIp = userIp.replace(/[^a-zA-Z0-9]/g, '_');
+        const docId = `${businessId}_${sanitizedIp}`;
+        const visitRef = db.collection('registro_visitas').doc(docId);
+        
+        const visitSnap = await visitRef.get();
+        const now = new Date();
+        const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+        if (visitSnap.exists) {
+            const data = visitSnap.data();
+            const lastVisit = data.timestamp ? (data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp)) : new Date(0);
+            if (now.getTime() - lastVisit.getTime() < TWENTY_FOUR_HOURS) {
+                return res.json({ success: true, incremented: false, message: 'Visita ya registrada en las últimas 24 horas.' });
+            }
+        }
+
+        // Set or update the visit record
+        await visitRef.set({
+            businessId,
+            ip: userIp,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Increment counts on the business document
+        const bizRef = db.collection('businesses').doc(businessId);
+        const bizSnap = await bizRef.get();
+
+        if (bizSnap.exists) {
+            const data = bizSnap.data();
+            let shouldReset = false;
+
+            if (data.lastMonthlyResetDate) {
+                const lastReset = data.lastMonthlyResetDate.toDate ? data.lastMonthlyResetDate.toDate() : new Date(data.lastMonthlyResetDate);
+                if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
+                    shouldReset = true;
+                }
+            } else {
+                shouldReset = true;
+            }
+
+            const updateData = {
+                viewCount: admin.firestore.FieldValue.increment(1)
+            };
+
+            if (shouldReset) {
+                updateData.monthlyViews = 1;
+                updateData.lastMonthlyResetDate = admin.firestore.FieldValue.serverTimestamp();
+            } else {
+                updateData.monthlyViews = admin.firestore.FieldValue.increment(1);
+            }
+
+            await bizRef.update(updateData);
+            return res.json({ success: true, incremented: true });
+        } else {
+            return res.status(404).json({ success: false, message: 'Negocio no encontrado.' });
+        }
+    } catch (error) {
+        logger.error('[Visit API] Error registering visit:', error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 // Exportamos la función bajo el nombre 'api'
 export const api = onRequest({
     region: "us-central1",
