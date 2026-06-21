@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sparkles, Zap, MessageCircle, Hash, CalendarDays, Heart, Loader2, Copy } from 'lucide-react';
+import { X, Sparkles, Zap, MessageCircle, Hash, CalendarDays, Heart, Loader2, Copy, Compass } from 'lucide-react';
 import { MarketingQueryType, getMarketingRecommendations } from '../../services/geminiService';
 import { Business } from '../../types';
 
@@ -16,6 +16,7 @@ const MARKETING_OPTIONS: { id: MarketingQueryType, label: string, icon: React.El
     { id: 'keywords', label: 'Palabras Clave', icon: Hash, description: 'Hashtags y keywords para mejorar tu visibilidad' },
     { id: 'thematic_ideas', label: 'Días Temáticos', icon: CalendarDays, description: 'Sugerencias para eventos recurrentes o semanas especiales' },
     { id: 'customer_preferences', label: 'Análisis de Clientes', icon: Heart, description: 'Descubre qué le gusta más a tus seguidores' },
+    { id: 'seo_geo', label: 'Estrategia SEO/GEO', icon: Compass, description: 'Optimiza tu visibilidad en buscadores y mapas locales' },
 ];
 
 export const AIMarketingModal: React.FC<AIMarketingModalProps> = ({ isOpen, onClose, business, metrics }) => {
@@ -53,6 +54,7 @@ export const AIMarketingModal: React.FC<AIMarketingModalProps> = ({ isOpen, onCl
 3. [Palabras Clave]: Sugiéreme hashtags y palabras clave relevantes para mejorar la visibilidad y alcance en buscadores/redes sociales.
 4. [Días Temáticos]: Propón ideas de eventos temáticos, semanales o recurrentes ideales para atraer más turistas.
 5. [Análisis de Clientes]: Analiza la afinidad de mi marca y ayúdame a descifrar qué tipo de contenido e interacciones gustan más a mis seguidores según mi impacto.
+6. [Estrategia SEO/GEO]: Proporciona una estrategia de posicionamiento web (SEO) y búsqueda geográfica (GEO) local en mapas.
 
 Por favor, ayúdame a desarrollar estas ideas y generar una estrategia de marketing creativa basada en mi contexto y las tareas descritas arriba.`;
 

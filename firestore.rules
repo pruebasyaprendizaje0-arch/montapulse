@@ -20,7 +20,10 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.admin == true || 
-        (exists(/databases/$(database)/documents/users_v2/$(request.auth.uid)) && getUserData().role == 'admin')
+        (exists(/databases/$(database)/documents/users_v2/$(request.auth.uid)) && getUserData().role == 'admin') ||
+        (request.auth.token.email.lower() == 'pruebasyaprendizaje0@gmail.com' ||
+         request.auth.token.email.lower() == 'fhernandezcalle@gmail.com' ||
+         request.auth.token.email.lower() == 'ubicameinformacion@gmail.com')
       );
     }
 
@@ -210,6 +213,69 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     
+    // Booking Addons
+    match /booking_addons/{businessId} {
+      allow read: if true;
+      allow write: if isAdmin() || (
+        isAuthenticated() && 
+        get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid
+      );
+    }
+
+    // Booking Configs
+    match /booking_configs/{businessId} {
+      allow read: if true;
+      allow write: if isAdmin() || (
+        isAuthenticated() && 
+        get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid
+      );
+    }
+
+    // Booking Inventories
+    match /room_inventories/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin() || (
+        isAuthenticated() && 
+        (
+          (request.resource != null && get(/databases/$(database)/documents/businesses/$(request.resource.data.businessId)).data.ownerId == request.auth.uid) ||
+          (resource != null && get(/databases/$(database)/documents/businesses/$(resource.data.businessId)).data.ownerId == request.auth.uid)
+        )
+      );
+    }
+    match /table_inventories/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin() || (
+        isAuthenticated() && 
+        (
+          (request.resource != null && get(/databases/$(database)/documents/businesses/$(request.resource.data.businessId)).data.ownerId == request.auth.uid) ||
+          (resource != null && get(/databases/$(database)/documents/businesses/$(resource.data.businessId)).data.ownerId == request.auth.uid)
+        )
+      );
+    }
+    match /slot_inventories/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin() || (
+        isAuthenticated() && 
+        (
+          (request.resource != null && get(/databases/$(database)/documents/businesses/$(request.resource.data.businessId)).data.ownerId == request.auth.uid) ||
+          (resource != null && get(/databases/$(database)/documents/businesses/$(resource.data.businessId)).data.ownerId == request.auth.uid)
+        )
+      );
+    }
+
+    // Bookings
+    match /bookings/{bookingId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAdmin() || (
+        isAuthenticated() && 
+        (
+          (request.resource != null && get(/databases/$(database)/documents/businesses/$(request.resource.data.businessId)).data.ownerId == request.auth.uid) ||
+          (resource != null && get(/databases/$(database)/documents/businesses/$(resource.data.businessId)).data.ownerId == request.auth.uid)
+        )
+      );
+    }
+
     // Default: Solo Admin
     match /{document=**} {
       allow read, write: if isAdmin();

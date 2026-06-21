@@ -141,7 +141,7 @@ export async function getRecommendationForUser(events: MontanitaEvent[], busines
   }
 }
 
-export type MarketingQueryType = 'social_media' | 'lightning_offer' | 'keywords' | 'thematic_ideas' | 'customer_preferences';
+export type MarketingQueryType = 'social_media' | 'lightning_offer' | 'keywords' | 'thematic_ideas' | 'customer_preferences' | 'seo_geo';
 
 export async function getMarketingRecommendations(
   business: Business,
@@ -166,6 +166,9 @@ export async function getMarketingRecommendations(
       break;
     case 'customer_preferences':
       taskDescription = "Analiza las métricas actuales del negocio y sugiere qué tipo de contenido, productos o servicios podrían gustarle más a sus clientes actuales para aumentar el 'engagement'.";
+      break;
+    case 'seo_geo':
+      taskDescription = "Proporciona una estrategia de posicionamiento web (SEO) y búsqueda geográfica (GEO) para este negocio. Incluye recomendaciones de palabras clave locales por intención de búsqueda y consejos específicos para destacar en búsquedas basadas en mapas (como Google Maps, Apple Maps y ubicame.info).";
       break;
   }
 

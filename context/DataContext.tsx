@@ -28,6 +28,7 @@ import { Coupon, CouponRedemption } from '../types';
 
 import { generateEventDescription } from '../services/geminiService';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { compressImage } from '../utils/imageUtils';
 import { useAuthContext } from './AuthContext';
 import { useToast } from './ToastContext';
 import { resetFirestoreCache } from '../firebase.config';

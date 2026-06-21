@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings, Share2 } from 'lucide-react';
+import { X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings, Share2, UserPlus, UserCheck } from 'lucide-react';
 import { MontanitaEvent, Business, Sector } from '../types';
 import { Skeleton } from './Skeleton';
 import { SECTOR_INFO, BASE_URL } from '../constants';
@@ -44,7 +44,7 @@ export const EventModal: React.FC<EventModalProps> = ({
 }) => {
     const [imgError, setImgError] = React.useState(false);
     const { showToast, showConfirm } = useToast();
-    const { setShowPublicProfile, setPublicProfileId, setPublicProfileType } = useData();
+    const { setShowPublicProfile, setPublicProfileId, setPublicProfileType, handleToggleFollow, isBusinessFollowed } = useData();
 
     useSEO({
         title: event?.title || 'Evento',
@@ -258,45 +258,70 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                         )}
 
                         {business ? (
-                            <div 
-                                className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 px-4 rounded-2xl transition-colors border border-white/5 bg-slate-800/20"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onClose) onClose();
-                                    setPublicProfileType('business');
-                                    setPublicProfileId(business.id);
-                                    setShowPublicProfile(true);
-                                }}
-                            >
-                                <div className="relative group">
-                                    <img
-                                        src={business.imageUrl}
-                                        alt={business.name}
-                                        className="w-10 h-10 rounded-full border-2 border-white/20 object-cover shadow-2xl"
-                                    />
-                                    {isAdmin && (
-                                        <button
-                                            onClick={() => onEditBusiness?.(business.id)}
-                                            className="absolute -top-1 -right-1 bg-orange-500 p-1.5 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            <Settings className="w-3 h-3 text-white" />
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="flex flex-col items-start">
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">Publicado por</p>
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-sm font-black text-white">{business.name}</p>
+                            <div className="flex items-center gap-3">
+                                <div 
+                                    className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 px-4 rounded-2xl transition-colors border border-white/5 bg-slate-800/20"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (onClose) onClose();
+                                        setPublicProfileType('business');
+                                        setPublicProfileId(business.id);
+                                        setShowPublicProfile(true);
+                                    }}
+                                >
+                                    <div className="relative group">
+                                        <img
+                                            src={business.imageUrl}
+                                            alt={business.name}
+                                            className="w-10 h-10 rounded-full border-2 border-white/20 object-cover shadow-2xl"
+                                        />
                                         {isAdmin && (
                                             <button
                                                 onClick={() => onEditBusiness?.(business.id)}
-                                                className="text-orange-400 hover:text-orange-300 transition-colors"
+                                                className="absolute -top-1 -right-1 bg-orange-500 p-1.5 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
                                             >
-                                                <Edit3 className="w-3 h-3" />
+                                                <Settings className="w-3 h-3 text-white" />
                                             </button>
                                         )}
                                     </div>
+                                    <div className="flex flex-col items-start">
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">Publicado por</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm font-black text-white">{business.name}</p>
+                                            {isAdmin && (
+                                                <button
+                                                    onClick={() => onEditBusiness?.(business.id)}
+                                                    className="text-orange-400 hover:text-orange-300 transition-colors"
+                                                >
+                                                    <Edit3 className="w-3 h-3" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleFollow(business.id);
+                                    }}
+                                    className={`flex items-center gap-1.5 px-4 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
+                                        isBusinessFollowed(business.id)
+                                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:bg-orange-600'
+                                            : 'bg-white/5 text-white border border-white/10 hover:bg-white/10'
+                                    }`}
+                                >
+                                    {isBusinessFollowed(business.id) ? (
+                                        <>
+                                            <UserCheck className="w-3.5 h-3.5 animate-in zoom-in duration-200" />
+                                            <span>Siguiendo</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <UserPlus className="w-3.5 h-3.5 animate-in zoom-in duration-200" />
+                                            <span>Seguir</span>
+                                        </>
+                                    )}
+                                </button>
                             </div>
                         ) : dataLoading ? (
                             <div className="flex items-center gap-3">

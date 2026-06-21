@@ -9,6 +9,8 @@ import { useAuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { getEcuadorDate, isBusinessOpen } from '../utils/timeUtils';
 import { useSEO } from '../hooks/useSEO';
+import { BookingWidget } from './BookingWidget';
+
 
 
 const DAYS_ES: Record<string, string> = {
@@ -555,6 +557,14 @@ export const PublicProfileModal = React.memo(({
                         </p>
                         <div className="absolute -bottom-4 -right-4 text-4xl text-white/5 font-serif">"</div>
                     </div>
+
+                    {/* Booking Module */}
+                    {business && (
+                        <div className="w-full">
+                            <BookingWidget businessId={business.id} />
+                        </div>
+                    )}
+
 
                     {/* Products and Services Section */}
                     <div className="w-full space-y-8">

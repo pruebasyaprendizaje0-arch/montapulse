@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass } from 'lucide-react';
-import { useAuthContext } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS } from '../../constants';
 import { Sector, BusinessCategory, MapEntryType } from '../../types';
@@ -13,7 +12,7 @@ interface BusinessEditModalProps {
 }
 
 export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, isRegistration = false }) => {
-    const { user, isSuperAdmin, isAdmin, isSuperUser } = useAuthContext();
+    const { user, isSuperAdmin, isAdmin, isSuperUser } = useData();
     const {
         businesses, setBusinesses, editingBusinessId, setShowBusinessEdit,
         setEditingBusinessId, handleUpdateBusinessProfile,

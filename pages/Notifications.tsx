@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Bell, Sparkles, X, Info, Gift, AlertTriangle, Zap, Users, MapPin, Hash, MessageCircle, Heart, ChevronRight, User, CheckCheck, Camera, ImagePlus, Trash2, Share2, Calendar } from 'lucide-react';
 import { uploadFile } from '../services/storageService';
-import { useAuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { SubscriptionPlan, Announcement, Vibe } from '../types';
@@ -23,9 +22,9 @@ const NOTIF_TYPE_STYLES: Record<string, { color: string; bg: string; icon: React
 };
 
 export const Notifications: React.FC = () => {
-    const { user, isAdmin } = useAuthContext();
     const { showToast } = useToast();
     const {
+        user, isAdmin,
         notifications, markAsRead, businesses, businessFollowers: contextFollowers = [],
         events, masterVibes = [], customLocalities = []
     } = useData();
