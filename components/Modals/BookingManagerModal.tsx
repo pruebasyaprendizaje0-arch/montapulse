@@ -25,6 +25,14 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
     const [loading, setLoading] = useState(true);
     const [businessName, setBusinessName] = useState('');
 
+    // Bank Account details
+    const [bankName, setBankName] = useState('');
+    const [accountType, setAccountType] = useState('Ahorros');
+    const [accountNumber, setAccountNumber] = useState('');
+    const [accountHolder, setAccountHolder] = useState('');
+    const [holderId, setHolderId] = useState('');
+    const [accountEmail, setAccountEmail] = useState('');
+
     // Manual Upload Receipt
     const [receiptUrl, setReceiptUrl] = useState('');
     const [submittingManual, setSubmittingManual] = useState(false);
@@ -83,6 +91,12 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                 const data = configSnap.data();
                 setBookingType(data.bookingType || 'rooms');
                 setIsEnabled(data.isEnabled || false);
+                setBankName(data.bankName || '');
+                setAccountType(data.accountType || 'Ahorros');
+                setAccountNumber(data.accountNumber || '');
+                setAccountHolder(data.accountHolder || '');
+                setHolderId(data.holderId || '');
+                setAccountEmail(data.accountEmail || '');
             }
 
             // 3. Get Business Name
@@ -188,6 +202,12 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                 businessId,
                 bookingType,
                 isEnabled,
+                bankName,
+                accountType,
+                accountNumber,
+                accountHolder,
+                holderId,
+                accountEmail,
                 updatedAt: new Date()
             }, { merge: true });
             showToast('Configuración guardada.', 'success');
@@ -391,7 +411,12 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
             detailStr = `Fecha/Turno: ${dateStr}\nCupos: ${booking.spotsRequested}`;
         }
 
-        const message = `Hola ${booking.clientName},\n\nTe escribimos de parte de *${businessName || 'ubicame.info'}* para recordarte tu reserva:\n\n*Tipo:* ${typeLabel}\n*Detalles:*\n${detailStr}\n*Estado:* ${booking.status.toUpperCase()}\n\n¡Te esperamos!`;
+        let bankPaymentStr = '';
+        if (bankName && accountNumber) {
+            bankPaymentStr = `\n\n*Datos de pago para confirmar su reserva:*\n- *Banco:* ${bankName}\n- *Tipo:* ${accountType || 'Ahorros'}\n- *Cuenta:* ${accountNumber}\n- *Titular:* ${accountHolder}\n${holderId ? `- *CI/RUC:* ${holderId}\n` : ''}${accountEmail ? `- *Email:* ${accountEmail}\n` : ''}\nPor favor, realice la transferencia y envíe el comprobante de pago por este medio para confirmar y registrar su reserva.`;
+        }
+
+        const message = `Hola ${booking.clientName},\n\nTe escribimos de parte de *${businessName || 'ubicame.info'}* para recordarte tu reserva:\n\n*Tipo:* ${typeLabel}\n*Detalles:*\n${detailStr}\n*Estado:* ${booking.status.toUpperCase()}${bankPaymentStr}\n\n¡Te esperamos!`;
         
         window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');
     };
@@ -565,6 +590,84 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                             >
                                                 <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all ${isEnabled ? 'left-[calc(100%-1.35rem)]' : 'left-0.5'}`} />
                                             </button>
+                                        </div>
+
+                                        <div className="border-t border-white/5 pt-6 space-y-4">
+                                            <div>
+                                                <h4 className="text-sm font-black text-white uppercase tracking-wider">Datos de Cuenta Bancaria</h4>
+                                                <p className="text-[10px] text-slate-500 mt-1">Configura una cuenta para que tus clientes puedan realizar pagos o transferencias directas para sus reservas.</p>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Banco</label>
+                                                    <input 
+                                                        type="text"
+                                                        placeholder="Ej: Banco Pichincha"
+                                                        value={bankName}
+                                                        onChange={(e) => setBankName(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none focus:border-orange-500/50"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Tipo de Cuenta</label>
+                                                    <select 
+                                                        value={accountType}
+                                                        onChange={(e) => setAccountType(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none focus:border-orange-500/50"
+                                                    >
+                                                        <option value="Ahorros">Ahorros</option>
+                                                        <option value="Corriente">Corriente</option>
+                                                        <option value="Virtual / Digital">Virtual / Digital</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Número de Cuenta</label>
+                                                    <input 
+                                                        type="text"
+                                                        placeholder="Ej: 2201234567"
+                                                        value={accountNumber}
+                                                        onChange={(e) => setAccountNumber(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none focus:border-orange-500/50"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Titular de la Cuenta</label>
+                                                    <input 
+                                                        type="text"
+                                                        placeholder="Nombre del beneficiario"
+                                                        value={accountHolder}
+                                                        onChange={(e) => setAccountHolder(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none focus:border-orange-500/50"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Identificación (C.I. / RUC)</label>
+                                                    <input 
+                                                        type="text"
+                                                        placeholder="Ej: 1712345678"
+                                                        value={holderId}
+                                                        onChange={(e) => setHolderId(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none focus:border-orange-500/50"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Email de Notificación</label>
+                                                    <input 
+                                                        type="email"
+                                                        placeholder="Ej: pagos@negocio.com"
+                                                        value={accountEmail}
+                                                        onChange={(e) => setAccountEmail(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none focus:border-orange-500/50"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <button 

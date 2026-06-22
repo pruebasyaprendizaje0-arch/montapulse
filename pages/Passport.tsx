@@ -27,7 +27,8 @@ import { SuperAdminCenter } from '../components/Admin/SuperAdminCenter';
 import { AIMarketingModal } from '../components/Modals/AIMarketingModal';
 import CouponManagerModal from '../components/Modals/CouponManagerModal';
 import { BookingManagerModal } from '../components/Modals/BookingManagerModal';
-import { CalendarDays } from 'lucide-react';
+import { MenuQRManagerModal } from '../components/Modals/MenuQRManagerModal';
+import { CalendarDays, QrCode } from 'lucide-react';
 import { UserWalletModal } from '../components/Coupons/UserWalletModal';
 import { subscribeToPublicCoupons, obtainCoupon, subscribeToUserWallet } from '../services/couponService';
 import { CouponCard } from '../components/Coupons/CouponCard';
@@ -98,6 +99,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const [showAIMarketing, setShowAIMarketing] = useState(false);
     const [showCouponManager, setShowCouponManager] = useState(false);
     const [showBookingManager, setShowBookingManager] = useState(false);
+    const [showMenuManager, setShowMenuManager] = useState(false);
     const [showUserWallet, setShowUserWallet] = useState(false);
     const [initialWalletRedemptionId, setInitialWalletRedemptionId] = useState<string | null>(null);
     const [showCopied, setShowCopied] = useState(false);
@@ -864,6 +866,16 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                             >
                                                 <CalendarDays className="w-3.5 h-3.5" />
                                                 Reservas
+                                            </button>
+                                            <button
+                                                 onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShowMenuManager(true);
+                                                }}
+                                                className="px-4 py-1.5 bg-gradient-to-r from-pink-500 to-rose-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-pink-500/10 flex items-center gap-1.5 shrink-0"
+                                            >
+                                                <QrCode className="w-3.5 h-3.5" />
+                                                Menú QR
                                             </button>
                                             <button
                                                  onClick={(e) => {
@@ -1710,6 +1722,14 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                 <BookingManagerModal
                     isOpen={showBookingManager}
                     onClose={() => setShowBookingManager(false)}
+                    businessId={userBusiness.id}
+                />
+            )}
+
+            {showMenuManager && userBusiness && (
+                <MenuQRManagerModal
+                    isOpen={showMenuManager}
+                    onClose={() => setShowMenuManager(false)}
                     businessId={userBusiness.id}
                 />
             )}

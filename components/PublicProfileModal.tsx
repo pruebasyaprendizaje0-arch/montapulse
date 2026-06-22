@@ -10,6 +10,8 @@ import { useToast } from '../context/ToastContext';
 import { getEcuadorDate, isBusinessOpen } from '../utils/timeUtils';
 import { useSEO } from '../hooks/useSEO';
 import { BookingWidget } from './BookingWidget';
+import { Utensils } from 'lucide-react';
+import { PublicMenuModal } from './Modals/PublicMenuModal';
 
 
 
@@ -53,6 +55,7 @@ export const PublicProfileModal = React.memo(({
     const [reviews, setReviews] = useState<ProfileReview[]>([]);
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showPublicMenu, setShowPublicMenu] = useState(false);
     
     const isMountedRef = React.useRef(false);
     const lastOpenTimeRef = React.useRef(0);
@@ -613,6 +616,19 @@ export const PublicProfileModal = React.memo(({
                         )}
                     </div>
 
+                    {/* Digital Menu Button */}
+                    {business && (business as any).menu_premium_active && (
+                        <div className="w-full max-w-sm px-4">
+                            <button
+                                onClick={() => setShowPublicMenu(true)}
+                                className="w-full flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-pink-500/20 group border border-white/10"
+                            >
+                                <Utensils className="w-5 h-5 text-white group-hover:rotate-12 transition-transform" />
+                                <span className="text-xs font-black text-white uppercase tracking-[0.2em]">Ver Menú Digital</span>
+                            </button>
+                        </div>
+                    )}
+
                     {/* Stats - Centered Grid */}
                     <div className="grid grid-cols-3 gap-4 py-4 border-y border-white/5 w-full">
                         <div className="text-center">
@@ -788,6 +804,14 @@ export const PublicProfileModal = React.memo(({
                     )}
 
                     
+                    {business && (
+                        <PublicMenuModal
+                            isOpen={showPublicMenu}
+                            onClose={() => setShowPublicMenu(false)}
+                            businessId={business.id}
+                            businessName={business.name}
+                        />
+                    )}
                 </div>
             </div>
         </div>

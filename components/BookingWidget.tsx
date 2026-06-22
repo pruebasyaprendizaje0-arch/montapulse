@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Hotel, Utensils, CalendarDays, Calendar, Users, Clock, X, Info, Sparkles, ShieldCheck } from 'lucide-react';
+import { Lock, Hotel, Utensils, CalendarDays, Calendar, Users, Clock, X, Info, Sparkles, ShieldCheck, CheckCircle } from 'lucide-react';
 import { db } from '../firebase.config';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuthContext } from '../context/AuthContext';
@@ -31,6 +31,19 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
     const [selectedItemId, setSelectedItemId] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
+    const [bankDetails, setBankDetails] = useState<{
+        bankName?: string;
+        accountType?: string;
+        accountNumber?: string;
+        accountHolder?: string;
+        holderId?: string;
+        accountEmail?: string;
+    } | null>(null);
+    const [bookingSuccessDetails, setBookingSuccessDetails] = useState<{
+        bookingId: string;
+        totalPrice: number;
+    } | null>(null);
+
     useEffect(() => {
         const checkAddonAndConfig = async () => {
             try {
@@ -60,6 +73,18 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
                     const configData = configSnap.data();
                     setBookingType(configData.bookingType || 'rooms');
                     setIsEnabled(configData.isEnabled || false);
+                    if (configData.bankName && configData.accountNumber) {
+                        setBankDetails({
+                            bankName: configData.bankName,
+                            accountType: configData.accountType,
+                            accountNumber: configData.accountNumber,
+                            accountHolder: configData.accountHolder,
+                            holderId: configData.holderId,
+                            accountEmail: configData.accountEmail
+                        });
+                    } else {
+                        setBankDetails(null);
+                    }
                 }
             } catch (err) {
                 console.error('Error fetching booking configuration:', err);
@@ -147,6 +172,26 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
                 endTime = `${startDate}T${timeSlot}:00`; 
             }
 
+            const selectedItem = inventoryItems.find(item => item.id === selectedItemId);
+            let calculatedPrice = 0;
+            if (selectedItem) {
+                if (bookingType === 'rooms') {
+                    const price = selectedItem.price_per_night || 0;
+                    if (startDate && endDate) {
+                        const s = new Date(startDate);
+                        const e = new Date(endDate);
+                        const diffTime = Math.abs(e.getTime() - s.getTime());
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        calculatedPrice = price * spotsRequested * (diffDays || 1);
+                    } else {
+                        calculatedPrice = price * spotsRequested;
+                    }
+                } else if (bookingType === 'appointments') {
+                    const price = selectedItem.price || 0;
+                    calculatedPrice = price * spotsRequested;
+                }
+            }
+
             const response = await fetch('/api/bookings/create', {
                 method: 'POST',
                 headers: {
@@ -169,7 +214,10 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
 
             if (response.ok && result.success) {
                 showToast('¡Reserva creada con éxito! Esperando confirmación.', 'success');
-                setIsModalOpen(false);
+                setBookingSuccessDetails({
+                    bookingId: result.bookingId,
+                    totalPrice: calculatedPrice
+                });
             } else {
                 showToast(result.error || result.message || 'Error al crear la reserva.', 'error');
             }
@@ -220,215 +268,290 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
                         </div>
 
                         {/* Modal Forms container */}
-                        <form onSubmit={handleCreateBooking} className="p-6 overflow-y-auto space-y-4 no-scrollbar">
-                            <div className="space-y-3">
-                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                    <ShieldCheck className="w-4 h-4 text-orange-500" />
-                                    Datos del Cliente
-                                </h4>
-                                <div className="grid grid-cols-1 gap-3">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Nombre Completo" 
-                                        value={clientName} 
-                                        onChange={(e) => setClientName(e.target.value)}
-                                        required
-                                        className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-orange-500 outline-none"
-                                    />
-                                    <input 
-                                        type="email" 
-                                        placeholder="Correo Electrónico" 
-                                        value={clientEmail} 
-                                        onChange={(e) => setClientEmail(e.target.value)}
-                                        required
-                                        className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-orange-500 outline-none"
-                                    />
-                                    <input 
-                                        type="tel" 
-                                        placeholder="WhatsApp / Teléfono" 
-                                        value={clientPhone} 
-                                        onChange={(e) => setClientPhone(e.target.value)}
-                                        required
-                                        className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-orange-500 outline-none"
-                                    />
+                        {bookingSuccessDetails ? (
+                            <div className="p-6 space-y-6 text-center overflow-y-auto no-scrollbar">
+                                <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-2 border border-emerald-500/20">
+                                    <CheckCircle className="w-8 h-8 animate-pulse" />
                                 </div>
-                            </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-white uppercase tracking-wider">¡Reserva Solicitada!</h3>
+                                    <p className="text-xs text-slate-400 mt-2">
+                                        Tu solicitud de reserva ha sido registrada correctamente. El negocio revisará la disponibilidad y se pondrá en contacto contigo.
+                                    </p>
+                                </div>
 
-                            <div className="border-t border-white/5 pt-4 space-y-3">
-                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                    <Calendar className="w-4 h-4 text-orange-500" />
-                                    Detalles de la Reserva
-                                </h4>
+                                {bankDetails && bankDetails.bankName && bankDetails.accountNumber ? (
+                                    <div className="bg-slate-900 border border-white/5 rounded-3xl p-5 text-left space-y-4 shadow-inner">
+                                        <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Monto Estimado</span>
+                                            <span className="text-lg font-black text-orange-500">${bookingSuccessDetails.totalPrice.toFixed(2)} USD</span>
+                                        </div>
+                                        
+                                        <div className="space-y-2.5">
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Banco:</span>
+                                                <span className="text-slate-200 font-black">{bankDetails.bankName}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Tipo de Cuenta:</span>
+                                                <span className="text-slate-200 font-black">{bankDetails.accountType || 'Ahorros'}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Número de Cuenta:</span>
+                                                <span className="text-slate-200 font-black tracking-wide">{bankDetails.accountNumber}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Titular:</span>
+                                                <span className="text-slate-200 font-black">{bankDetails.accountHolder}</span>
+                                            </div>
+                                            {bankDetails.holderId && (
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">C.I. / RUC:</span>
+                                                    <span className="text-slate-200 font-black">{bankDetails.holderId}</span>
+                                                </div>
+                                            )}
+                                            {bankDetails.accountEmail && (
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Email de Notificación:</span>
+                                                    <span className="text-slate-200 font-black text-[10px]">{bankDetails.accountEmail}</span>
+                                                </div>
+                                            )}
+                                        </div>
 
-                                {bookingType === 'rooms' && (
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Check-in</label>
-                                                <input 
-                                                    type="date" 
-                                                    value={startDate}
-                                                    onChange={(e) => setStartDate(e.target.value)}
-                                                    required
-                                                    className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Check-out</label>
-                                                <input 
-                                                    type="date" 
-                                                    value={endDate}
-                                                    onChange={(e) => setEndDate(e.target.value)}
-                                                    required
-                                                    className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
-                                                />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Tipo de Habitación</label>
-                                            <select 
-                                                value={selectedItemId}
-                                                onChange={(e) => setSelectedItemId(e.target.value)}
-                                                required
-                                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none"
-                                            >
-                                                {inventoryItems.map((item) => (
-                                                    <option key={item.id} value={item.id}>
-                                                        {item.room_type} (${item.price_per_night}/noche)
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Habitaciones solicitadas</label>
-                                            <input 
-                                                type="number" 
-                                                min="1" 
-                                                max="10" 
-                                                value={spotsRequested}
-                                                onChange={(e) => setSpotsRequested(parseInt(e.target.value) || 1)}
-                                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
-                                            />
-                                        </div>
+                                        <p className="text-[10px] text-amber-400 font-bold text-center bg-amber-500/10 border border-amber-500/20 py-2.5 px-3 rounded-2xl leading-relaxed">
+                                            Realiza tu transferencia bancaria y envía el comprobante de pago al negocio para confirmar y asegurar tu reserva.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-slate-900 border border-white/5 rounded-3xl p-4 text-center">
+                                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider leading-relaxed">
+                                            El negocio te enviará un correo o mensaje de WhatsApp para la confirmación de la reserva.
+                                        </p>
                                     </div>
                                 )}
 
-                                {bookingType === 'tables' && (
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Fecha</label>
-                                                <input 
-                                                    type="date" 
-                                                    value={startDate}
-                                                    onChange={(e) => setStartDate(e.target.value)}
-                                                    required
-                                                    className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
-                                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setBookingSuccessDetails(null);
+                                        setIsModalOpen(false);
+                                    }}
+                                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black rounded-2xl uppercase tracking-widest text-xs hover:shadow-lg transition-all"
+                                >
+                                    Entendido / Cerrar
+                                </button>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleCreateBooking} className="p-6 overflow-y-auto space-y-4 no-scrollbar">
+                                <div className="space-y-3">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                        <ShieldCheck className="w-4 h-4 text-orange-500" />
+                                        Datos del Cliente
+                                    </h4>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Nombre Completo" 
+                                            value={clientName} 
+                                            onChange={(e) => setClientName(e.target.value)}
+                                            required
+                                            className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-orange-500 outline-none"
+                                        />
+                                        <input 
+                                            type="email" 
+                                            placeholder="Correo Electrónico" 
+                                            value={clientEmail} 
+                                            onChange={(e) => setClientEmail(e.target.value)}
+                                            required
+                                            className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-orange-500 outline-none"
+                                        />
+                                        <input 
+                                            type="tel" 
+                                            placeholder="WhatsApp / Teléfono" 
+                                            value={clientPhone} 
+                                            onChange={(e) => setClientPhone(e.target.value)}
+                                            required
+                                            className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-orange-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-white/5 pt-4 space-y-3">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                        <Calendar className="w-4 h-4 text-orange-500" />
+                                        Detalles de la Reserva
+                                    </h4>
+
+                                    {bookingType === 'rooms' && (
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Check-in</label>
+                                                    <input 
+                                                        type="date" 
+                                                        value={startDate}
+                                                        onChange={(e) => setStartDate(e.target.value)}
+                                                        required
+                                                        className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Check-out</label>
+                                                    <input 
+                                                        type="date" 
+                                                        value={endDate}
+                                                        onChange={(e) => setEndDate(e.target.value)}
+                                                        required
+                                                        className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
+                                                    />
+                                                </div>
                                             </div>
                                             <div>
-                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Hora</label>
+                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Tipo de Habitación</label>
                                                 <select 
-                                                    value={timeSlot} 
-                                                    onChange={(e) => setTimeSlot(e.target.value)}
+                                                    value={selectedItemId}
+                                                    onChange={(e) => setSelectedItemId(e.target.value)}
                                                     required
                                                     className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none"
                                                 >
-                                                    <option value="">Seleccionar...</option>
-                                                    <option value="12:00">12:00 PM</option>
-                                                    <option value="13:30">01:30 PM</option>
-                                                    <option value="15:00">03:00 PM</option>
-                                                    <option value="19:00">07:00 PM</option>
-                                                    <option value="20:30">08:30 PM</option>
-                                                    <option value="22:00">10:00 PM</option>
+                                                    {inventoryItems.map((item) => (
+                                                        <option key={item.id} value={item.id}>
+                                                            {item.room_type} (${item.price_per_night}/noche)
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </div>
-                                        </div>
-                                        <div>
-                                            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Mesa disponible</label>
-                                            <select 
-                                                value={selectedItemId}
-                                                onChange={(e) => setSelectedItemId(e.target.value)}
-                                                required
-                                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none"
-                                            >
-                                                {inventoryItems.map((item) => (
-                                                    <option key={item.id} value={item.id}>
-                                                        {item.table_identifier} ({item.zone_name} - Max {item.max_diners} personas)
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {bookingType === 'appointments' && (
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Fecha</label>
+                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Habitaciones solicitadas</label>
                                                 <input 
-                                                    type="date" 
-                                                    value={startDate}
-                                                    onChange={(e) => setStartDate(e.target.value)}
-                                                    required
+                                                    type="number" 
+                                                    min="1" 
+                                                    max="10" 
+                                                    value={spotsRequested}
+                                                    onChange={(e) => setSpotsRequested(parseInt(e.target.value) || 1)}
                                                     className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
                                                 />
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {bookingType === 'tables' && (
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Fecha</label>
+                                                    <input 
+                                                        type="date" 
+                                                        value={startDate}
+                                                        onChange={(e) => setStartDate(e.target.value)}
+                                                        required
+                                                        className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Hora</label>
+                                                    <select 
+                                                        value={timeSlot} 
+                                                        onChange={(e) => setTimeSlot(e.target.value)}
+                                                        required
+                                                        className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none"
+                                                    >
+                                                        <option value="">Seleccionar...</option>
+                                                        <option value="12:00">12:00 PM</option>
+                                                        <option value="13:30">01:30 PM</option>
+                                                        <option value="15:00">03:00 PM</option>
+                                                        <option value="19:00">07:00 PM</option>
+                                                        <option value="20:30">08:30 PM</option>
+                                                        <option value="22:00">10:00 PM</option>
+                                                    </select>
+                                                </div>
+                                            </div>
                                             <div>
-                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Turno</label>
+                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Mesa disponible</label>
                                                 <select 
-                                                    value={timeSlot} 
-                                                    onChange={(e) => setTimeSlot(e.target.value)}
+                                                    value={selectedItemId}
+                                                    onChange={(e) => setSelectedItemId(e.target.value)}
                                                     required
                                                     className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none"
                                                 >
-                                                    <option value="">Seleccionar...</option>
-                                                    <option value="09:00">09:00 AM</option>
-                                                    <option value="10:30">10:30 AM</option>
-                                                    <option value="14:00">02:00 PM</option>
-                                                    <option value="16:00">04:00 PM</option>
+                                                    {inventoryItems.map((item) => (
+                                                        <option key={item.id} value={item.id}>
+                                                            {item.table_identifier} ({item.zone_name} - Max {item.max_diners} personas)
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </div>
                                         </div>
-                                        <div>
-                                            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Servicio / Experiencia</label>
-                                            <select 
-                                                value={selectedItemId}
-                                                onChange={(e) => setSelectedItemId(e.target.value)}
-                                                required
-                                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none"
-                                            >
-                                                {inventoryItems.map((item) => (
-                                                    <option key={item.id} value={item.id}>
-                                                        {item.service_name} (${item.price} - {item.duration_minutes} min)
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Cupos solicitados</label>
-                                            <input 
-                                                type="number" 
-                                                min="1" 
-                                                max="10" 
-                                                value={spotsRequested}
-                                                onChange={(e) => setSpotsRequested(parseInt(e.target.value) || 1)}
-                                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
 
-                            <button
-                                type="submit"
-                                disabled={submitting || inventoryItems.length === 0}
-                                className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black rounded-2xl uppercase tracking-widest text-xs mt-6 hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                            >
-                                {submitting ? 'Reservando...' : 'Confirmar Reserva'}
-                            </button>
-                        </form>
+                                    {bookingType === 'appointments' && (
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Fecha</label>
+                                                    <input 
+                                                        type="date" 
+                                                        value={startDate}
+                                                        onChange={(e) => setStartDate(e.target.value)}
+                                                        required
+                                                        className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Turno</label>
+                                                    <select 
+                                                        value={timeSlot} 
+                                                        onChange={(e) => setTimeSlot(e.target.value)}
+                                                        required
+                                                        className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none"
+                                                    >
+                                                        <option value="">Seleccionar...</option>
+                                                        <option value="09:00">09:00 AM</option>
+                                                        <option value="10:30">10:30 AM</option>
+                                                        <option value="14:00">02:00 PM</option>
+                                                        <option value="16:00">04:00 PM</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Servicio / Experiencia</label>
+                                                <select 
+                                                    value={selectedItemId}
+                                                    onChange={(e) => setSelectedItemId(e.target.value)}
+                                                    required
+                                                    className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none"
+                                                >
+                                                    {inventoryItems.map((item) => (
+                                                        <option key={item.id} value={item.id}>
+                                                            {item.service_name} (${item.price} - {item.duration_minutes} min)
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Cupos solicitados</label>
+                                                <input 
+                                                    type="number" 
+                                                    min="1" 
+                                                    max="10" 
+                                                    value={spotsRequested}
+                                                    onChange={(e) => setSpotsRequested(parseInt(e.target.value) || 1)}
+                                                    className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={submitting || inventoryItems.length === 0}
+                                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black rounded-2xl uppercase tracking-widest text-xs mt-6 hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                                >
+                                    {submitting ? 'Reservando...' : 'Confirmar Reserva'}
+                                </button>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}

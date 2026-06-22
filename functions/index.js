@@ -898,6 +898,117 @@ app.post('/api/webhook/dlocal-addon', async (req, res) => {
 });
 
 /**
+ * Route: Create Menu Addon Checkout Session ($5 USD/month)
+ */
+app.post('/api/menu-addon/checkout', async (req, res) => {
+    const { businessId, email } = req.body;
+    const origin = req.get('origin') || 'https://montapulse-app.web.app';
+
+    if (!businessId || !email) {
+        return res.status(400).json({ success: false, message: 'businessId y email son requeridos.' });
+    }
+
+    try {
+        const DLOCAL_GO_URL = 'https://api.dlocalgo.com/v1/payments';
+
+        logger.info(`[dLocal Go Menu Addon] Creando pago de Addon para negocio ${businessId}`);
+
+        const response = await axios.post(DLOCAL_GO_URL, {
+            amount: 5.00,
+            currency: 'USD',
+            country: 'EC',
+            description: 'Activar Menú Digital QR - ubicame.info',
+            success_url: origin + '/passport?menu_addon_status=success',
+            back_url: origin + '/passport',
+            notification_url: origin + '/api/webhook/dlocal-menu?businessId=' + encodeURIComponent(businessId)
+        }, {
+            auth: {
+                username: process.env.DLOCAL_GO_API_KEY,
+                password: process.env.DLOCAL_GO_SECRET_KEY
+            },
+            timeout: 10000
+        });
+
+        if (response.data && (response.data.checkout_url || response.data.redirect_url)) {
+            // Save state as inactive (pending payment confirmation)
+            const bizRef = db.collection('businesses').doc(businessId);
+            await bizRef.set({
+                menu_premium_active: false,
+                menu_subscription: {
+                    status: 'inactive',
+                    payment_method: 'dlocal',
+                    dlocalOrderId: response.data.id || '',
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                }
+            }, { merge: true });
+
+            return res.json({
+                success: true,
+                checkout_url: response.data.checkout_url || response.data.redirect_url
+            });
+        }
+        throw new Error('dLocal response did not contain redirect URLs.');
+    } catch (err) {
+        const errorStatus = err.response?.status || 500;
+        const errorData = err.response?.data || err.message;
+        logger.error(`[dLocal Go Menu Addon] Error ${errorStatus}:`, errorData);
+
+        return res.status(errorStatus).json({
+            success: false,
+            message: 'Error al conectar con dLocal Go',
+            detail: errorData
+        });
+    }
+});
+
+/**
+ * Route: Webhook for Menu Addon
+ */
+app.post('/api/webhook/dlocal-menu', async (req, res) => {
+    try {
+        const { businessId } = req.query;
+        const { status } = req.body;
+
+        const expectedToken = process.env.DLOCAL_WEBHOOK_SECRET;
+        const authHeader = req.headers['authorization'];
+        
+        if (expectedToken) {
+            if (!authHeader || authHeader !== `Bearer ${expectedToken}`) {
+                logger.warn(`[Webhook dLocal Menu] Token inválido para negocio ${businessId}`);
+                return res.status(401).json({ success: false, message: 'Firma de Webhook no válida' });
+            }
+        }
+
+        logger.info(`[Webhook dLocal Menu] Recibido para negocio ${businessId}, status: ${status}`);
+
+        if (status === 'PAID' && businessId) {
+            const bizRef = db.collection('businesses').doc(businessId);
+            const now = new Date();
+            const expires = new Date();
+            expires.setDate(now.getDate() + 30);
+
+            await bizRef.set({
+                menu_premium_active: true,
+                menu_subscription: {
+                    status: 'active',
+                    payment_method: 'dlocal',
+                    activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    expiresAt: admin.firestore.Timestamp.fromDate(expires),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                }
+            }, { merge: true });
+
+            logger.info(`[Webhook dLocal Menu] Addon de menú digital activado para negocio ${businessId}`);
+        }
+
+        res.status(200).send('OK');
+    } catch (error) {
+        logger.error('[Webhook dLocal Menu] Error:', error);
+        res.status(500).send('Error');
+    }
+});
+
+/**
  * Route: Create Booking with Concurrency Control (Firestore Transactions)
  */
 app.post('/api/bookings/create', async (req, res) => {

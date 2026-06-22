@@ -414,4 +414,26 @@ export interface Transaction {
   rawBody?: any;
 }
 
+// ==================== DIGITAL MENU QR ====================
+
+export interface MenuCategory {
+  id: string;
+  name: string;
+  order_index: number;
+  created_at: any;
+}
+
+export interface MenuProduct {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image_url: string;
+  disponible: boolean;
+  etiquetas_alergenos: string[];
+  categoryId: string;
+  order_index: number;
+  created_at: any;
+}
+
 
