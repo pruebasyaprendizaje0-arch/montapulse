@@ -31,6 +31,17 @@ Status: **In Progress** 🛠️
   - [x] Add "LIVE NOW" logic to `EventCard.tsx` based on `startAt` and `endAt`
   - [x] Implement pulsating red ring around live event markers/cards
   - [x] Refine "Who's going" row with improved aesthetics
+- [x] **BookingManagerModal**
+  - [x] Create and configure bank account inputs in `BookingManagerModal.tsx`
+    - [x] Add state variables for `bankName`, `accountType`, `accountNumber`, `accountHolder`, `holderId`, `email`
+    - [x] Load bank fields from Firestore configuration in `loadAddonAndConfig`
+    - [x] Save bank fields to Firestore in `handleUpdateConfig`
+    - [x] Build UI inputs inside the "Configuración" tab
+  - [x] Fetch and display bank account details in `BookingWidget.tsx`
+    - [x] Fetch bank details in `checkAddonAndConfig`
+    - [x] Add confirmation step screen inside the booking modal (instead of closing immediately)
+    - [x] Display total price calculated based on chosen dates, spots, and unit price
+    - [x] Show bank transfer instructions if configured, or a regular success message if not
 - [x] **Community Atmosphere**
   - [x] Add simulated "Typing..." indicators in `Community.tsx`
   - [x] Add read receipts (double check icons) to messages in `Community.tsx`

@@ -446,7 +446,8 @@ app.post('/api/bookings/create', async (req, res) => {
         inventoryItemId, 
         startTime, 
         endTime, 
-        spotsRequested 
+        spotsRequested,
+        force
     } = req.body;
 
     const parsedSpots = parseInt(spotsRequested || 1, 10);
@@ -517,7 +518,7 @@ app.post('/api/bookings/create', async (req, res) => {
                     const doc = availabilityDocs[i];
                     const booked = doc.exists ? (doc.data().bookedRooms || 0) : 0;
                     console.log(`[Booking Rooms] Day ${days[i]}: booked=${booked}, requesting=${parsedSpots}, capacity=${total_capacity}, available=${booked + parsedSpots <= total_capacity}`);
-                    if (booked + parsedSpots > total_capacity) {
+                    if (!force && booked + parsedSpots > total_capacity) {
                         throw new Error('NO_ROOMS_AVAILABLE');
                     }
                 }
@@ -550,7 +551,7 @@ app.post('/api/bookings/create', async (req, res) => {
                 const tableAvRef = db.collection('table_availability').doc(`${inventoryItemId}_${dateStr}_${timeSlot}`);
                 const tableAvDoc = await transaction.get(tableAvRef);
                 
-                if (tableAvDoc.exists && tableAvDoc.data().isBooked) {
+                if (!force && tableAvDoc.exists && tableAvDoc.data().isBooked) {
                     throw new Error('TABLE_ALREADY_BOOKED');
                 }
 
@@ -578,7 +579,7 @@ app.post('/api/bookings/create', async (req, res) => {
                 const slotAvDoc = await transaction.get(slotAvRef);
 
                 const booked = slotAvDoc.exists ? (slotAvDoc.data().bookedSpots || 0) : 0;
-                if (booked + parsedSpots > max_spots_per_slot) {
+                if (!force && booked + parsedSpots > max_spots_per_slot) {
                     throw new Error('NO_SPOTS_AVAILABLE');
                 }
 
@@ -605,7 +606,10 @@ app.post('/api/bookings/create', async (req, res) => {
                 startTime: admin.firestore.Timestamp.fromDate(new Date(startTime)),
                 endTime: admin.firestore.Timestamp.fromDate(new Date(endTime)),
                 spotsRequested: parsedSpots,
-                status: 'pending',
+                status: force ? 'confirmed' : 'pending',
+                notes: req.body.notes || '',
+                extraServices: req.body.extraServices || [],
+                staffAssigned: req.body.staffAssigned || '',
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });

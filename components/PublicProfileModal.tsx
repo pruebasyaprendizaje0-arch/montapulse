@@ -302,10 +302,11 @@ export const PublicProfileModal = React.memo(({
     const totalEventClicks = allBusinessPulses.reduce((sum, e) => sum + (e.clickCount || 0), 0);
 
     return (
-        <div
-            className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300"
-            onClick={onClose}
-        >
+        <>
+            <div
+                className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300"
+                onClick={onClose}
+            >
             <div
                 className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto no-scrollbar"
                 onClick={e => e.stopPropagation()}
@@ -804,16 +805,18 @@ export const PublicProfileModal = React.memo(({
                     )}
 
                     
-                    {business && (
-                        <PublicMenuModal
-                            isOpen={showPublicMenu}
-                            onClose={() => setShowPublicMenu(false)}
-                            businessId={business.id}
-                            businessName={business.name}
-                        />
-                    )}
-                </div>
             </div>
-        </div>
+            </div>
+            </div>
+
+            {business && (
+                <PublicMenuModal
+                    isOpen={showPublicMenu}
+                    onClose={() => setShowPublicMenu(false)}
+                    businessId={business.id}
+                    businessName={business.name}
+                />
+            )}
+        </>
     );
 });

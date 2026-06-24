@@ -73,8 +73,11 @@ export const PublicMenuModal: React.FC<PublicMenuModalProps> = ({ isOpen, onClos
         : products.filter(p => p.categoryId === activeTab);
 
     return (
-        <div className="fixed inset-0 z-[5000] bg-slate-950/95 backdrop-blur-md flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="w-full max-w-lg bg-[#0b0f19] rounded-t-[3.5rem] sm:rounded-[3rem] border border-white/10 p-6 sm:p-8 shadow-2xl flex flex-col max-h-[90vh] text-left">
+        <div 
+            className="fixed inset-0 z-[5000] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300"
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div className="w-full max-w-lg bg-[#0b0f19] rounded-[2.5rem] sm:rounded-[3rem] border border-white/10 p-5 sm:p-8 shadow-2xl flex flex-col max-h-[95vh] text-left">
                 
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">

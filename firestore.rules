@@ -65,6 +65,16 @@ service cloud.firestore {
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount', 'monthlyViews', 'lastMonthlyResetDate'])) ||
         (isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin()));
       allow delete: if isAdmin();
+
+      // Menú digital subcollections
+      match /menu_categories/{catId} {
+        allow read: if true;
+        allow write: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid);
+      }
+      match /menu_products/{prodId} {
+        allow read: if true;
+        allow write: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid);
+      }
     }
     
     // Eventos: Público read, incrementos de vista/click permitidos para todos

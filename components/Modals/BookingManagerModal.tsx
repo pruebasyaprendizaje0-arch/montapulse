@@ -43,6 +43,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
     const [roomType, setRoomType] = useState('');
     const [roomCapacity, setRoomCapacity] = useState(1);
     const [roomPrice, setRoomPrice] = useState(0);
+    const [roomImageUrl, setRoomImageUrl] = useState('');
 
     const [tableZone, setTableZone] = useState('');
     const [tableIdentifier, setTableIdentifier] = useState('');
@@ -52,6 +53,10 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
     const [serviceDuration, setServiceDuration] = useState(60);
     const [serviceSpots, setServiceSpots] = useState(5);
     const [servicePrice, setServicePrice] = useState(0);
+    const [serviceStaff, setServiceStaff] = useState('');
+    const [serviceWorkingDays, setServiceWorkingDays] = useState<string[]>(['lunes', 'martes', 'miercoles', 'jueves', 'viernes']);
+    const [serviceStartHour, setServiceStartHour] = useState('08:00');
+    const [serviceEndHour, setServiceEndHour] = useState('17:00');
 
     // Bookings list
     const [bookings, setBookings] = useState<any[]>([]);
@@ -61,6 +66,8 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
     const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
     const [savingEdit, setSavingEdit] = useState(false);
     const [editState, setEditState] = useState<Record<string, any>>({}); // bookingId -> draft fields
+    const [editingInventoryId, setEditingInventoryId] = useState<string | null>(null);
+    const [editInvFields, setEditInvFields] = useState<Record<string, any>>({});
 
     useEffect(() => {
         if (!isOpen) return;
@@ -138,6 +145,31 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
             }
         } catch (err) {
             console.error('Error loading inventory:', err);
+        }
+    };
+
+    const handleStartEditInventory = (item: any) => {
+        setEditingInventoryId(item.id);
+        setEditInvFields(item);
+    };
+
+    const handleSaveEditInventory = async (item: any) => {
+        try {
+            let colName = '';
+            if (bookingType === 'rooms') colName = 'room_inventories';
+            else if (bookingType === 'tables') colName = 'table_inventories';
+            else if (bookingType === 'appointments') colName = 'slot_inventories';
+
+            if (colName) {
+                const itemRef = doc(db, colName, item.id);
+                const { id, ...dataToWrite } = editInvFields;
+                await setDoc(itemRef, dataToWrite, { merge: true });
+                showToast('Elemento del inventario actualizado.', 'success');
+                setEditingInventoryId(null);
+                loadInventory();
+            }
+        } catch (err) {
+            showToast('Error al actualizar el elemento.', 'error');
         }
     };
 
@@ -228,7 +260,8 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                     ...payload,
                     room_type: roomType,
                     total_capacity: roomCapacity,
-                    price_per_night: roomPrice
+                    price_per_night: roomPrice,
+                    image_url: roomImageUrl
                 };
             } else if (bookingType === 'tables') {
                 colName = 'table_inventories';
@@ -245,7 +278,11 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                     service_name: serviceName,
                     duration_minutes: serviceDuration,
                     max_spots_per_slot: serviceSpots,
-                    price: servicePrice
+                    price: servicePrice,
+                    assigned_staff: serviceStaff,
+                    working_days: serviceWorkingDays,
+                    work_start_time: serviceStartHour,
+                    work_end_time: serviceEndHour
                 };
             }
 
@@ -256,9 +293,14 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                 showToast('Elemento agregado al inventario.', 'success');
                 // Reset forms
                 setRoomType('');
+                setRoomImageUrl('');
                 setTableZone('');
                 setTableIdentifier('');
                 setServiceName('');
+                setServiceStaff('');
+                setServiceWorkingDays(['lunes', 'martes', 'miercoles', 'jueves', 'viernes']);
+                setServiceStartHour('08:00');
+                setServiceEndHour('17:00');
                 loadInventory();
             }
         } catch (err) {
@@ -545,7 +587,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                 <div className="space-y-3">
                                                     <OptimizedImageUploader 
                                                         onImageProcessed={(url) => setReceiptUrl(url)}
-                                                        path={`receipts/${businessId}`}
+                                                        path={`uploads/${user?.id || 'anonymous'}/receipts`}
                                                         className="h-24"
                                                     />
                                                     <button 
@@ -716,6 +758,15 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                         className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white"
                                                     />
                                                 </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider text-left block">Imagen de la Habitación</label>
+                                                    <OptimizedImageUploader 
+                                                        onImageProcessed={(url) => setRoomImageUrl(url)}
+                                                        currentImageUrl={roomImageUrl}
+                                                        path={`uploads/${user?.id || 'anonymous'}/rooms`}
+                                                        className="h-20"
+                                                    />
+                                                </div>
                                             </div>
                                         )}
 
@@ -805,33 +856,209 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                         ) : (
                                             <div className="grid grid-cols-1 gap-2">
                                                 {inventoryItems.map((item) => (
-                                                    <div key={item.id} className="p-4 bg-slate-800/40 border border-white/5 rounded-2xl flex items-center justify-between">
-                                                        <div>
-                                                            {bookingType === 'rooms' && (
-                                                                <>
-                                                                    <p className="text-xs font-bold text-white">{item.room_type}</p>
-                                                                    <p className="text-[10px] text-slate-500 mt-0.5">Inventario: {item.total_capacity} habitaciones · ${item.price_per_night}/noche</p>
-                                                                </>
-                                                            )}
-                                                            {bookingType === 'tables' && (
-                                                                <>
-                                                                    <p className="text-xs font-bold text-white">{item.table_identifier}</p>
-                                                                    <p className="text-[10px] text-slate-500 mt-0.5">Zona: {item.zone_name} · Max {item.max_diners} personas</p>
-                                                                </>
-                                                            )}
-                                                            {bookingType === 'appointments' && (
-                                                                <>
-                                                                    <p className="text-xs font-bold text-white">{item.service_name}</p>
-                                                                    <p className="text-[10px] text-slate-500 mt-0.5">Duración: {item.duration_minutes} min · Cupos: {item.max_spots_per_slot} · ${item.price}</p>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                        <button 
-                                                            onClick={() => handleDeleteInventory(item.id)}
-                                                            className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
+                                                    <div key={item.id} className="p-4 bg-slate-800/40 border border-white/5 rounded-2xl flex flex-col gap-3">
+                                                        {editingInventoryId === item.id ? (
+                                                            <div className="space-y-3">
+                                                                {bookingType === 'rooms' && (
+                                                                    <div className="space-y-2 text-left">
+                                                                        <input 
+                                                                            type="text" 
+                                                                            value={editInvFields.room_type || ''} 
+                                                                            onChange={e => setEditInvFields({...editInvFields, room_type: e.target.value})}
+                                                                            className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                        />
+                                                                        <div className="grid grid-cols-2 gap-2">
+                                                                            <input 
+                                                                                type="number" 
+                                                                                value={editInvFields.total_capacity || 0} 
+                                                                                onChange={e => setEditInvFields({...editInvFields, total_capacity: parseInt(e.target.value) || 0})}
+                                                                                className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                            />
+                                                                            <input 
+                                                                                type="number" 
+                                                                                value={editInvFields.price_per_night || 0} 
+                                                                                onChange={e => setEditInvFields({...editInvFields, price_per_night: parseFloat(e.target.value) || 0})}
+                                                                                className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="space-y-1.5">
+                                                                            <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Imagen de la Habitación</label>
+                                                                            <OptimizedImageUploader 
+                                                                                onImageProcessed={(url) => setEditInvFields({...editInvFields, image_url: url})}
+                                                                                currentImageUrl={editInvFields.image_url || ''}
+                                                                                path={`uploads/${user?.id || 'anonymous'}/rooms`}
+                                                                                className="h-20"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {bookingType === 'tables' && (
+                                                                    <div className="space-y-2 text-left">
+                                                                        <div className="grid grid-cols-2 gap-2">
+                                                                            <input 
+                                                                                type="text" 
+                                                                                value={editInvFields.zone_name || ''} 
+                                                                                onChange={e => setEditInvFields({...editInvFields, zone_name: e.target.value})}
+                                                                                className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                            />
+                                                                            <input 
+                                                                                type="text" 
+                                                                                value={editInvFields.table_identifier || ''} 
+                                                                                onChange={e => setEditInvFields({...editInvFields, table_identifier: e.target.value})}
+                                                                                className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                            />
+                                                                        </div>
+                                                                        <input 
+                                                                            type="number" 
+                                                                            value={editInvFields.max_diners || 0} 
+                                                                            onChange={e => setEditInvFields({...editInvFields, max_diners: parseInt(e.target.value) || 0})}
+                                                                            className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                                {bookingType === 'appointments' && (
+                                                                    <div className="space-y-2 text-left">
+                                                                        <input 
+                                                                            type="text" 
+                                                                            value={editInvFields.service_name || ''} 
+                                                                            onChange={e => setEditInvFields({...editInvFields, service_name: e.target.value})}
+                                                                            className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                        />
+                                                                        <div className="grid grid-cols-3 gap-2">
+                                                                            <input 
+                                                                                type="number" 
+                                                                                value={editInvFields.duration_minutes || 0} 
+                                                                                onChange={e => setEditInvFields({...editInvFields, duration_minutes: parseInt(e.target.value) || 0})}
+                                                                                className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                            />
+                                                                            <input 
+                                                                                type="number" 
+                                                                                value={editInvFields.max_spots_per_slot || 0} 
+                                                                                onChange={e => setEditInvFields({...editInvFields, max_spots_per_slot: parseInt(e.target.value) || 0})}
+                                                                                className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                            />
+                                                                            <input 
+                                                                                type="number" 
+                                                                                value={editInvFields.price || 0} 
+                                                                                onChange={e => setEditInvFields({...editInvFields, price: parseFloat(e.target.value) || 0})}
+                                                                                className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                            />
+                                                                        </div>
+                                                                        <input 
+                                                                            type="text" 
+                                                                            placeholder="Profesional / Personal asignado (Opcional)"
+                                                                            value={editInvFields.assigned_staff || ''} 
+                                                                            onChange={e => setEditInvFields({...editInvFields, assigned_staff: e.target.value})}
+                                                                            className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                        />
+                                                                        <div className="space-y-1">
+                                                                            <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Días laborables</label>
+                                                                            <div className="flex flex-wrap gap-1">
+                                                                                {['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'].map((day) => {
+                                                                                    const currentDays: string[] = editInvFields.working_days || [];
+                                                                                    const isChecked = currentDays.includes(day);
+                                                                                    return (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            key={day}
+                                                                                            onClick={() => {
+                                                                                                const updated = isChecked
+                                                                                                    ? currentDays.filter(d => d !== day)
+                                                                                                    : [...currentDays, day];
+                                                                                                setEditInvFields({...editInvFields, working_days: updated});
+                                                                                            }}
+                                                                                            className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider border transition-all ${isChecked ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20' : 'bg-slate-800 text-slate-400 border-white/5'}`}
+                                                                                        >
+                                                                                            {day.substring(0, 3)}
+                                                                                        </button>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-2 gap-2">
+                                                                            <div>
+                                                                                <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Hora Inicio</label>
+                                                                                <input 
+                                                                                    type="time" 
+                                                                                    value={editInvFields.work_start_time || '08:00'}
+                                                                                    onChange={e => setEditInvFields({...editInvFields, work_start_time: e.target.value})}
+                                                                                    className="w-full bg-slate-850 border border-white/5 rounded-xl py-1 px-2 text-xs text-white outline-none"
+                                                                                />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Hora Fin</label>
+                                                                                <input 
+                                                                                    type="time" 
+                                                                                    value={editInvFields.work_end_time || '17:00'}
+                                                                                    onChange={e => setEditInvFields({...editInvFields, work_end_time: e.target.value})}
+                                                                                    className="w-full bg-slate-850 border border-white/5 rounded-xl py-1 px-2 text-xs text-white outline-none"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex gap-2">
+                                                                    <button 
+                                                                        onClick={() => handleSaveEditInventory(item)}
+                                                                        className="flex-1 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 hover:shadow-lg transition-all"
+                                                                    >
+                                                                        <Save className="w-3.5 h-3.5" /> Guardar
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => setEditingInventoryId(null)}
+                                                                        className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
+                                                                    >
+                                                                        Cancelar
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center justify-between w-full">
+                                                                <div>
+                                                                    {bookingType === 'rooms' && (
+                                                                        <div className="flex items-center gap-3">
+                                                                            {item.image_url && (
+                                                                                <img 
+                                                                                    src={item.image_url} 
+                                                                                    alt={item.room_type} 
+                                                                                    className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0" 
+                                                                                />
+                                                                            )}
+                                                                            <div className="text-left">
+                                                                                <p className="text-xs font-bold text-white">{item.room_type}</p>
+                                                                                <p className="text-[10px] text-slate-500 mt-0.5">Inventario: {item.total_capacity} habitaciones · ${item.price_per_night}/noche</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {bookingType === 'tables' && (
+                                                                        <div className="text-left">
+                                                                            <p className="text-xs font-bold text-white">{item.table_identifier}</p>
+                                                                            <p className="text-[10px] text-slate-500 mt-0.5">Zona: {item.zone_name} · Max {item.max_diners} personas</p>
+                                                                        </div>
+                                                                    )}
+                                                                    {bookingType === 'appointments' && (
+                                                                        <div className="text-left">
+                                                                            <p className="text-xs font-bold text-white">{item.service_name}</p>
+                                                                            <p className="text-[10px] text-slate-500 mt-0.5">Duración: {item.duration_minutes} min · Cupos: {item.max_spots_per_slot} · ${item.price}</p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex gap-1 shrink-0">
+                                                                    <button 
+                                                                        onClick={() => handleStartEditInventory(item)}
+                                                                        className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
+                                                                    >
+                                                                        <Edit2 className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => handleDeleteInventory(item.id)}
+                                                                        className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
