@@ -10,27 +10,10 @@ const getResendClient = () => {
 };
 
 /**
- * Generates a clean, corporate HTML layout showing performance metrics for the business
+ * Generates a clean, modern, high-converting HTML report showing monthly performance metrics.
  */
 export const generateReportHtml = (nombreNegocio, metricas) => {
-  // Generate table rows dynamically from the metrics object
-  const tableRowsHtml = Object.entries(metricas).map(([key, value]) => {
-    // Format metric names nicely (e.g. capitalize first letter of each word)
-    const formattedKey = key
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase());
-      
-    return `
-      <tr>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #334155; font-weight: 500; font-family: 'Inter', sans-serif;">
-          ${formattedKey}
-        </td>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #0f172a; font-weight: 700; text-align: right; font-family: 'Inter', sans-serif;">
-          ${typeof value === 'number' ? value.toLocaleString('es-EC') : value}
-        </td>
-      </tr>
-    `;
-  }).join('');
+  const formatNum = (val) => (typeof val === 'number' ? val.toLocaleString('es-EC') : val);
 
   return `
     <!DOCTYPE html>
@@ -40,77 +23,113 @@ export const generateReportHtml = (nombreNegocio, metricas) => {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Reporte Mensual de Rendimiento - Ubícame.info</title>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+        body {
+          margin: 0; padding: 0; background-color: #0b0f19; font-family: 'Inter', sans-serif;
+        }
       </style>
     </head>
-    <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 40px 0;">
+    <body style="margin: 0; padding: 0; background-color: #0b0f19; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #0b0f19; padding: 40px 10px;">
         <tr>
           <td align="center">
-            <table role="presentation" width="100%" max-width="600" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 16px; border-collapse: collapse; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0;">
-              <!-- Header -->
+            <table role="presentation" width="100%" style="max-width: 600px; background-color: #0f172a; border-collapse: collapse; border-radius: 24px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);">
+              
+              <!-- Premium Header -->
               <tr>
-                <td style="background-color: #0f172a; padding: 32px 40px; text-align: left; border-radius: 16px 16px 0 0;">
-                  <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.025em; font-family: 'Inter', sans-serif;">
-                    Ubícame.info <span style="color: #10b981; font-weight: 500;">Socios</span>
-                  </h1>
-                  <p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 13px; font-family: 'Inter', sans-serif;">
-                    Reporte de Rendimiento Comercial
-                  </p>
+                <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 30px; text-align: left;">
+                  <table width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                      <td>
+                        <h1 style="color: #ffffff; margin: 0; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 24px; letter-spacing: -0.5px;">
+                          Ubícame.info <span style="font-weight: 400; color: #a7f3d0;">Socios</span>
+                        </h1>
+                        <p style="color: #d1fae5; margin: 4px 0 0 0; font-size: 13px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Inter', sans-serif;">
+                          Reporte Mensual de Rendimiento
+                        </p>
+                      </td>
+                      <td align="right" style="font-size: 28px;">
+                        📊
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
-              <!-- Body -->
+
+              <!-- Content Body -->
               <tr>
-                <td style="padding: 40px; background-color: #ffffff;">
-                  <h2 style="color: #0f172a; margin-top: 0; font-size: 18px; font-weight: 600; margin-bottom: 8px; font-family: 'Inter', sans-serif;">
+                <td style="padding: 40px 30px; background-color: #0f172a;">
+                  <h2 style="color: #ffffff; margin-top: 0; font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 12px;">
                     Estimado/a de ${nombreNegocio},
                   </h2>
-                  <p style="color: #475569; font-size: 14px; line-height: 1.6; margin-bottom: 24px; font-family: 'Inter', sans-serif;">
-                    A continuación, te presentamos el reporte consolidado de actividad y rendimiento de tu establecimiento en la plataforma **Ubícame.info** correspondiente al último mes.
+                  <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 30px; font-family: 'Inter', sans-serif;">
+                    Te presentamos el informe detallado de interacciones y visitas de tu establecimiento en la plataforma **Ubícame.info** durante el último mes.
                   </p>
 
-                  <!-- Metrics Table -->
-                  <table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; margin-bottom: 32px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
-                    <thead>
-                       <tr style="background-color: #f1f5f9;">
-                        <th style="padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #475569; border-bottom: 2px solid #e2e8f0; font-family: 'Inter', sans-serif;">
-                          Métrica de Rendimiento
-                        </th>
-                        <th style="padding: 12px 16px; text-align: right; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #475569; border-bottom: 2px solid #e2e8f0; font-family: 'Inter', sans-serif;">
-                          Total Mensual
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${tableRowsHtml}
-                    </tbody>
+                  <!-- Modern Dashboard Grid (Table style for email compatibility) -->
+                  <table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 30px;">
+                    <tr>
+                      <td width="48%" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 16px; margin-bottom: 15px; vertical-align: top;">
+                        <div style="font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Visitas al Perfil</div>
+                        <div style="font-size: 28px; color: #10b981; font-weight: 800; font-family: 'Outfit', sans-serif;">
+                          ${formatNum(metricas.visitas_al_perfil || 0)}
+                        </div>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Visitas únicas registradas</div>
+                      </td>
+                      <td width="4%"></td>
+                      <td width="48%" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 16px; margin-bottom: 15px; vertical-align: top;">
+                        <div style="font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Nuevos Seguidores</div>
+                        <div style="font-size: 28px; color: #60a5fa; font-weight: 800; font-family: 'Outfit', sans-serif;">
+                          +${formatNum(metricas.nuevos_seguidores || 0)}
+                        </div>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Usuarios interesados</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td colspan="3" height="16"></td>
+                    </tr>
+                    <tr>
+                      <td width="48%" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 16px; vertical-align: top;">
+                        <div style="font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Clics en Eventos</div>
+                        <div style="font-size: 28px; color: #fbbf24; font-weight: 800; font-family: 'Outfit', sans-serif;">
+                          ${formatNum(metricas.clicks_totales_eventos || 0)}
+                        </div>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Clics en tus publicaciones</div>
+                      </td>
+                      <td></td>
+                      <td width="48%" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 16px; vertical-align: top;">
+                        <div style="font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Vistas de la App</div>
+                        <div style="font-size: 28px; color: #c084fc; font-weight: 800; font-family: 'Outfit', sans-serif;">
+                          ${formatNum(metricas.vistas_generales_app || 0)}
+                        </div>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Interacciones totales</div>
+                      </td>
+                    </tr>
                   </table>
 
-                  <p style="color: #475569; font-size: 14px; line-height: 1.6; margin-bottom: 24px; font-family: 'Inter', sans-serif;">
-                    Estas métricas reflejan el interés y la interacción directa de turistas y locales buscando servicios y experiencias en la costa. Si adjuntamos un archivo en formato PDF, podrás encontrar el desglose diario en el archivo anexo de este correo.
-                  </p>
-
-                  <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 16px; border-radius: 0 8px 8px 0; margin-bottom: 32px;">
-                    <p style="color: #334155; font-size: 13px; font-weight: 500; margin: 0; line-height: 1.5; font-family: 'Inter', sans-serif;">
-                      💡 <strong>Tip de Crecimiento:</strong> Mantener tus ofertas (Pulsos) y horarios actualizados duplica la tasa de conversión en clics de dirección física.
+                  <!-- Helpful Tip -->
+                  <div style="background: rgba(16, 185, 129, 0.05); border-left: 4px solid #10b981; padding: 18px; border-radius: 4px 16px 16px 4px; margin-bottom: 30px;">
+                    <p style="color: #e2e8f0; font-size: 13px; font-weight: 500; margin: 0; line-height: 1.5; font-family: 'Inter', sans-serif;">
+                      💡 <strong>Tip Comercial:</strong> Las empresas que publican al menos un Evento o Pulso cada semana obtienen hasta un <strong>120% más de clics</strong> en sus botones de contacto directo y cómo llegar.
                     </p>
                   </div>
 
-                  <!-- Footer / Support info -->
                   <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin: 0; font-family: 'Inter', sans-serif;">
-                    Si tienes dudas sobre tus estadísticas o deseas mejorar tu plan comercial, escríbenos a nuestro canal de socios.
+                    Si deseas ampliar tus campañas o tienes dudas sobre las estadísticas de tu negocio, escríbenos directamente a través del chat de soporte de tu pasaporte en Ubícame.info.
                   </p>
                 </td>
               </tr>
-              <!-- Footer border -->
+
+              <!-- Footer -->
               <tr>
-                <td style="padding: 24px 40px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; border-radius: 0 0 16px 16px; text-align: center;">
-                  <p style="color: #94a3b8; font-size: 11px; margin: 0; line-height: 1.5; font-family: 'Inter', sans-serif;">
-                    Este es un correo automático enviado a los aliados comerciales de Ubícame.info.<br/>
+                <td style="padding: 24px 30px; background-color: #0b0f19; border-top: 1px solid rgba(255, 255, 255, 0.03); text-align: center;">
+                  <p style="color: #475569; font-size: 11px; margin: 0; line-height: 1.5; font-family: 'Inter', sans-serif;">
+                    Este correo se envía automáticamente a los establecimientos registrados en la red comercial de Ubícame.info.<br/>
                     © 2026 Ubícame.info. Todos los derechos reservados.
                   </p>
                 </td>
               </tr>
+
             </table>
           </td>
         </tr>
@@ -125,7 +144,7 @@ export const generateReportHtml = (nombreNegocio, metricas) => {
  * 
  * @param {string} email - Recipient email
  * @param {string} nombreNegocio - Name of the business partner
- * @param {Object} metricas - Object containing metrics (e.g. { visitas_al_perfil: 120, clics_en_como_llegar: 45 })
+ * @param {Object} metricas - Object containing metrics
  * @param {Buffer} [pdfBuffer] - Optional PDF buffer for detailed report attachment
  * @returns {Promise<Object>} - Response object from Resend API
  */
@@ -144,7 +163,6 @@ export async function enviarReporteMensualNegocio(email, nombreNegocio, metricas
   const attachments = [];
 
   if (pdfBuffer) {
-    // Sanitize filename to prevent directory traversal or invalid characters
     const sanitizedName = nombreNegocio.replace(/[^a-zA-Z0-9]/g, '_');
     attachments.push({
       filename: `Reporte_Mensual_${sanitizedName}.pdf`,
@@ -163,7 +181,7 @@ export async function enviarReporteMensualNegocio(email, nombreNegocio, metricas
     });
 
     if (data.error) {
-      console.error('[Reporte B2B] Error de Resend API:', data.error);
+      console.error('[Reporte B2B] Error devuelto por la API de Resend:', data.error);
       return { success: false, error: data.error };
     }
 

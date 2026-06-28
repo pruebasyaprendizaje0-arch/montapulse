@@ -1503,8 +1503,8 @@ app.post('/api/webhook/dlocal', async (req, res) => {
 
         // Verificamos si dLocal envía "PAID" u otro estado exitoso
         if (status === 'PAID' && userId && planId) {
-            // Actualizar usuario en Firestore
-            const userRef = db.collection('users').doc(userId);
+            // Actualizar usuario en Firestore (utilizando la colección oficial users_v2)
+            const userRef = db.collection('users_v2').doc(userId);
             await userRef.set({
                 plan: planId,
                 pulsePassActive: true
@@ -1729,8 +1729,22 @@ export const sendWeeklyNewsletter = onSchedule({
             return;
         }
 
-        logger.info(`[Newsletter] Sending weekly newsletter to ${usuarios.length} users with ${eventos.length} events...`);
-        const result = await enviarPulseSemanal(usuarios, eventos);
+        // Fetch recent community posts
+        const communitySnapshot = await db.collection('posts')
+            .orderBy('timestamp', 'desc')
+            .limit(3)
+            .get();
+        const communityPosts = [];
+        communitySnapshot.forEach(doc => {
+            const data = doc.data();
+            communityPosts.push({
+                authorName: data.authorName || 'Usuario de Ubícame',
+                content: data.content || ''
+            });
+        });
+
+        logger.info(`[Newsletter] Sending weekly newsletter to ${usuarios.length} users with ${eventos.length} events and ${communityPosts.length} community posts...`);
+        const result = await enviarPulseSemanal(usuarios, eventos, communityPosts);
         logger.info('[Newsletter] Task finished. Result:', result);
 
     } catch (error) {
@@ -1753,6 +1767,17 @@ export const sendMonthlyBusinessReport = onSchedule({
         const firstDayPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const lastDayPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
+        // Fetch general app views (from settings/visits)
+        let vistasGeneralesApp = 0;
+        try {
+            const visitsDoc = await db.collection('settings').doc('visits').get();
+            if (visitsDoc.exists) {
+                vistasGeneralesApp = visitsDoc.data().count || 0;
+            }
+        } catch (err) {
+            logger.error('[Monthly Report] Error fetching general app visits:', err);
+        }
+
         // Fetch all active businesses
         const businessesSnapshot = await db.collection('businesses')
             .where('isDeleted', '!=', true)
@@ -1762,21 +1787,6 @@ export const sendMonthlyBusinessReport = onSchedule({
             logger.info('[Monthly Report] No businesses found. Exiting.');
             return;
         }
-
-        // Fetch coupon redemptions for the previous month
-        const redemptionsSnapshot = await db.collection('couponRedemptions')
-            .where('reservedAt', '>=', admin.firestore.Timestamp.fromDate(firstDayPrevMonth))
-            .where('reservedAt', '<=', admin.firestore.Timestamp.fromDate(lastDayPrevMonth))
-            .get();
-
-        // Count redemptions by businessId
-        const redemptionsMap = {};
-        redemptionsSnapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.businessId) {
-                redemptionsMap[data.businessId] = (redemptionsMap[data.businessId] || 0) + 1;
-            }
-        });
 
         let sentCount = 0;
 
@@ -1789,22 +1799,53 @@ export const sendMonthlyBusinessReport = onSchedule({
             if (business.isReference || !email) continue;
 
             const name = business.name || 'Socio MontaPulse';
-            const views = business.viewCount || 0;
-            const clicks = business.clickCount || 0;
-            const redemptions = redemptionsMap[businessId] || 0;
+
+            // Query 1: New followers in the previous month range
+            let nuevosSeguidores = 0;
+            try {
+                const followsSnapshot = await db.collection('follows')
+                    .where('businessId', '==', businessId)
+                    .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(firstDayPrevMonth))
+                    .where('createdAt', '<=', admin.firestore.Timestamp.fromDate(lastDayPrevMonth))
+                    .get();
+                nuevosSeguidores = followsSnapshot.size;
+            } catch (err) {
+                logger.error(`[Monthly Report] Error fetching followers for business ${businessId}:`, err.message);
+            }
+
+            // Query 2: Total clicks on all events associated with this business
+            let clicksTotalesEventos = 0;
+            try {
+                const eventsSnapshot = await db.collection('events')
+                    .where('businessId', '==', businessId)
+                    .get();
+                eventsSnapshot.forEach(evtDoc => {
+                    const evtData = evtDoc.data();
+                    clicksTotalesEventos += (evtData.clickCount || 0);
+                });
+            } catch (err) {
+                logger.error(`[Monthly Report] Error fetching events clickCount for business ${businessId}:`, err.message);
+            }
 
             // Prepare metrics
             const metricas = {
-                visitas_al_perfil: views,
-                clics_en_como_llegar: clicks,
-                llamadas_whatsapp: Math.max(0, Math.floor(clicks * 0.25)), // Calculated fallback for WhatsApp calls if not directly logged
-                cupones_reservados: redemptions
+                visitas_al_perfil: business.monthlyViews || business.viewCount || 0,
+                nuevos_seguidores: nuevosSeguidores,
+                clicks_totales_eventos: clicksTotalesEventos,
+                vistas_generales_app: vistasGeneralesApp
             };
 
-            logger.info(`[Monthly Report] Sending report to ${name} (${email})`);
-            const result = await enviarReporteMensualNegocio(email, name, metricas);
-            if (result.success) {
-                sentCount++;
+            logger.info(`[Monthly Report] Sending report to ${name} (${email}) with metrics: ${JSON.stringify(metricas)}`);
+            
+            try {
+                const result = await enviarReporteMensualNegocio(email, name, metricas);
+                if (result.success) {
+                    sentCount++;
+                } else {
+                    logger.error(`[Monthly Report] Failed sending to ${email}:`, result.error || result.message);
+                }
+            } catch (sendErr) {
+                logger.error(`[Monthly Report] Critical Resend API error sending to ${email}:`, sendErr);
             }
         }
 

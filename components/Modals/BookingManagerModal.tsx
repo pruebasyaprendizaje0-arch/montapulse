@@ -69,6 +69,11 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
     const [editingInventoryId, setEditingInventoryId] = useState<string | null>(null);
     const [editInvFields, setEditInvFields] = useState<Record<string, any>>({});
 
+    // WhatsApp Reminder Configuration State
+    const [whatsappConfigBooking, setWhatsappConfigBooking] = useState<any | null>(null);
+    const [includePaymentInfo, setIncludePaymentInfo] = useState(true);
+    const [includeCalendarLink, setIncludeCalendarLink] = useState(true);
+
     useEffect(() => {
         if (!isOpen) return;
         loadAddonAndConfig();
@@ -435,7 +440,41 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
         });
     };
 
+    const generateCalendarLink = (booking: any) => {
+        const typeLabel = booking.bookingType === 'rooms' ? 'Reserva de Alojamiento' 
+                        : booking.bookingType === 'tables' ? 'Reserva de Mesa' 
+                        : `Cita: ${booking.reservedItemName || 'Servicio'}`;
+        const title = `${typeLabel} - ${businessName || 'MontaPulse'}`;
+        
+        const startDate = booking.startTime?.toDate ? booking.startTime.toDate() : new Date(booking.startTime);
+        let endDate = booking.endTime?.toDate ? booking.endTime.toDate() : (booking.endTime ? new Date(booking.endTime) : null);
+        
+        if (!endDate || isNaN(endDate.getTime())) {
+            endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour duration
+        }
+        
+        const toUTCString = (date: Date) => {
+            try {
+                return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+            } catch (e) {
+                return new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+            }
+        };
+        
+        const dates = `${toUTCString(startDate)}/${toUTCString(endDate)}`;
+        
+        const details = `Hola ${booking.clientName}, aquí tienes tu confirmación de reserva.\n\nDetalles:\n- Tipo: ${booking.bookingType === 'rooms' ? 'Alojamiento' : booking.bookingType === 'tables' ? 'Mesa/Restaurante' : 'Cita/Servicio'}\n- Detalle: ${booking.reservedItemName || 'N/A'}\n- Organizado por: ${businessName || 'MontaPulse'}`;
+        
+        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${dates}&details=${encodeURIComponent(details)}`;
+    };
+
     const handleWhatsAppReminder = (booking: any) => {
+        setWhatsappConfigBooking(booking);
+        setIncludePaymentInfo(!!(bankName && accountNumber));
+        setIncludeCalendarLink(true);
+    };
+
+    const executeWhatsAppSend = (booking: any, incPayment: boolean, incCalendar: boolean) => {
         const phone = booking.clientPhone.replace(/\D/g, ''); // keep only numbers
         const formattedPhone = phone.startsWith('0') ? '593' + phone.substring(1) : phone;
         
@@ -454,13 +493,20 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
         }
 
         let bankPaymentStr = '';
-        if (bankName && accountNumber) {
+        if (incPayment && bankName && accountNumber) {
             bankPaymentStr = `\n\n*Datos de pago para confirmar su reserva:*\n- *Banco:* ${bankName}\n- *Tipo:* ${accountType || 'Ahorros'}\n- *Cuenta:* ${accountNumber}\n- *Titular:* ${accountHolder}\n${holderId ? `- *CI/RUC:* ${holderId}\n` : ''}${accountEmail ? `- *Email:* ${accountEmail}\n` : ''}\nPor favor, realice la transferencia y envíe el comprobante de pago por este medio para confirmar y registrar su reserva.`;
         }
 
-        const message = `Hola ${booking.clientName},\n\nTe escribimos de parte de *${businessName || 'ubicame.info'}* para recordarte tu reserva:\n\n*Tipo:* ${typeLabel}\n*Detalles:*\n${detailStr}\n*Estado:* ${booking.status.toUpperCase()}${bankPaymentStr}\n\n¡Te esperamos!`;
+        let calendarStr = '';
+        if (incCalendar) {
+            const calUrl = generateCalendarLink(booking);
+            calendarStr = `\n\n*Añadir a tu calendario:*\n${calUrl}`;
+        }
+
+        const message = `Hola ${booking.clientName},\n\nTe escribimos de parte de *${businessName || 'ubicame.info'}* para recordarte tu reserva:\n\n*Tipo:* ${typeLabel}\n*Detalles:*\n${detailStr}\n*Estado:* ${booking.status.toUpperCase()}${bankPaymentStr}${calendarStr}\n\n¡Te esperamos!`;
         
         window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');
+        setWhatsappConfigBooking(null);
     };
 
     if (!isOpen) return null;
@@ -1415,6 +1461,84 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                     )}
                 </div>
             </div>
+
+            {whatsappConfigBooking && (
+                <div className="fixed inset-0 z-[5000] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="w-full max-w-md bg-slate-900 border border-white/10 p-6 rounded-[2.5rem] shadow-2xl space-y-6 text-left relative">
+                        <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                            <h3 className="text-lg font-black text-white flex items-center gap-2">
+                                <svg className="w-5 h-5 fill-emerald-400" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.739-1.451L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.864.001-2.63-1.023-5.102-2.884-6.964C16.59 1.962 14.12 1.025 11.99 1.025 6.556 1.025 2.133 5.448 2.13 10.887c-.001 1.701.453 3.361 1.311 4.8l-.364 1.328 1.395-.365zm11.233-6.52c-.287-.144-1.7-.84-1.962-.935-.264-.096-.456-.144-.648.144-.192.288-.744.936-.912 1.129-.168.193-.336.216-.624.072-.288-.144-1.217-.449-2.317-1.43-.856-.764-1.433-1.709-1.6-1.998-.169-.289-.018-.445.125-.587.13-.129.289-.336.433-.505.144-.168.192-.288.288-.48.096-.193.048-.361-.024-.505-.072-.144-.648-1.56-.888-2.136-.233-.56-.47-.482-.648-.491-.168-.009-.36-.01-.552-.01-.192 0-.504.072-.768.36-.264.288-1.008.985-1.008 2.4 0 1.416 1.032 2.784 1.176 2.976.144.193 2.033 3.103 4.925 4.35.688.297 1.224.474 1.644.608.691.22 1.32.19 1.815.116.552-.082 1.7-.696 1.944-1.37.24-.672.24-1.25.168-1.37-.072-.12-.264-.192-.552-.336z"/></svg>
+                                Configurar Recordatorio
+                            </h3>
+                            <button onClick={() => setWhatsappConfigBooking(null)} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors">
+                                <X className="w-4 h-4 text-slate-400" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <p className="text-xs text-slate-400">
+                                Personaliza el mensaje de WhatsApp que enviarás a <strong className="text-white">{whatsappConfigBooking.clientName}</strong>.
+                            </p>
+
+                            {/* Checkbox for Payment Info */}
+                            <div className="flex items-start justify-between p-3.5 bg-slate-800/40 border border-white/5 rounded-2xl">
+                                <div className="space-y-0.5 max-w-[80%]">
+                                    <label className="text-xs font-black text-white cursor-pointer select-none" htmlFor="toggle-payment">
+                                        Enviar Cuenta de Cobro
+                                    </label>
+                                    <p className="text-[10px] text-slate-500">
+                                        {bankName && accountNumber 
+                                            ? `Incluye los datos de transferencia del banco ${bankName}.` 
+                                            : 'No has configurado una cuenta bancaria en la pestaña de Configuración.'}
+                                    </p>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    id="toggle-payment"
+                                    disabled={!(bankName && accountNumber)}
+                                    checked={includePaymentInfo}
+                                    onChange={(e) => setIncludePaymentInfo(e.target.checked)}
+                                    className="w-4 h-4 mt-1 accent-orange-500 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                />
+                            </div>
+
+                            {/* Checkbox for Calendar Link */}
+                            <div className="flex items-start justify-between p-3.5 bg-slate-800/40 border border-white/5 rounded-2xl">
+                                <div className="space-y-0.5 max-w-[80%]">
+                                    <label className="text-xs font-black text-white cursor-pointer select-none" htmlFor="toggle-calendar">
+                                        Enviar Enlace de Calendario
+                                    </label>
+                                    <p className="text-[10px] text-slate-500">
+                                        Incluye un enlace rápido para que el cliente añada el evento a Google Calendar.
+                                    </p>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    id="toggle-calendar"
+                                    checked={includeCalendarLink}
+                                    onChange={(e) => setIncludeCalendarLink(e.target.checked)}
+                                    className="w-4 h-4 mt-1 accent-orange-500 cursor-pointer"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 border-t border-white/5 pt-4">
+                            <button
+                                onClick={() => executeWhatsAppSend(whatsappConfigBooking, includePaymentInfo, includeCalendarLink)}
+                                className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5"
+                            >
+                                Enviar WhatsApp
+                            </button>
+                            <button
+                                onClick={() => setWhatsappConfigBooking(null)}
+                                className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
