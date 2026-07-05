@@ -299,29 +299,39 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                         </div>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleFollow(business.id);
-                                    }}
-                                    className={`flex items-center gap-1.5 px-4 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                                        isBusinessFollowed(business.id)
-                                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:bg-orange-600'
-                                            : 'bg-white/5 text-white border border-white/10 hover:bg-white/10'
-                                    }`}
-                                >
-                                    {isBusinessFollowed(business.id) ? (
-                                        <>
-                                            <UserCheck className="w-3.5 h-3.5 animate-in zoom-in duration-200" />
-                                            <span>Siguiendo</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <UserPlus className="w-3.5 h-3.5 animate-in zoom-in duration-200" />
-                                            <span>Seguir</span>
-                                        </>
-                                    )}
-                                </button>
+                                <div className="flex flex-col gap-2 shrink-0">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleToggleFollow(business.id);
+                                        }}
+                                        className={`flex items-center justify-center gap-1.5 px-4 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
+                                            isBusinessFollowed(business.id)
+                                                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:bg-orange-600'
+                                                : 'bg-white/5 text-white border border-white/10 hover:bg-white/10'
+                                        }`}
+                                    >
+                                        {isBusinessFollowed(business.id) ? (
+                                            <>
+                                                <UserCheck className="w-3.5 h-3.5 animate-in zoom-in duration-200" />
+                                                <span>Siguiendo</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <UserPlus className="w-3.5 h-3.5 animate-in zoom-in duration-200" />
+                                                <span>Seguir</span>
+                                            </>
+                                        )}
+                                    </button>
+                                    
+                                    <button
+                                        onClick={onClose}
+                                        className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl border border-white/10 transition-all font-black text-[10px] uppercase tracking-widest pointer-events-auto"
+                                    >
+                                        <ChevronLeft className="w-3.5 h-3.5 text-orange-500" />
+                                        <span>Volver</span>
+                                    </button>
+                                </div>
                             </div>
                         ) : dataLoading ? (
                             <div className="flex items-center gap-3">

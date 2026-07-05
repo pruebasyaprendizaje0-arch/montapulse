@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2, Compass } from 'lucide-react';
+import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronLeft, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2, Compass } from 'lucide-react';
 import { Business, UserProfile, MontanitaEvent, ProfileReview, Coupon, Sector, MapEntryType } from '../types';
 import { useData } from '../context/DataContext';
 import { BASE_URL, SECTOR_INFO } from '../constants';
@@ -464,6 +464,13 @@ export const PublicProfileModal = React.memo(({
                                     <span>Hay Cupones</span>
                                 </div>
                             )}
+                            <button
+                                onClick={onClose}
+                                className="flex items-center gap-1.5 bg-orange-500 text-white px-3.5 py-1.5 rounded-full border border-orange-400/20 hover:bg-orange-600 transition-colors shadow-md shadow-orange-500/10 cursor-pointer select-none font-bold shrink-0"
+                            >
+                                <ChevronLeft className="w-3.5 h-3.5 text-white" />
+                                <span>Volver</span>
+                            </button>
                         </div>
 
                         {/* Centered Actions & Info Group */}

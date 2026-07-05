@@ -45,7 +45,19 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
     } | null>(null);
     const [bookedTableIds, setBookedTableIds] = useState<string[]>([]);
     const [notes, setNotes] = useState('');
+    
+    // Appointment Availability Check States
+    const [checkingAvailability, setCheckingAvailability] = useState(false);
+    const [availabilityStatus, setAvailabilityStatus] = useState<'available' | 'full' | 'conflict_working_hours' | 'conflict_working_days' | null>(null);
+    const [availableSpotsLeft, setAvailableSpotsLeft] = useState<number | null>(null);
+
+    // Room Availability and Custom Rates Check States
+    const [roomPriceQuote, setRoomPriceQuote] = useState<number | null>(null);
+    const [roomAvailabilityStatus, setRoomAvailabilityStatus] = useState<'available' | 'full' | 'blocked' | null>(null);
+    const [checkingRoomAvailability, setCheckingRoomAvailability] = useState(false);
+    const [roomCapacityLeft, setRoomCapacityLeft] = useState<number | null>(null);
     const [extraServices, setExtraServices] = useState<string[]>([]);
+    const [extraServicesConfigList, setExtraServicesConfigList] = useState<any[]>([]);
     const [staffAssigned, setStaffAssigned] = useState('');
     const [conflictMsg, setConflictMsg] = useState<string | null>(null);
     const [forceSubmit, setForceSubmit] = useState(false);
@@ -79,6 +91,7 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
                     const configData = configSnap.data();
                     setBookingType(configData.bookingType || 'rooms');
                     setIsEnabled(configData.isEnabled || false);
+                    setExtraServicesConfigList(configData.extraServices || []);
                     if (configData.bankName && configData.accountNumber) {
                         setBankDetails({
                             bankName: configData.bankName,
@@ -175,6 +188,217 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
         }
     }, [selectedItemId, inventoryItems, bookingType]);
 
+    // Check availability for appointments
+    useEffect(() => {
+        if (bookingType !== 'appointments' || !startDate || !timeSlot || !selectedItemId) {
+            setAvailabilityStatus(null);
+            setAvailableSpotsLeft(null);
+            return;
+        }
+
+        const checkSlotAvailability = async () => {
+            setCheckingAvailability(true);
+            setAvailabilityStatus(null);
+            try {
+                const selectedItem = inventoryItems.find(item => item.id === selectedItemId);
+                if (!selectedItem) {
+                    setCheckingAvailability(false);
+                    return;
+                }
+
+                // 1. Check working days
+                if (selectedItem.working_days && selectedItem.working_days.length > 0) {
+                    const daysOfWeekSpanish = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                    const [year, month, day] = startDate.split('-').map(Number);
+                    const dateObj = new Date(year, month - 1, day);
+                    const dayOfWeekName = daysOfWeekSpanish[dateObj.getDay()];
+                    if (!selectedItem.working_days.includes(dayOfWeekName)) {
+                        setAvailabilityStatus('conflict_working_days');
+                        setCheckingAvailability(false);
+                        return;
+                    }
+                }
+
+                // 2. Check working hours
+                if (selectedItem.work_start_time && selectedItem.work_end_time) {
+                    if (timeSlot < selectedItem.work_start_time || timeSlot > selectedItem.work_end_time) {
+                        setAvailabilityStatus('conflict_working_hours');
+                        setCheckingAvailability(false);
+                        return;
+                    }
+                }
+
+                // 3. Query bookings for this slot and service (no inequality filter to avoid requiring composite indexes)
+                const q = query(
+                    collection(db, 'bookings'),
+                    where('businessId', '==', businessId),
+                    where('inventoryItemId', '==', selectedItemId)
+                );
+                
+                const snap = await getDocs(q);
+                let bookedSpots = 0;
+                
+                snap.docs.forEach(doc => {
+                    const data = doc.data();
+                    if (data.status === 'cancelled') return;
+                    
+                    const bTime = data.startTime?.toDate ? data.startTime.toDate() : new Date(data.startTime);
+                    
+                    const bTimeStr = bTime.toTimeString().substring(0, 5);
+                    const bDateStr = bTime.toISOString().split('T')[0];
+                    
+                    if (bDateStr === startDate && bTimeStr === timeSlot) {
+                        bookedSpots += (data.spotsRequested || 1);
+                    }
+                });
+
+                const maxSpots = selectedItem.max_spots_per_slot || 5;
+                const left = maxSpots - bookedSpots;
+                setAvailableSpotsLeft(left);
+                
+                if (left >= spotsRequested) {
+                    setAvailabilityStatus('available');
+                } else {
+                    setAvailabilityStatus('full');
+                }
+            } catch (err) {
+                console.error('Error checking slot availability:', err);
+            } finally {
+                setCheckingAvailability(false);
+            }
+        };
+
+        checkSlotAvailability();
+    }, [startDate, timeSlot, selectedItemId, spotsRequested, inventoryItems, bookingType, businessId]);
+
+    // Check availability and calculate price quote for rooms/accommodations
+    useEffect(() => {
+        if (bookingType !== 'rooms' || !startDate || !endDate || !selectedItemId) {
+            setRoomAvailabilityStatus(null);
+            setRoomPriceQuote(null);
+            setRoomCapacityLeft(null);
+            return;
+        }
+
+        const checkRoomAvailability = async () => {
+            setCheckingRoomAvailability(true);
+            setRoomAvailabilityStatus(null);
+            try {
+                const selectedItem = inventoryItems.find(item => item.id === selectedItemId);
+                if (!selectedItem) {
+                    setCheckingRoomAvailability(false);
+                    return;
+                }
+
+                const s = new Date(`${startDate}T12:00:00`);
+                const e = new Date(`${endDate}T10:00:00`);
+
+                if (isNaN(s.getTime()) || isNaN(e.getTime()) || s >= e) {
+                    setRoomAvailabilityStatus(null);
+                    setCheckingRoomAvailability(false);
+                    return;
+                }
+
+                // 1. Fetch all bookings of this room type
+                const q = query(
+                    collection(db, 'bookings'),
+                    where('businessId', '==', businessId),
+                    where('inventoryItemId', '==', selectedItemId)
+                );
+                const snap = await getDocs(q);
+                const activeBookings = snap.docs
+                    .map(doc => doc.data())
+                    .filter(b => b.status !== 'cancelled');
+
+                // 2. Loop through each night of the requested stay
+                let totalQuote = 0;
+                let minCapacityLeft = Infinity;
+                const current = new Date(s);
+
+                const defaultPrice = selectedItem.price_per_night || 0;
+                const defaultCapacity = selectedItem.total_capacity || 1;
+
+                while (current < e) {
+                    const year = current.getFullYear();
+                    const month = String(current.getMonth() + 1).padStart(2, '0');
+                    const dateNum = String(current.getDate()).padStart(2, '0');
+                    const dateStr = `${year}-${month}-${dateNum}`;
+
+                    // Check custom rate for this night
+                    const customRate = selectedItem.custom_rates?.find((r: any) => dateStr >= r.start && dateStr <= r.end);
+                    const nightPrice = customRate ? customRate.price : defaultPrice;
+                    totalQuote += nightPrice;
+
+                    // Check custom capacity/block for this night
+                    const block = selectedItem.blocked_dates?.find((b: any) => dateStr >= b.start && dateStr <= b.end);
+                    const nightCapacity = block ? block.capacity : defaultCapacity;
+
+                    if (nightCapacity === 0) {
+                        minCapacityLeft = 0;
+                    } else {
+                        // Count how many rooms are already booked on this night
+                        const nightDate = new Date(current);
+                        let bookedOnNight = 0;
+
+                        activeBookings.forEach(b => {
+                            const bStart = b.startTime?.toDate ? b.startTime.toDate() : new Date(b.startTime);
+                            const bEnd = b.endTime?.toDate ? b.endTime.toDate() : new Date(b.endTime);
+
+                            const bStartClean = new Date(bStart);
+                            bStartClean.setHours(12, 0, 0, 0);
+                            const bEndClean = new Date(bEnd);
+                            bEndClean.setHours(10, 0, 0, 0);
+
+                            const nightDateClean = new Date(nightDate);
+                            nightDateClean.setHours(12, 0, 0, 0);
+
+                            if (bStartClean <= nightDateClean && bEndClean > nightDateClean) {
+                                bookedOnNight += (b.spotsRequested || 1);
+                            }
+                        });
+
+                        const capacityLeft = nightCapacity - bookedOnNight;
+                        if (capacityLeft < minCapacityLeft) {
+                            minCapacityLeft = capacityLeft;
+                        }
+                    }
+
+                    current.setDate(current.getDate() + 1);
+                }
+
+                let servicesTotal = 0;
+                extraServices.forEach(selectedName => {
+                    const found = extraServicesConfigList.find(s => s.name === selectedName);
+                    if (found) {
+                        servicesTotal += (found.price || 0);
+                    }
+                });
+
+                const diffTime = Math.abs(e.getTime() - s.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+                const servicesPrice = servicesTotal * diffDays * spotsRequested;
+
+                setRoomPriceQuote((totalQuote * spotsRequested) + servicesPrice);
+                setRoomCapacityLeft(minCapacityLeft < 0 ? 0 : minCapacityLeft);
+
+                if (minCapacityLeft <= 0) {
+                    setRoomAvailabilityStatus('blocked');
+                } else if (minCapacityLeft >= spotsRequested) {
+                    setRoomAvailabilityStatus('available');
+                } else {
+                    setRoomAvailabilityStatus('full');
+                }
+
+            } catch (err) {
+                console.error('Error checking room availability:', err);
+            } finally {
+                setCheckingRoomAvailability(false);
+            }
+        };
+
+        checkRoomAvailability();
+    }, [startDate, endDate, selectedItemId, spotsRequested, inventoryItems, bookingType, businessId, extraServices, extraServicesConfigList]);
+
     // Reset conflict warnings when input parameters change
     useEffect(() => {
         setConflictMsg(null);
@@ -233,15 +457,11 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
             let calculatedPrice = 0;
             if (selectedItem) {
                 if (bookingType === 'rooms') {
-                    const price = selectedItem.price_per_night || 0;
-                    if (startDate && endDate) {
-                        const s = new Date(startDate);
-                        const e = new Date(endDate);
-                        const diffTime = Math.abs(e.getTime() - s.getTime());
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        calculatedPrice = price * spotsRequested * (diffDays || 1);
-                    } else {
-                        calculatedPrice = price * spotsRequested;
+                    calculatedPrice = roomPriceQuote || 0;
+                    if (roomAvailabilityStatus !== 'available') {
+                        showToast('El alojamiento seleccionado no está disponible en las fechas indicadas.', 'error');
+                        setSubmitting(false);
+                        return;
                     }
                 } else if (bookingType === 'appointments') {
                     const price = selectedItem.price || 0;
@@ -292,6 +512,13 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
                     force: false
                 })
             });
+
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                showToast('El servidor de reservas no responde con datos válidos. Por favor, asegúrate de iniciar el backend (npm run server).', 'error');
+                setSubmitting(false);
+                return;
+            }
 
             const result = await response.json();
 
@@ -378,6 +605,13 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
                     force: true
                 })
             });
+
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                showToast('El servidor de reservas no responde con datos válidos. Por favor, asegúrate de iniciar el backend (npm run server).', 'error');
+                setSubmitting(false);
+                return;
+            }
 
             const result = await response.json();
 
@@ -624,35 +858,62 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
                                                     />
                                                 </div>
                                             </div>
-                                            <div>
-                                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Servicios Adicionales</label>
-                                                <div className="flex flex-wrap gap-2.5">
-                                                    <label className="flex items-center gap-2 bg-slate-800/30 border border-white/5 px-4 py-2.5 rounded-2xl text-[10px] text-white cursor-pointer select-none">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={extraServices.includes('breakfast')} 
-                                                            onChange={e => {
-                                                                if (e.target.checked) setExtraServices([...extraServices, 'breakfast']);
-                                                                else setExtraServices(extraServices.filter(s => s !== 'breakfast'));
-                                                            }}
-                                                            className="accent-orange-500"
-                                                        />
-                                                        Desayuno
-                                                    </label>
-                                                    <label className="flex items-center gap-2 bg-slate-800/30 border border-white/5 px-4 py-2.5 rounded-2xl text-[10px] text-white cursor-pointer select-none">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={extraServices.includes('wifi')} 
-                                                            onChange={e => {
-                                                                if (e.target.checked) setExtraServices([...extraServices, 'wifi']);
-                                                                else setExtraServices(extraServices.filter(s => s !== 'wifi'));
-                                                            }}
-                                                            className="accent-orange-500"
-                                                        />
-                                                        Wifi
-                                                    </label>
+                                            {extraServicesConfigList.length > 0 && (
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1.5 block">Servicios Adicionales</label>
+                                                    <div className="flex flex-wrap gap-2.5">
+                                                        {extraServicesConfigList.map((service) => (
+                                                            <label key={service.id} className="flex items-center gap-2 bg-slate-800/30 border border-white/5 px-4 py-2.5 rounded-2xl text-[10px] text-white cursor-pointer select-none">
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    checked={extraServices.includes(service.name)} 
+                                                                    onChange={e => {
+                                                                        if (e.target.checked) setExtraServices([...extraServices, service.name]);
+                                                                        else setExtraServices(extraServices.filter(s => s !== service.name));
+                                                                    }}
+                                                                    className="accent-orange-500"
+                                                                />
+                                                                {service.name} {service.price > 0 ? `(+$${service.price.toFixed(2)})` : '(Gratis)'}
+                                                            </label>
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
+
+                                            {/* Real-time Room Availability and Price Quote Feedback */}
+                                            {(startDate && endDate) && (
+                                                <div className="mt-3 text-xs space-y-2">
+                                                    {checkingRoomAvailability ? (
+                                                        <div className="p-3 bg-slate-800/50 border border-white/5 rounded-2xl flex items-center gap-2">
+                                                            <div className="w-3.5 h-3.5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
+                                                            <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Verificando disponibilidad y tarifas...</p>
+                                                        </div>
+                                                    ) : roomAvailabilityStatus === 'available' ? (
+                                                        <div className="space-y-2">
+                                                            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center gap-2">
+                                                                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                                                                <span>¡Disponible! Quedan {roomCapacityLeft} habitaciones de este tipo.</span>
+                                                            </div>
+                                                            {roomPriceQuote !== null && (
+                                                                <div className="p-3 bg-slate-800/40 border border-white/5 rounded-2xl flex justify-between items-center">
+                                                                    <span className="text-slate-400 uppercase font-black text-[9px]">Monto Cotizado (Tarifas Aplicadas):</span>
+                                                                    <strong className="text-base font-black text-orange-500">${roomPriceQuote.toFixed(2)} USD</strong>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : roomAvailabilityStatus === 'blocked' ? (
+                                                        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl flex items-center gap-2">
+                                                            <X className="w-4 h-4 text-red-400 shrink-0" />
+                                                            <span>Las fechas seleccionadas están bloqueadas para esta habitación o no hay cupos.</span>
+                                                        </div>
+                                                    ) : roomAvailabilityStatus === 'full' ? (
+                                                        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl flex items-center gap-2">
+                                                            <X className="w-4 h-4 text-red-400 shrink-0" />
+                                                            <span>No disponible. Sin habitaciones libres para el rango de fechas seleccionado (Quedan {roomCapacityLeft || 0} disponibles).</span>
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -784,6 +1045,38 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
                                                     className="w-full bg-slate-800/50 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none" 
                                                 />
                                             </div>
+                                            
+                                            {/* Real-time Availability Feedback */}
+                                            {(startDate && timeSlot) && (
+                                                <div className="mt-2 text-xs">
+                                                    {checkingAvailability ? (
+                                                        <div className="p-3 bg-slate-800/50 border border-white/5 rounded-2xl flex items-center gap-2">
+                                                            <div className="w-3.5 h-3.5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
+                                                            <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Verificando disponibilidad...</p>
+                                                        </div>
+                                                    ) : availabilityStatus === 'available' ? (
+                                                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center gap-2">
+                                                            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                                                            <span>¡Disponible! Quedan {availableSpotsLeft} cupos libres para este horario.</span>
+                                                        </div>
+                                                    ) : availabilityStatus === 'full' ? (
+                                                        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl flex items-center gap-2">
+                                                            <X className="w-4 h-4 text-red-400 shrink-0" />
+                                                            <span>No disponible. Cupos insuficientes (Solo quedan {availableSpotsLeft || 0} cupos).</span>
+                                                        </div>
+                                                    ) : availabilityStatus === 'conflict_working_days' ? (
+                                                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl flex items-center gap-2">
+                                                            <Info className="w-4 h-4 text-amber-400 shrink-0" />
+                                                            <span>Servicio no disponible en este día de la semana.</span>
+                                                        </div>
+                                                    ) : availabilityStatus === 'conflict_working_hours' ? (
+                                                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl flex items-center gap-2">
+                                                            <Info className="w-4 h-4 text-amber-400 shrink-0" />
+                                                            <span>Fuera del horario de atención de este servicio.</span>
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -824,11 +1117,20 @@ export const BookingWidget: React.FC<BookingWidgetProps> = ({ businessId }) => {
                                     disabled={
                                         submitting || 
                                         inventoryItems.length === 0 || 
-                                        (bookingType === 'tables' && startDate && timeSlot && inventoryItems.filter(item => !bookedTableIds.includes(item.id)).length === 0)
+                                        (bookingType === 'tables' && startDate && timeSlot && inventoryItems.filter(item => !bookedTableIds.includes(item.id)).length === 0) ||
+                                        (bookingType === 'appointments' && startDate && timeSlot && availabilityStatus !== 'available' && !checkingAvailability) ||
+                                        (bookingType === 'rooms' && startDate && endDate && roomAvailabilityStatus !== 'available' && !checkingRoomAvailability)
                                     }
                                     className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black rounded-2xl uppercase tracking-widest text-xs mt-6 hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                                 >
-                                    {submitting ? 'Reservando...' : (bookingType === 'tables' && startDate && timeSlot && inventoryItems.filter(item => !bookedTableIds.includes(item.id)).length === 0) ? 'No hay mesas disponibles' : 'Confirmar Reserva'}
+                                    {submitting ? 'Reservando...' : 
+                                     (bookingType === 'tables' && startDate && timeSlot && inventoryItems.filter(item => !bookedTableIds.includes(item.id)).length === 0) ? 'No hay mesas disponibles' : 
+                                     (bookingType === 'appointments' && startDate && timeSlot && availabilityStatus === 'full') ? 'No disponible (Cupos llenos)' :
+                                     (bookingType === 'appointments' && startDate && timeSlot && availabilityStatus === 'conflict_working_days') ? 'No disponible este día' :
+                                     (bookingType === 'appointments' && startDate && timeSlot && availabilityStatus === 'conflict_working_hours') ? 'Fuera de horario de atención' :
+                                     (bookingType === 'rooms' && startDate && endDate && roomAvailabilityStatus === 'blocked') ? 'No disponible (Fechas bloqueadas)' :
+                                     (bookingType === 'rooms' && startDate && endDate && roomAvailabilityStatus === 'full') ? 'No disponible (Sin habitaciones)' :
+                                     'Confirmar Reserva'}
                                 </button>
                             </form>
                         )}

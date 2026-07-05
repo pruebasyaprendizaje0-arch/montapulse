@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Lock, CreditCard, Banknote, Sparkles, Plus, Trash2, Check, CheckCircle, Info, CalendarDays, Hotel, Utensils, Edit2, Save, RotateCcw, ChevronDown, ChevronUp, FileText, Phone, Mail, User, Clock, Calendar, XCircle } from 'lucide-react';
+import { X, Lock, CreditCard, Banknote, Sparkles, Plus, Trash2, Check, CheckCircle, Info, CalendarDays, Hotel, Utensils, Edit2, Save, RotateCcw, ChevronDown, ChevronUp, FileText, Phone, Mail, User, Clock, Calendar, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { db } from '../../firebase.config';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 import { useToast } from '../../context/ToastContext';
@@ -74,6 +74,108 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
     const [includePaymentInfo, setIncludePaymentInfo] = useState(true);
     const [includeCalendarLink, setIncludeCalendarLink] = useState(true);
 
+    // Filters and Weekly Calendar States
+    const [bookingFilter, setBookingFilter] = useState<'active' | 'completed' | 'cancelled'>('active');
+    const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
+    const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
+        const today = new Date();
+        const day = today.getDay();
+        const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Monday
+        const monday = new Date(today.setDate(diff));
+        monday.setHours(0, 0, 0, 0);
+        return monday;
+    });
+
+    // Custom Rates and Blocks Form States (for Room Inventory Management)
+    const [newRateStart, setNewRateStart] = useState('');
+    const [newRateEnd, setNewRateEnd] = useState('');
+    const [newRatePrice, setNewRatePrice] = useState(0);
+
+    const [newBlockStart, setNewBlockStart] = useState('');
+    const [newBlockEnd, setNewBlockEnd] = useState('');
+    const [newBlockCapacity, setNewBlockCapacity] = useState(0);
+
+    // Extra Services Config States
+    const [extraServicesList, setExtraServicesList] = useState<any[]>([]);
+    const [newExtraServiceName, setNewExtraServiceName] = useState('');
+    const [newExtraServicePrice, setNewExtraServicePrice] = useState(0);
+
+    // Helpers and computations for filtering and weekly calendar
+    const getBookingLocalDateString = (booking: any) => {
+        if (!booking.startTime) return '';
+        const d = booking.startTime.toDate ? booking.startTime.toDate() : new Date(booking.startTime);
+        if (isNaN(d.getTime())) return '';
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const getWeekDays = () => {
+        const days = [];
+        const current = new Date(currentWeekStart);
+        for (let i = 0; i < 7; i++) {
+            days.push(new Date(current));
+            current.setDate(current.getDate() + 1);
+        }
+        return days;
+    };
+
+    const handlePrevWeek = () => {
+        const newStart = new Date(currentWeekStart);
+        newStart.setDate(newStart.getDate() - 7);
+        setCurrentWeekStart(newStart);
+    };
+
+    const handleNextWeek = () => {
+        const newStart = new Date(currentWeekStart);
+        newStart.setDate(newStart.getDate() + 7);
+        setCurrentWeekStart(newStart);
+    };
+
+    const handleGoToToday = () => {
+        const today = new Date();
+        const day = today.getDay();
+        const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(today.setDate(diff));
+        monday.setHours(0, 0, 0, 0);
+        setCurrentWeekStart(monday);
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        setSelectedDateFilter(todayStr);
+    };
+
+    const weekDays = getWeekDays();
+
+    const bookingCountsByDate = bookings.reduce((acc: Record<string, number>, booking) => {
+        const isMatchFilter = bookingFilter === 'active'
+            ? (booking.status === 'pending' || booking.status === 'confirmed' || !booking.status)
+            : booking.status === bookingFilter;
+        if (isMatchFilter) {
+            const dateStr = getBookingLocalDateString(booking);
+            if (dateStr) {
+                acc[dateStr] = (acc[dateStr] || 0) + 1;
+            }
+        }
+        return acc;
+    }, {});
+
+    const filteredBookings = bookings.filter(booking => {
+        const matchesStatus = bookingFilter === 'active'
+            ? (booking.status === 'pending' || booking.status === 'confirmed' || !booking.status)
+            : booking.status === bookingFilter;
+        if (!matchesStatus) return false;
+        if (selectedDateFilter) {
+            return getBookingLocalDateString(booking) === selectedDateFilter;
+        }
+        return true;
+    });
+
+    const sortedFilteredBookings = [...filteredBookings].sort((a, b) => {
+        const dateA = a.startTime?.toDate ? a.startTime.toDate() : new Date(a.startTime || 0);
+        const dateB = b.startTime?.toDate ? b.startTime.toDate() : new Date(b.startTime || 0);
+        return dateA.getTime() - dateB.getTime();
+    });
+
     useEffect(() => {
         if (!isOpen) return;
         loadAddonAndConfig();
@@ -109,6 +211,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                 setAccountHolder(data.accountHolder || '');
                 setHolderId(data.holderId || '');
                 setAccountEmail(data.accountEmail || '');
+                setExtraServicesList(data.extraServices || []);
             }
 
             // 3. Get Business Name
@@ -245,6 +348,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                 accountHolder,
                 holderId,
                 accountEmail,
+                extraServices: extraServicesList,
                 updatedAt: new Date()
             }, { merge: true });
             showToast('Configuración guardada.', 'success');
@@ -333,11 +437,12 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
         }
     };
 
-    const handleUpdateBookingStatus = async (bookingId: string, status: 'confirmed' | 'cancelled') => {
+    const handleUpdateBookingStatus = async (bookingId: string, status: 'confirmed' | 'cancelled' | 'completed') => {
         try {
             const bookingRef = doc(db, 'bookings', bookingId);
             await updateDoc(bookingRef, { status, updatedAt: new Date() });
-            showToast(`Reserva ${status === 'confirmed' ? 'confirmada' : 'cancelada'} con éxito.`, 'success');
+            const msg = status === 'confirmed' ? 'Reserva confirmada con éxito.' : status === 'cancelled' ? 'Reserva cancelada con éxito.' : 'Reserva marcada como terminada.';
+            showToast(msg, 'success');
             loadBookings();
         } catch (err) {
             showToast('Error al actualizar estado de reserva.', 'error');
@@ -441,18 +546,18 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
     };
 
     const generateCalendarLink = (booking: any) => {
-        const typeLabel = booking.bookingType === 'rooms' ? 'Reserva de Alojamiento' 
-                        : booking.bookingType === 'tables' ? 'Reserva de Mesa' 
-                        : `Cita: ${booking.reservedItemName || 'Servicio'}`;
+        const typeLabel = booking.bookingType === 'rooms' ? 'Reserva de Alojamiento'
+            : booking.bookingType === 'tables' ? 'Reserva de Mesa'
+                : `Cita: ${booking.reservedItemName || 'Servicio'}`;
         const title = `${typeLabel} - ${businessName || 'MontaPulse'}`;
-        
+
         const startDate = booking.startTime?.toDate ? booking.startTime.toDate() : new Date(booking.startTime);
         let endDate = booking.endTime?.toDate ? booking.endTime.toDate() : (booking.endTime ? new Date(booking.endTime) : null);
-        
+
         if (!endDate || isNaN(endDate.getTime())) {
             endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour duration
         }
-        
+
         const toUTCString = (date: Date) => {
             try {
                 return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
@@ -460,11 +565,11 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                 return new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
             }
         };
-        
+
         const dates = `${toUTCString(startDate)}/${toUTCString(endDate)}`;
-        
+
         const details = `Hola ${booking.clientName}, aquí tienes tu confirmación de reserva.\n\nDetalles:\n- Tipo: ${booking.bookingType === 'rooms' ? 'Alojamiento' : booking.bookingType === 'tables' ? 'Mesa/Restaurante' : 'Cita/Servicio'}\n- Detalle: ${booking.reservedItemName || 'N/A'}\n- Organizado por: ${businessName || 'MontaPulse'}`;
-        
+
         return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${dates}&details=${encodeURIComponent(details)}`;
     };
 
@@ -477,12 +582,12 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
     const executeWhatsAppSend = (booking: any, incPayment: boolean, incCalendar: boolean) => {
         const phone = booking.clientPhone.replace(/\D/g, ''); // keep only numbers
         const formattedPhone = phone.startsWith('0') ? '593' + phone.substring(1) : phone;
-        
+
         const dateStr = formatBookingDate(booking.startTime);
-        const typeLabel = booking.bookingType === 'rooms' ? 'Habitación/Alojamiento' 
-                        : booking.bookingType === 'tables' ? 'Mesa/Restaurante' 
-                        : 'Cita/Servicio';
-        
+        const typeLabel = booking.bookingType === 'rooms' ? 'Habitación/Alojamiento'
+            : booking.bookingType === 'tables' ? 'Mesa/Restaurante'
+                : 'Cita/Servicio';
+
         let detailStr = '';
         if (booking.bookingType === 'rooms') {
             detailStr = `Check-in: ${dateStr}\nCheck-out: ${formatBookingDate(booking.endTime)}\nHabitaciones: ${booking.spotsRequested}`;
@@ -504,7 +609,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
         }
 
         const message = `Hola ${booking.clientName},\n\nTe escribimos de parte de *${businessName || 'ubicame.info'}* para recordarte tu reserva:\n\n*Tipo:* ${typeLabel}\n*Detalles:*\n${detailStr}\n*Estado:* ${booking.status.toUpperCase()}${bankPaymentStr}${calendarStr}\n\n¡Te esperamos!`;
-        
+
         window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');
         setWhatsappConfigBooking(null);
     };
@@ -530,7 +635,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
 
                 {/* Tabs */}
                 <div className="flex gap-2 mb-6 border-b border-white/5 pb-3 overflow-x-auto no-scrollbar">
-                    <button 
+                    <button
                         onClick={() => setActiveTab('addon')}
                         className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'addon' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-400 hover:text-white bg-white/5'}`}
                     >
@@ -538,19 +643,19 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                     </button>
                     {addonStatus === 'active' && (
                         <>
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('config')}
                                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'config' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-400 hover:text-white bg-white/5'}`}
                             >
                                 Configuración
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('inventory')}
                                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'inventory' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-400 hover:text-white bg-white/5'}`}
                             >
                                 Inventario
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('bookings')}
                                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'bookings' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-400 hover:text-white bg-white/5'}`}
                             >
@@ -613,7 +718,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                     <h4 className="text-sm font-black text-white uppercase tracking-wider">Pago Automático</h4>
                                                     <p className="text-[10px] text-slate-400 mt-1">Activa al instante usando tarjetas o métodos locales en Ecuador vía dLocal Go.</p>
                                                 </div>
-                                                <button 
+                                                <button
                                                     onClick={handleDlocalCheckout}
                                                     className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl"
                                                 >
@@ -631,12 +736,12 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                     <p className="text-[10px] text-slate-400 mt-1">Realiza tu transferencia y sube el comprobante de pago para aprobación del admin.</p>
                                                 </div>
                                                 <div className="space-y-3">
-                                                    <OptimizedImageUploader 
+                                                    <OptimizedImageUploader
                                                         onImageProcessed={(url) => setReceiptUrl(url)}
                                                         path={`uploads/${user?.id || 'anonymous'}/receipts`}
                                                         className="h-24"
                                                     />
-                                                    <button 
+                                                    <button
                                                         onClick={handleManualPaymentSubmit}
                                                         disabled={submittingManual}
                                                         className="w-full py-3 bg-slate-800 text-slate-200 border border-white/10 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-700 transition-all"
@@ -655,7 +760,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                     <div className="p-6 bg-slate-800/40 border border-white/5 rounded-3xl space-y-6">
                                         <div>
                                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Giro Comercial (Tipo de Reserva)</label>
-                                            <select 
+                                            <select
                                                 value={bookingType}
                                                 onChange={(e) => setBookingType(e.target.value as any)}
                                                 className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-sm text-white"
@@ -685,11 +790,11 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                 <h4 className="text-sm font-black text-white uppercase tracking-wider">Datos de Cuenta Bancaria</h4>
                                                 <p className="text-[10px] text-slate-500 mt-1">Configura una cuenta para que tus clientes puedan realizar pagos o transferencias directas para sus reservas.</p>
                                             </div>
-                                            
+
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Banco</label>
-                                                    <input 
+                                                    <input
                                                         type="text"
                                                         placeholder="Ej: Banco Pichincha"
                                                         value={bankName}
@@ -699,7 +804,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Tipo de Cuenta</label>
-                                                    <select 
+                                                    <select
                                                         value={accountType}
                                                         onChange={(e) => setAccountType(e.target.value)}
                                                         className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none focus:border-orange-500/50"
@@ -714,7 +819,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Número de Cuenta</label>
-                                                    <input 
+                                                    <input
                                                         type="text"
                                                         placeholder="Ej: 2201234567"
                                                         value={accountNumber}
@@ -724,7 +829,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Titular de la Cuenta</label>
-                                                    <input 
+                                                    <input
                                                         type="text"
                                                         placeholder="Nombre del beneficiario"
                                                         value={accountHolder}
@@ -737,7 +842,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Identificación (C.I. / RUC)</label>
-                                                    <input 
+                                                    <input
                                                         type="text"
                                                         placeholder="Ej: 1712345678"
                                                         value={holderId}
@@ -747,7 +852,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Email de Notificación</label>
-                                                    <input 
+                                                    <input
                                                         type="email"
                                                         placeholder="Ej: pagos@negocio.com"
                                                         value={accountEmail}
@@ -758,7 +863,81 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                             </div>
                                         </div>
 
-                                        <button 
+                                        {/* Servicios Adicionales Section */}
+                                        <div className="border-t border-white/5 pt-6 space-y-4">
+                                            <div>
+                                                <h4 className="text-sm font-black text-white uppercase tracking-wider">Servicios Adicionales</h4>
+                                                <p className="text-[10px] text-slate-500 mt-1">Configura los servicios extras que tus clientes pueden añadir a sus reservas (desayuno, wifi, traslados, etc.).</p>
+                                            </div>
+
+                                            <div className="grid grid-cols-3 gap-3 items-end">
+                                                <div className="col-span-2">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Nombre del Servicio</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Ej: Desayuno Buffet"
+                                                        value={newExtraServiceName}
+                                                        onChange={(e) => setNewExtraServiceName(e.target.value)}
+                                                        className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none focus:border-orange-500/50"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Precio ($)</label>
+                                                    <input
+                                                        type="number"
+                                                        placeholder="0.00"
+                                                        value={newExtraServicePrice || ''}
+                                                        onChange={(e) => setNewExtraServicePrice(parseFloat(e.target.value) || 0)}
+                                                        className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white outline-none focus:border-orange-500/50"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!newExtraServiceName.trim()) {
+                                                        showToast('Por favor escribe el nombre del servicio.', 'error');
+                                                        return;
+                                                    }
+                                                    const updated = [...extraServicesList, {
+                                                        id: Math.random().toString(36).substring(7),
+                                                        name: newExtraServiceName.trim(),
+                                                        price: newExtraServicePrice
+                                                    }];
+                                                    setExtraServicesList(updated);
+                                                    setNewExtraServiceName('');
+                                                    setNewExtraServicePrice(0);
+                                                    showToast('Servicio añadido a la lista temporal. Haz clic en "Guardar Configuración" para persistir.', 'info');
+                                                }}
+                                                className="py-2.5 px-4 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
+                                            >
+                                                Agregar Servicio
+                                            </button>
+
+                                            {extraServicesList.length > 0 && (
+                                                <div className="space-y-2 bg-slate-900/40 p-4 rounded-2xl border border-white/5">
+                                                    {extraServicesList.map((service) => (
+                                                        <div key={service.id} className="flex justify-between items-center text-xs text-slate-300">
+                                                             <span>{service.name} &middot; <strong className="text-orange-400">${service.price.toFixed(2)}</strong></span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const updated = extraServicesList.filter((s) => s.id !== service.id);
+                                                                    setExtraServicesList(updated);
+                                                                    showToast('Servicio removido. Recuerda guardar la configuración.', 'info');
+                                                                }}
+                                                                className="text-red-500 hover:text-red-400 text-[10px] font-bold"
+                                                            >
+                                                                Eliminar
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <button
                                             onClick={handleUpdateConfig}
                                             className="w-full py-4 bg-orange-500 text-white font-black rounded-2xl uppercase tracking-widest text-xs"
                                         >
@@ -778,26 +957,26 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
 
                                         {bookingType === 'rooms' && (
                                             <div className="space-y-3">
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="Nombre de la Habitación (Ej: Suite Premium)" 
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nombre de la Habitación (Ej: Suite Premium)"
                                                     value={roomType}
                                                     onChange={(e) => setRoomType(e.target.value)}
                                                     required
                                                     className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white"
                                                 />
                                                 <div className="grid grid-cols-2 gap-3">
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="Capacidad total de inventario" 
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Capacidad total de inventario"
                                                         value={roomCapacity}
                                                         onChange={(e) => setRoomCapacity(parseInt(e.target.value) || 1)}
                                                         required
                                                         className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white"
                                                     />
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="Precio por noche ($ USD)" 
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Precio por noche ($ USD)"
                                                         value={roomPrice}
                                                         onChange={(e) => setRoomPrice(parseFloat(e.target.value) || 0)}
                                                         required
@@ -806,7 +985,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                 </div>
                                                 <div className="space-y-1">
                                                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider text-left block">Imagen de la Habitación</label>
-                                                    <OptimizedImageUploader 
+                                                    <OptimizedImageUploader
                                                         onImageProcessed={(url) => setRoomImageUrl(url)}
                                                         currentImageUrl={roomImageUrl}
                                                         path={`uploads/${user?.id || 'anonymous'}/rooms`}
@@ -819,26 +998,26 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                         {bookingType === 'tables' && (
                                             <div className="space-y-3">
                                                 <div className="grid grid-cols-2 gap-3">
-                                                    <input 
-                                                        type="text" 
-                                                        placeholder="Zona (Ej: Terraza)" 
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Zona (Ej: Terraza)"
                                                         value={tableZone}
                                                         onChange={(e) => setTableZone(e.target.value)}
                                                         required
                                                         className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white"
                                                     />
-                                                    <input 
-                                                        type="text" 
-                                                        placeholder="Identificador (Ej: Mesa 4)" 
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Identificador (Ej: Mesa 4)"
                                                         value={tableIdentifier}
                                                         onChange={(e) => setTableIdentifier(e.target.value)}
                                                         required
                                                         className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white"
                                                     />
                                                 </div>
-                                                <input 
-                                                    type="number" 
-                                                    placeholder="Max Comensales" 
+                                                <input
+                                                    type="number"
+                                                    placeholder="Max Comensales"
                                                     value={tableDiners}
                                                     onChange={(e) => setTableDiners(parseInt(e.target.value) || 2)}
                                                     required
@@ -849,34 +1028,34 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
 
                                         {bookingType === 'appointments' && (
                                             <div className="space-y-3">
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="Nombre del Servicio o Actividad (Ej: Clase de Surf Grupal)" 
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nombre del Servicio o Actividad (Ej: Clase de Surf Grupal)"
                                                     value={serviceName}
                                                     onChange={(e) => setServiceName(e.target.value)}
                                                     required
                                                     className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white"
                                                 />
                                                 <div className="grid grid-cols-3 gap-3">
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="Duración (minutos)" 
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Duración (minutos)"
                                                         value={serviceDuration}
                                                         onChange={(e) => setServiceDuration(parseInt(e.target.value) || 60)}
                                                         required
                                                         className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white"
                                                     />
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="Cupos / Turno" 
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Cupos / Turno"
                                                         value={serviceSpots}
                                                         onChange={(e) => setServiceSpots(parseInt(e.target.value) || 5)}
                                                         required
                                                         className="w-full bg-slate-800 border border-white/5 rounded-2xl py-3 px-4 text-xs text-white"
                                                     />
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="Precio ($)" 
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Precio ($)"
                                                         value={servicePrice}
                                                         onChange={(e) => setServicePrice(parseFloat(e.target.value) || 0)}
                                                         required
@@ -886,7 +1065,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                             </div>
                                         )}
 
-                                        <button 
+                                        <button
                                             type="submit"
                                             className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2"
                                         >
@@ -906,95 +1085,257 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                         {editingInventoryId === item.id ? (
                                                             <div className="space-y-3">
                                                                 {bookingType === 'rooms' && (
-                                                                    <div className="space-y-2 text-left">
-                                                                        <input 
-                                                                            type="text" 
-                                                                            value={editInvFields.room_type || ''} 
-                                                                            onChange={e => setEditInvFields({...editInvFields, room_type: e.target.value})}
-                                                                            className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
-                                                                        />
-                                                                        <div className="grid grid-cols-2 gap-2">
-                                                                            <input 
-                                                                                type="number" 
-                                                                                value={editInvFields.total_capacity || 0} 
-                                                                                onChange={e => setEditInvFields({...editInvFields, total_capacity: parseInt(e.target.value) || 0})}
-                                                                                className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
-                                                                            />
-                                                                            <input 
-                                                                                type="number" 
-                                                                                value={editInvFields.price_per_night || 0} 
-                                                                                onChange={e => setEditInvFields({...editInvFields, price_per_night: parseFloat(e.target.value) || 0})}
+                                                                    <div className="space-y-4 text-left">
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Nombre de la Habitación</label>
+                                                                            <input
+                                                                                type="text"
+                                                                                value={editInvFields.room_type || ''}
+                                                                                onChange={e => setEditInvFields({ ...editInvFields, room_type: e.target.value })}
                                                                                 className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
                                                                             />
                                                                         </div>
+                                                                        <div className="grid grid-cols-2 gap-2">
+                                                                            <div>
+                                                                                <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Habitaciones Totales</label>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={editInvFields.total_capacity || 0}
+                                                                                    onChange={e => setEditInvFields({ ...editInvFields, total_capacity: parseInt(e.target.value) || 0 })}
+                                                                                    className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                                />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Precio base ($/noche)</label>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={editInvFields.price_per_night || 0}
+                                                                                    onChange={e => setEditInvFields({ ...editInvFields, price_per_night: parseFloat(e.target.value) || 0 })}
+                                                                                    className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
                                                                         <div className="space-y-1.5">
                                                                             <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Imagen de la Habitación</label>
-                                                                            <OptimizedImageUploader 
-                                                                                onImageProcessed={(url) => setEditInvFields({...editInvFields, image_url: url})}
+                                                                            <OptimizedImageUploader
+                                                                                onImageProcessed={(url) => setEditInvFields({ ...editInvFields, image_url: url })}
                                                                                 currentImageUrl={editInvFields.image_url || ''}
                                                                                 path={`uploads/${user?.id || 'anonymous'}/rooms`}
                                                                                 className="h-20"
                                                                             />
+                                                                        </div>
+
+                                                                        {/* Custom Rates Management Section */}
+                                                                        <div className="border-t border-white/5 pt-3 space-y-2">
+                                                                            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Gestión de Tarifas Especiales</span>
+                                                                            <div className="grid grid-cols-3 gap-2">
+                                                                                <div>
+                                                                                    <label className="text-[7px] font-bold uppercase text-slate-500 block mb-0.5">Desde</label>
+                                                                                    <input
+                                                                                        type="date"
+                                                                                        value={newRateStart}
+                                                                                        onChange={e => setNewRateStart(e.target.value)}
+                                                                                        className="bg-slate-850 border border-white/5 rounded-xl p-1.5 text-[9px] text-white outline-none w-full"
+                                                                                    />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[7px] font-bold uppercase text-slate-500 block mb-0.5">Hasta</label>
+                                                                                    <input
+                                                                                        type="date"
+                                                                                        value={newRateEnd}
+                                                                                        onChange={e => setNewRateEnd(e.target.value)}
+                                                                                        className="bg-slate-850 border border-white/5 rounded-xl p-1.5 text-[9px] text-white outline-none w-full"
+                                                                                    />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[7px] font-bold uppercase text-slate-500 block mb-0.5">Precio ($)</label>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        placeholder="Tarifa"
+                                                                                        value={newRatePrice || ''}
+                                                                                        onChange={e => setNewRatePrice(parseFloat(e.target.value) || 0)}
+                                                                                        className="bg-slate-850 border border-white/5 rounded-xl p-1.5 text-[9px] text-white outline-none w-full"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    if (!newRateStart || !newRateEnd || newRatePrice <= 0) return;
+                                                                                    const currentRates = editInvFields.custom_rates || [];
+                                                                                    const updated = [...currentRates, {
+                                                                                        id: Math.random().toString(36).substring(7),
+                                                                                        start: newRateStart,
+                                                                                        end: newRateEnd,
+                                                                                        price: newRatePrice
+                                                                                    }];
+                                                                                    setEditInvFields({ ...editInvFields, custom_rates: updated });
+                                                                                    setNewRateStart('');
+                                                                                    setNewRateEnd('');
+                                                                                    setNewRatePrice(0);
+                                                                                }}
+                                                                                className="py-1.5 px-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all"
+                                                                            >
+                                                                                Agregar Tarifa
+                                                                            </button>
+
+                                                                            {/* Custom Rates List */}
+                                                                            {editInvFields.custom_rates && editInvFields.custom_rates.length > 0 && (
+                                                                                <div className="space-y-1 mt-1 bg-slate-900/40 p-2 rounded-xl border border-white/5 max-h-24 overflow-y-auto">
+                                                                                    {editInvFields.custom_rates.map((rate: any) => (
+                                                                                        <div key={rate.id} className="flex justify-between items-center text-[9px] text-slate-300">
+                                                                                            <span>Del {rate.start} al {rate.end} &middot; <strong className="text-orange-400">${rate.price}/noche</strong></span>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => {
+                                                                                                    const updated = editInvFields.custom_rates.filter((r: any) => r.id !== rate.id);
+                                                                                                    setEditInvFields({ ...editInvFields, custom_rates: updated });
+                                                                                                }}
+                                                                                                className="text-red-500 hover:text-red-400 font-bold ml-2"
+                                                                                            >
+                                                                                                Eliminar
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Blocked Dates/Rooms Management Section */}
+                                                                        <div className="border-t border-white/5 pt-3 space-y-2">
+                                                                            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Bloquear Fechas y Habitaciones</span>
+                                                                            <div className="grid grid-cols-3 gap-2">
+                                                                                <div>
+                                                                                    <label className="text-[7px] font-bold uppercase text-slate-500 block mb-0.5">Desde</label>
+                                                                                    <input
+                                                                                        type="date"
+                                                                                        value={newBlockStart}
+                                                                                        onChange={e => setNewBlockStart(e.target.value)}
+                                                                                        className="bg-slate-850 border border-white/5 rounded-xl p-1.5 text-[9px] text-white outline-none w-full"
+                                                                                    />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[7px] font-bold uppercase text-slate-500 block mb-0.5">Hasta</label>
+                                                                                    <input
+                                                                                        type="date"
+                                                                                        value={newBlockEnd}
+                                                                                        onChange={e => setNewBlockEnd(e.target.value)}
+                                                                                        className="bg-slate-850 border border-white/5 rounded-xl p-1.5 text-[9px] text-white outline-none w-full"
+                                                                                    />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[7px] font-bold uppercase text-slate-500 block mb-0.5">Cupos Libres</label>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        placeholder="0 = Bloqueado"
+                                                                                        value={newBlockCapacity}
+                                                                                        onChange={e => setNewBlockCapacity(parseInt(e.target.value) || 0)}
+                                                                                        className="bg-slate-850 border border-white/5 rounded-xl p-1.5 text-[9px] text-white outline-none w-full"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                            <p className="text-[8px] text-slate-500 leading-normal">"Cupos Libres" indica cuántas habitaciones quedan disponibles en ese período (0 = Bloqueo total).</p>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    if (!newBlockStart || !newBlockEnd) return;
+                                                                                    const currentBlocks = editInvFields.blocked_dates || [];
+                                                                                    const updated = [...currentBlocks, {
+                                                                                        id: Math.random().toString(36).substring(7),
+                                                                                        start: newBlockStart,
+                                                                                        end: newBlockEnd,
+                                                                                        capacity: newBlockCapacity
+                                                                                    }];
+                                                                                    setEditInvFields({ ...editInvFields, blocked_dates: updated });
+                                                                                    setNewBlockStart('');
+                                                                                    setNewBlockEnd('');
+                                                                                    setNewBlockCapacity(0);
+                                                                                }}
+                                                                                className="py-1.5 px-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all"
+                                                                            >
+                                                                                Agregar Bloqueo
+                                                                            </button>
+
+                                                                            {/* Blocked Dates List */}
+                                                                            {editInvFields.blocked_dates && editInvFields.blocked_dates.length > 0 && (
+                                                                                <div className="space-y-1 mt-1 bg-slate-900/40 p-2 rounded-xl border border-white/5 max-h-24 overflow-y-auto">
+                                                                                    {editInvFields.blocked_dates.map((block: any) => (
+                                                                                        <div key={block.id} className="flex justify-between items-center text-[9px] text-slate-300">
+                                                                                            <span>Del {block.start} al {block.end} &middot; <strong className="text-orange-400">{block.capacity === 0 ? 'Bloqueo Total' : `Disponibles: ${block.capacity}`}</strong></span>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => {
+                                                                                                    const updated = editInvFields.blocked_dates.filter((b: any) => b.id !== block.id);
+                                                                                                    setEditInvFields({ ...editInvFields, blocked_dates: updated });
+                                                                                                }}
+                                                                                                className="text-red-500 hover:text-red-400 font-bold ml-2"
+                                                                                            >
+                                                                                                Eliminar
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 )}
                                                                 {bookingType === 'tables' && (
                                                                     <div className="space-y-2 text-left">
                                                                         <div className="grid grid-cols-2 gap-2">
-                                                                            <input 
-                                                                                type="text" 
-                                                                                value={editInvFields.zone_name || ''} 
-                                                                                onChange={e => setEditInvFields({...editInvFields, zone_name: e.target.value})}
+                                                                            <input
+                                                                                type="text"
+                                                                                value={editInvFields.zone_name || ''}
+                                                                                onChange={e => setEditInvFields({ ...editInvFields, zone_name: e.target.value })}
                                                                                 className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
                                                                             />
-                                                                            <input 
-                                                                                type="text" 
-                                                                                value={editInvFields.table_identifier || ''} 
-                                                                                onChange={e => setEditInvFields({...editInvFields, table_identifier: e.target.value})}
+                                                                            <input
+                                                                                type="text"
+                                                                                value={editInvFields.table_identifier || ''}
+                                                                                onChange={e => setEditInvFields({ ...editInvFields, table_identifier: e.target.value })}
                                                                                 className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
                                                                             />
                                                                         </div>
-                                                                        <input 
-                                                                            type="number" 
-                                                                            value={editInvFields.max_diners || 0} 
-                                                                            onChange={e => setEditInvFields({...editInvFields, max_diners: parseInt(e.target.value) || 0})}
+                                                                        <input
+                                                                            type="number"
+                                                                            value={editInvFields.max_diners || 0}
+                                                                            onChange={e => setEditInvFields({ ...editInvFields, max_diners: parseInt(e.target.value) || 0 })}
                                                                             className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
                                                                         />
                                                                     </div>
                                                                 )}
                                                                 {bookingType === 'appointments' && (
                                                                     <div className="space-y-2 text-left">
-                                                                        <input 
-                                                                            type="text" 
-                                                                            value={editInvFields.service_name || ''} 
-                                                                            onChange={e => setEditInvFields({...editInvFields, service_name: e.target.value})}
+                                                                        <input
+                                                                            type="text"
+                                                                            value={editInvFields.service_name || ''}
+                                                                            onChange={e => setEditInvFields({ ...editInvFields, service_name: e.target.value })}
                                                                             className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
                                                                         />
                                                                         <div className="grid grid-cols-3 gap-2">
-                                                                            <input 
-                                                                                type="number" 
-                                                                                value={editInvFields.duration_minutes || 0} 
-                                                                                onChange={e => setEditInvFields({...editInvFields, duration_minutes: parseInt(e.target.value) || 0})}
+                                                                            <input
+                                                                                type="number"
+                                                                                value={editInvFields.duration_minutes || 0}
+                                                                                onChange={e => setEditInvFields({ ...editInvFields, duration_minutes: parseInt(e.target.value) || 0 })}
                                                                                 className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
                                                                             />
-                                                                            <input 
-                                                                                type="number" 
-                                                                                value={editInvFields.max_spots_per_slot || 0} 
-                                                                                onChange={e => setEditInvFields({...editInvFields, max_spots_per_slot: parseInt(e.target.value) || 0})}
+                                                                            <input
+                                                                                type="number"
+                                                                                value={editInvFields.max_spots_per_slot || 0}
+                                                                                onChange={e => setEditInvFields({ ...editInvFields, max_spots_per_slot: parseInt(e.target.value) || 0 })}
                                                                                 className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
                                                                             />
-                                                                            <input 
-                                                                                type="number" 
-                                                                                value={editInvFields.price || 0} 
-                                                                                onChange={e => setEditInvFields({...editInvFields, price: parseFloat(e.target.value) || 0})}
+                                                                            <input
+                                                                                type="number"
+                                                                                value={editInvFields.price || 0}
+                                                                                onChange={e => setEditInvFields({ ...editInvFields, price: parseFloat(e.target.value) || 0 })}
                                                                                 className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
                                                                             />
                                                                         </div>
-                                                                        <input 
-                                                                            type="text" 
+                                                                        <input
+                                                                            type="text"
                                                                             placeholder="Profesional / Personal asignado (Opcional)"
-                                                                            value={editInvFields.assigned_staff || ''} 
-                                                                            onChange={e => setEditInvFields({...editInvFields, assigned_staff: e.target.value})}
+                                                                            value={editInvFields.assigned_staff || ''}
+                                                                            onChange={e => setEditInvFields({ ...editInvFields, assigned_staff: e.target.value })}
                                                                             className="w-full bg-slate-850 border border-white/5 rounded-xl py-2 px-3 text-xs text-white outline-none"
                                                                         />
                                                                         <div className="space-y-1">
@@ -1011,7 +1352,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                                                                 const updated = isChecked
                                                                                                     ? currentDays.filter(d => d !== day)
                                                                                                     : [...currentDays, day];
-                                                                                                setEditInvFields({...editInvFields, working_days: updated});
+                                                                                                setEditInvFields({ ...editInvFields, working_days: updated });
                                                                                             }}
                                                                                             className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider border transition-all ${isChecked ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20' : 'bg-slate-800 text-slate-400 border-white/5'}`}
                                                                                         >
@@ -1024,19 +1365,19 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                                         <div className="grid grid-cols-2 gap-2">
                                                                             <div>
                                                                                 <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Hora Inicio</label>
-                                                                                <input 
-                                                                                    type="time" 
+                                                                                <input
+                                                                                    type="time"
                                                                                     value={editInvFields.work_start_time || '08:00'}
-                                                                                    onChange={e => setEditInvFields({...editInvFields, work_start_time: e.target.value})}
+                                                                                    onChange={e => setEditInvFields({ ...editInvFields, work_start_time: e.target.value })}
                                                                                     className="w-full bg-slate-850 border border-white/5 rounded-xl py-1 px-2 text-xs text-white outline-none"
                                                                                 />
                                                                             </div>
                                                                             <div>
                                                                                 <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Hora Fin</label>
-                                                                                <input 
-                                                                                    type="time" 
+                                                                                <input
+                                                                                    type="time"
                                                                                     value={editInvFields.work_end_time || '17:00'}
-                                                                                    onChange={e => setEditInvFields({...editInvFields, work_end_time: e.target.value})}
+                                                                                    onChange={e => setEditInvFields({ ...editInvFields, work_end_time: e.target.value })}
                                                                                     className="w-full bg-slate-850 border border-white/5 rounded-xl py-1 px-2 text-xs text-white outline-none"
                                                                                 />
                                                                             </div>
@@ -1044,13 +1385,13 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                                     </div>
                                                                 )}
                                                                 <div className="flex gap-2">
-                                                                    <button 
+                                                                    <button
                                                                         onClick={() => handleSaveEditInventory(item)}
                                                                         className="flex-1 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 hover:shadow-lg transition-all"
                                                                     >
                                                                         <Save className="w-3.5 h-3.5" /> Guardar
                                                                     </button>
-                                                                    <button 
+                                                                    <button
                                                                         onClick={() => setEditingInventoryId(null)}
                                                                         className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
                                                                     >
@@ -1064,10 +1405,10 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                                     {bookingType === 'rooms' && (
                                                                         <div className="flex items-center gap-3">
                                                                             {item.image_url && (
-                                                                                <img 
-                                                                                    src={item.image_url} 
-                                                                                    alt={item.room_type} 
-                                                                                    className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0" 
+                                                                                <img
+                                                                                    src={item.image_url}
+                                                                                    alt={item.room_type}
+                                                                                    className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0"
                                                                                 />
                                                                             )}
                                                                             <div className="text-left">
@@ -1090,13 +1431,13 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                                     )}
                                                                 </div>
                                                                 <div className="flex gap-1 shrink-0">
-                                                                    <button 
+                                                                    <button
                                                                         onClick={() => handleStartEditInventory(item)}
                                                                         className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
                                                                     >
                                                                         <Edit2 className="w-4 h-4" />
                                                                     </button>
-                                                                    <button 
+                                                                    <button
                                                                         onClick={() => handleDeleteInventory(item.id)}
                                                                         className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
                                                                     >
@@ -1114,27 +1455,141 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                             )}
 
                             {activeTab === 'bookings' && (
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-xs font-black uppercase text-slate-500 tracking-wider">Historial de Reservas</h3>
-                                        <span className="text-[10px] text-slate-600 font-bold">{bookings.length} reserva{bookings.length !== 1 ? 's' : ''}</span>
+                                <div className="space-y-4 text-left">
+                                    {/* Segmented Controls for Sub-tabs */}
+                                    <div className="flex gap-2 p-1 bg-slate-950/40 rounded-2xl border border-white/5">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setBookingFilter('active');
+                                                setSelectedDateFilter(null);
+                                            }}
+                                            className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${bookingFilter === 'active' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                                        >
+                                            Activas
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setBookingFilter('completed');
+                                                setSelectedDateFilter(null);
+                                            }}
+                                            className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${bookingFilter === 'completed' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                                        >
+                                            Terminadas
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setBookingFilter('cancelled');
+                                                setSelectedDateFilter(null);
+                                            }}
+                                            className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${bookingFilter === 'cancelled' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                                        >
+                                            Canceladas
+                                        </button>
                                     </div>
-                                    {bookings.length === 0 ? (
-                                        <div className="py-10 text-center">
+
+                                    {/* Weekly Calendar Component */}
+                                    <div className="bg-slate-800/20 border border-white/5 p-4 rounded-3xl space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Calendario Semanal</span>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={handleGoToToday}
+                                                    type="button"
+                                                    className="px-2 py-1 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-[9px] font-bold text-slate-300 transition-all"
+                                                >
+                                                    Hoy
+                                                </button>
+                                                <div className="flex border border-white/5 bg-slate-950/20 rounded-xl overflow-hidden">
+                                                    <button type="button" onClick={handlePrevWeek} className="p-1.5 hover:bg-white/5 transition-colors">
+                                                        <ChevronLeft className="w-3.5 h-3.5 text-slate-400" />
+                                                    </button>
+                                                    <button type="button" onClick={handleNextWeek} className="p-1.5 hover:bg-white/5 transition-colors">
+                                                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-7 gap-1">
+                                            {weekDays.map((day, idx) => {
+                                                const year = day.getFullYear();
+                                                const month = String(day.getMonth() + 1).padStart(2, '0');
+                                                const dateNum = String(day.getDate()).padStart(2, '0');
+                                                const dateStr = `${year}-${month}-${dateNum}`;
+                                                
+                                                const isSelected = selectedDateFilter === dateStr;
+                                                const isToday = new Date().toDateString() === day.toDateString();
+                                                const count = bookingCountsByDate[dateStr] || 0;
+                                                
+                                                // Short name of day in Spanish
+                                                const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                                                const dayName = dayNames[day.getDay()];
+
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => setSelectedDateFilter(isSelected ? null : dateStr)}
+                                                        className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all relative border ${isSelected ? 'bg-orange-500/20 border-orange-500/40 text-orange-400 shadow-md shadow-orange-500/5' : 'bg-slate-950/20 border-white/5 hover:bg-white/5 text-slate-400'}`}
+                                                    >
+                                                        <span className="text-[8px] uppercase font-black opacity-60">{dayName}</span>
+                                                        <span className={`text-xs font-black mt-1 ${isToday && !isSelected ? 'text-orange-500' : ''}`}>{day.getDate()}</span>
+                                                        
+                                                        {/* Booking Count indicator */}
+                                                        {count > 0 && (
+                                                            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-orange-500 text-[9px] font-black text-white flex items-center justify-center border border-slate-900 shadow-sm animate-scaleIn">
+                                                                {count}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        
+                                        {selectedDateFilter && (
+                                            <div className="flex items-center justify-between text-[10px] text-slate-500 bg-slate-950/20 px-3 py-2 rounded-xl">
+                                                <span>Filtrado por fecha: <strong>{new Date(`${selectedDateFilter}T12:00:00`).toLocaleDateString('es-EC', { dateStyle: 'medium' })}</strong></span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedDateFilter(null)}
+                                                    className="font-bold text-orange-400 hover:underline"
+                                                >
+                                                    Mostrar todas
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center justify-between mt-2">
+                                        <h3 className="text-xs font-black uppercase text-slate-500 tracking-wider">
+                                            {bookingFilter === 'active' ? 'Reservas Activas' : bookingFilter === 'completed' ? 'Historial de Reservas Terminadas' : 'Reservas Canceladas'}
+                                        </h3>
+                                        <span className="text-[10px] text-slate-600 font-bold">
+                                            {filteredBookings.length} de {bookings.filter(b => bookingFilter === 'active' ? (b.status === 'pending' || b.status === 'confirmed' || !b.status) : b.status === bookingFilter).length}
+                                        </span>
+                                    </div>
+
+                                    {sortedFilteredBookings.length === 0 ? (
+                                        <div className="py-10 text-center bg-slate-800/10 border border-white/5 rounded-3xl">
                                             <CalendarDays className="w-10 h-10 text-slate-700 mx-auto mb-3" />
-                                            <p className="text-xs text-slate-600">Aún no has recibido solicitudes de reserva.</p>
+                                            <p className="text-xs text-slate-600">No hay reservas para mostrar con los filtros seleccionados.</p>
                                         </div>
                                     ) : (
                                         <div className="space-y-3">
-                                            {bookings.map((booking) => {
+                                            {sortedFilteredBookings.map((booking) => {
                                                 const isExpanded = expandedBookingId === booking.id;
                                                 const isEditing = editingBookingId === booking.id;
                                                 const draft = editState[booking.id] || {};
                                                 const statusColor = booking.status === 'confirmed'
                                                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                                    : booking.status === 'cancelled'
-                                                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                                                    : booking.status === 'completed'
+                                                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                                        : booking.status === 'cancelled'
+                                                            ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
 
                                                 return (
                                                     <div key={booking.id} className={`bg-slate-800/40 border rounded-3xl overflow-hidden transition-all duration-300 ${isEditing ? 'border-orange-500/40 shadow-lg shadow-orange-500/5' : 'border-white/5 hover:border-white/10'}`}>
@@ -1158,7 +1613,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                                 </div>
                                                                 <div className="flex items-center gap-2 shrink-0">
                                                                     <span className={`px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider border ${statusColor}`}>
-                                                                        {booking.status === 'confirmed' ? 'Confirmada' : booking.status === 'cancelled' ? 'Cancelada' : 'Pendiente'}
+                                                                        {booking.status === 'confirmed' ? 'Confirmada' : booking.status === 'completed' ? 'Terminada' : booking.status === 'cancelled' ? 'Cancelada' : 'Pendiente'}
                                                                     </span>
                                                                     {!isEditing && (
                                                                         isExpanded
@@ -1237,7 +1692,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                                         onClick={() => handleWhatsAppReminder(booking)}
                                                                         className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-95 shadow-sm shadow-emerald-500/20"
                                                                     >
-                                                                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.739-1.451L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.864.001-2.63-1.023-5.102-2.884-6.964C16.59 1.962 14.12 1.025 11.99 1.025 6.556 1.025 2.133 5.448 2.13 10.887c-.001 1.701.453 3.361 1.311 4.8l-.364 1.328 1.395-.365zm11.233-6.52c-.287-.144-1.7-.84-1.962-.935-.264-.096-.456-.144-.648.144-.192.288-.744.936-.912 1.129-.168.193-.336.216-.624.072-.288-.144-1.217-.449-2.317-1.43-.856-.764-1.433-1.709-1.6-1.998-.169-.289-.018-.445.125-.587.13-.129.289-.336.433-.505.144-.168.192-.288.288-.48.096-.193.048-.361-.024-.505-.072-.144-.648-1.56-.888-2.136-.233-.56-.47-.482-.648-.491-.168-.009-.36-.01-.552-.01-.192 0-.504.072-.768.36-.264.288-1.008.985-1.008 2.4 0 1.416 1.032 2.784 1.176 2.976.144.193 2.033 3.103 4.925 4.35.688.297 1.224.474 1.644.608.691.22 1.32.19 1.815.116.552-.082 1.7-.696 1.944-1.37.24-.672.24-1.25.168-1.37-.072-.12-.264-.192-.552-.336z"/></svg>
+                                                                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.739-1.451L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.864.001-2.63-1.023-5.102-2.884-6.964C16.59 1.962 14.12 1.025 11.99 1.025 6.556 1.025 2.133 5.448 2.13 10.887c-.001 1.701.453 3.361 1.311 4.8l-.364 1.328 1.395-.365zm11.233-6.52c-.287-.144-1.7-.84-1.962-.935-.264-.096-.456-.144-.648.144-.192.288-.744.936-.912 1.129-.168.193-.336.216-.624.072-.288-.144-1.217-.449-2.317-1.43-.856-.764-1.433-1.709-1.6-1.998-.169-.289-.018-.445.125-.587.13-.129.289-.336.433-.505.144-.168.192-.288.288-.48.096-.193.048-.361-.024-.505-.072-.144-.648-1.56-.888-2.136-.233-.56-.47-.482-.648-.491-.168-.009-.36-.01-.552-.01-.192 0-.504.072-.768.36-.264.288-1.008.985-1.008 2.4 0 1.416 1.032 2.784 1.176 2.976.144.193 2.033 3.103 4.925 4.35.688.297 1.224.474 1.644.608.691.22 1.32.19 1.815.116.552-.082 1.7-.696 1.944-1.37.24-.672.24-1.25.168-1.37-.072-.12-.264-.192-.552-.336z" /></svg>
                                                                         WhatsApp
                                                                     </button>
 
@@ -1267,12 +1722,22 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                                                         </>
                                                                     )}
                                                                     {booking.status === 'confirmed' && (
-                                                                        <button
-                                                                            onClick={() => handleUpdateBookingStatus(booking.id, 'cancelled')}
-                                                                            className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
-                                                                        >
-                                                                            <XCircle className="w-3.5 h-3.5" /> Cancelar
-                                                                        </button>
+                                                                        <>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleUpdateBookingStatus(booking.id, 'completed')}
+                                                                                className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/20 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
+                                                                            >
+                                                                                <CheckCircle className="w-3.5 h-3.5" /> Terminar
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleUpdateBookingStatus(booking.id, 'cancelled')}
+                                                                                className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
+                                                                            >
+                                                                                <XCircle className="w-3.5 h-3.5" /> Cancelar
+                                                                            </button>
+                                                                        </>
                                                                     )}
 
                                                                     {/* Delete */}
@@ -1467,7 +1932,7 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                     <div className="w-full max-w-md bg-slate-900 border border-white/10 p-6 rounded-[2.5rem] shadow-2xl space-y-6 text-left relative">
                         <div className="flex items-center justify-between pb-3 border-b border-white/5">
                             <h3 className="text-lg font-black text-white flex items-center gap-2">
-                                <svg className="w-5 h-5 fill-emerald-400" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.739-1.451L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.864.001-2.63-1.023-5.102-2.884-6.964C16.59 1.962 14.12 1.025 11.99 1.025 6.556 1.025 2.133 5.448 2.13 10.887c-.001 1.701.453 3.361 1.311 4.8l-.364 1.328 1.395-.365zm11.233-6.52c-.287-.144-1.7-.84-1.962-.935-.264-.096-.456-.144-.648.144-.192.288-.744.936-.912 1.129-.168.193-.336.216-.624.072-.288-.144-1.217-.449-2.317-1.43-.856-.764-1.433-1.709-1.6-1.998-.169-.289-.018-.445.125-.587.13-.129.289-.336.433-.505.144-.168.192-.288.288-.48.096-.193.048-.361-.024-.505-.072-.144-.648-1.56-.888-2.136-.233-.56-.47-.482-.648-.491-.168-.009-.36-.01-.552-.01-.192 0-.504.072-.768.36-.264.288-1.008.985-1.008 2.4 0 1.416 1.032 2.784 1.176 2.976.144.193 2.033 3.103 4.925 4.35.688.297 1.224.474 1.644.608.691.22 1.32.19 1.815.116.552-.082 1.7-.696 1.944-1.37.24-.672.24-1.25.168-1.37-.072-.12-.264-.192-.552-.336z"/></svg>
+                                <svg className="w-5 h-5 fill-emerald-400" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.739-1.451L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.864.001-2.63-1.023-5.102-2.884-6.964C16.59 1.962 14.12 1.025 11.99 1.025 6.556 1.025 2.133 5.448 2.13 10.887c-.001 1.701.453 3.361 1.311 4.8l-.364 1.328 1.395-.365zm11.233-6.52c-.287-.144-1.7-.84-1.962-.935-.264-.096-.456-.144-.648.144-.192.288-.744.936-.912 1.129-.168.193-.336.216-.624.072-.288-.144-1.217-.449-2.317-1.43-.856-.764-1.433-1.709-1.6-1.998-.169-.289-.018-.445.125-.587.13-.129.289-.336.433-.505.144-.168.192-.288.288-.48.096-.193.048-.361-.024-.505-.072-.144-.648-1.56-.888-2.136-.233-.56-.47-.482-.648-.491-.168-.009-.36-.01-.552-.01-.192 0-.504.072-.768.36-.264.288-1.008.985-1.008 2.4 0 1.416 1.032 2.784 1.176 2.976.144.193 2.033 3.103 4.925 4.35.688.297 1.224.474 1.644.608.691.22 1.32.19 1.815.116.552-.082 1.7-.696 1.944-1.37.24-.672.24-1.25.168-1.37-.072-.12-.264-.192-.552-.336z" /></svg>
                                 Configurar Recordatorio
                             </h3>
                             <button onClick={() => setWhatsappConfigBooking(null)} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors">
@@ -1487,8 +1952,8 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({ isOpen
                                         Enviar Cuenta de Cobro
                                     </label>
                                     <p className="text-[10px] text-slate-500">
-                                        {bankName && accountNumber 
-                                            ? `Incluye los datos de transferencia del banco ${bankName}.` 
+                                        {bankName && accountNumber
+                                            ? `Incluye los datos de transferencia del banco ${bankName}.`
                                             : 'No has configurado una cuenta bancaria en la pestaña de Configuración.'}
                                     </p>
                                 </div>
