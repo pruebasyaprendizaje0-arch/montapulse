@@ -1629,14 +1629,14 @@ export const subscribeToActiveBoosts = (businessId: string, callback: (boosts: a
         where('expiresAt', '>', Timestamp.fromDate(now))
     );
 
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const boosts = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
             expiresAt: doc.data().expiresAt?.toDate() || getEcuadorDate()
         }));
         callback(boosts);
-    });
+    }, 'subscribeToActiveBoosts');
 };
 
 // ==================== LEADS & PROSPECTING ====================

@@ -1,5 +1,6 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onObjectFinalized } from "firebase-functions/v2/storage";
 import * as logger from "firebase-functions/logger";
 import express from 'express';
 import cors from 'cors';
@@ -7,6 +8,10 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import admin from 'firebase-admin';
 import { Resend } from 'resend';
+import sharp from 'sharp';
+import path from 'path';
+import os from 'os';
+import fs from 'fs';
 import { enviarPulseSemanal } from './services/newsletterService.js';
 import { enviarReporteMensualNegocio } from './services/reporteMensualService.js';
 
@@ -1853,6 +1858,86 @@ export const sendMonthlyBusinessReport = onSchedule({
 
     } catch (error) {
         logger.error('[Monthly Report] Critical error in monthly B2B report task:', error);
+    }
+});
+
+
+/**
+ * Cloud Function to resize images uploaded to Firebase Storage
+ * Replaces the deprecated storage-resize-images Firebase Extension
+ */
+export const resizeUploadedImage = onObjectFinalized({ maxInstances: 3 }, async (event) => {
+    const fileBucket = event.data.bucket;
+    const filePath = event.data.name;
+    const contentType = event.data.contentType;
+
+    // Exit if this is not an image
+    if (!contentType || !contentType.startsWith("image/")) {
+        logger.info("[Resize] File is not an image. Skipping.");
+        return;
+    }
+
+    // Exit if the image is already a thumbnail/resized version to avoid infinite loop
+    const fileName = path.basename(filePath);
+    if (fileName.includes("_200x200") || fileName.includes("_800x800")) {
+        logger.info("[Resize] File is already a resized thumbnail. Skipping.");
+        return;
+    }
+
+    const bucket = admin.storage().bucket(fileBucket);
+    const tempFilePath = path.join(os.tmpdir(), fileName);
+    const metadata = {
+        contentType: contentType,
+        cacheControl: 'public, max-age=31536000'
+    };
+
+    try {
+        // Download file from bucket
+        await bucket.file(filePath).download({ destination: tempFilePath });
+        logger.info(`[Resize] Image downloaded locally to ${tempFilePath}`);
+
+        const sizes = [200, 800];
+        
+        for (const size of sizes) {
+            const dotIdx = fileName.lastIndexOf('.');
+            let resizedFileName;
+            if (dotIdx !== -1) {
+                const name = fileName.substring(0, dotIdx);
+                const ext = fileName.substring(dotIdx);
+                resizedFileName = `${name}_${size}x${size}${ext}`;
+            } else {
+                resizedFileName = `${fileName}_${size}x${size}`;
+            }
+
+            const resizedFilePath = path.join(path.dirname(filePath), resizedFileName).replace(/\\/g, '/');
+            const tempResizedPath = path.join(os.tmpdir(), resizedFileName);
+
+            // Resize image using sharp
+            await sharp(tempFilePath)
+                .resize(size, size, {
+                    fit: 'inside',
+                    withoutEnlargement: true
+                })
+                .toFile(tempResizedPath);
+
+            logger.info(`[Resize] Resized image (${size}x${size}) created at ${tempResizedPath}`);
+
+            // Upload the resized image
+            await bucket.upload(tempResizedPath, {
+                destination: resizedFilePath,
+                metadata: metadata,
+            });
+            logger.info(`[Resize] Resized image uploaded to ${resizedFilePath}`);
+
+            // Delete temporary resized file
+            fs.unlinkSync(tempResizedPath);
+        }
+
+        // Delete temporary original file
+        fs.unlinkSync(tempFilePath);
+        logger.info("[Resize] Finished processing all sizes successfully.");
+    } catch (error) {
+        logger.error("[Resize] Error resizing image:", error);
     }
 });
 

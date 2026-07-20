@@ -2008,7 +2008,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Same name, same sector, same locality (Ignore if it's a reference point)
                 const duplicateNameSector = !bizForm.isReference && businesses.some(b => 
                     !b.isReference &&
-                    b.name.toLowerCase().trim() === bizForm.name.toLowerCase().trim() && 
+                    (b.name || '').toLowerCase().trim() === (bizForm.name || '').toLowerCase().trim() && 
                     b.sector === bizForm.sector &&
                     (b.locality || 'Montañita') === bizForm.locality
                 );

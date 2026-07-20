@@ -4,7 +4,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { Coupon, CouponRedemption, Business } from '../types';
-import { getBusinessFollowers, createNotification, getBusinessById } from './firestoreService';
+import { getBusinessFollowers, createNotification, getBusinessById, safeOnSnapshot } from './firestoreService';
 
 // ==================== HELPERS ====================
 
@@ -55,7 +55,7 @@ export const subscribeToBusinessCoupons = (businessId: string, callback: (coupon
     if (ownerId) constraints.push(where('ownerId', '==', ownerId));
     
     const q = query(collection(db, 'coupons'), ...constraints);
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const items = snapshot.docs.map(doc => ({ 
             id: doc.id, 
             ...doc.data(),
@@ -70,10 +70,7 @@ export const subscribeToBusinessCoupons = (businessId: string, callback: (coupon
         });
         
         callback(items);
-    }, (error) => {
-        console.error('Error subscribing to coupons:', error);
-        callback([]);
-    });
+    }, 'subscribeToBusinessCoupons');
 };
 
 /**
@@ -84,7 +81,7 @@ export const subscribeToPublicCoupons = (callback: (coupons: Coupon[]) => void) 
         collection(db, 'coupons'),
         where('isActive', '==', true)
     );
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const now = new Date();
         const items = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as Coupon))
@@ -94,10 +91,7 @@ export const subscribeToPublicCoupons = (callback: (coupons: Coupon[]) => void) 
             })
             .filter(c => c.maxUses === 0 || c.currentUses < c.maxUses);
         callback(items);
-    }, (error) => {
-        console.error('Error subscribing to public coupons:', error);
-        callback([]);
-    });
+    }, 'subscribeToPublicCoupons');
 };
 
 /**
@@ -108,7 +102,7 @@ export const subscribeToCouponRedemptions = (businessId: string, callback: (rede
     if (ownerId) constraints.push(where('ownerId', '==', ownerId));
 
     const q = query(collection(db, 'couponRedemptions'), ...constraints);
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const items = snapshot.docs.map(doc => ({ 
             id: doc.id, 
             ...doc.data(),
@@ -125,10 +119,7 @@ export const subscribeToCouponRedemptions = (businessId: string, callback: (rede
         });
 
         callback(items);
-    }, (error) => {
-        console.error('Error subscribing to coupon redemptions:', error);
-        callback([]);
-    });
+    }, 'subscribeToCouponRedemptions');
 };
 
 /**
@@ -142,7 +133,7 @@ export const subscribeToUserWallet = (userId: string, callback: (redemptions: Co
         collection(db, 'couponRedemptions'),
         where('userId', '==', userId)
     );
-    return onSnapshot(q, (snapshot) => {
+    return safeOnSnapshot(q, (snapshot) => {
         const items = snapshot.docs.map(doc => ({ 
             id: doc.id, 
             ...doc.data(),
@@ -159,10 +150,7 @@ export const subscribeToUserWallet = (userId: string, callback: (redemptions: Co
         });
 
         callback(items);
-    }, (error) => {
-        console.error('Error subscribing to user wallet:', error);
-        callback([]);
-    });
+    }, 'subscribeToUserWallet');
 };
 
 // ==================== CRUD ====================
