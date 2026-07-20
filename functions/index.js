@@ -1,6 +1,6 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { onObjectFinalized } from "firebase-functions/v2/storage";
+import * as functionsV1 from "firebase-functions/v1";
 import * as logger from "firebase-functions/logger";
 import express from 'express';
 import cors from 'cors';
@@ -1866,10 +1866,10 @@ export const sendMonthlyBusinessReport = onSchedule({
  * Cloud Function to resize images uploaded to Firebase Storage
  * Replaces the deprecated storage-resize-images Firebase Extension
  */
-export const resizeUploadedImage = onObjectFinalized({ region: "us-east1", maxInstances: 3 }, async (event) => {
-    const fileBucket = event.data.bucket;
-    const filePath = event.data.name;
-    const contentType = event.data.contentType;
+export const resizeUploadedImage = functionsV1.region("us-east1").storage.object().onFinalize(async (object) => {
+    const fileBucket = object.bucket;
+    const filePath = object.name;
+    const contentType = object.contentType;
 
     // Exit if this is not an image
     if (!contentType || !contentType.startsWith("image/")) {
