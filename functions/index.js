@@ -1866,7 +1866,7 @@ export const sendMonthlyBusinessReport = onSchedule({
  * Cloud Function to resize images uploaded to Firebase Storage
  * Replaces the deprecated storage-resize-images Firebase Extension
  */
-export const resizeUploadedImage = functionsV1.region("us-east1").storage.object().onFinalize(async (object) => {
+export const resizeUploadedImage = functionsV1.region("us-east1").storage.bucket("montapulse-app.appspot.com").object().onFinalize(async (object) => {
     const fileBucket = object.bucket;
     const filePath = object.name;
     const contentType = object.contentType;
