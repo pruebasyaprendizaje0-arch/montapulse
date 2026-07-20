@@ -1866,7 +1866,7 @@ export const sendMonthlyBusinessReport = onSchedule({
  * Cloud Function to resize images uploaded to Firebase Storage
  * Replaces the deprecated storage-resize-images Firebase Extension
  */
-export const resizeUploadedImage = onObjectFinalized({ maxInstances: 3 }, async (event) => {
+export const resizeUploadedImage = onObjectFinalized({ region: "us-east1", maxInstances: 3 }, async (event) => {
     const fileBucket = event.data.bucket;
     const filePath = event.data.name;
     const contentType = event.data.contentType;
