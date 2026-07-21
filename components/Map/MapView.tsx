@@ -227,7 +227,7 @@ activeTab,
     }
     
     // Staggered invalidation to ensure layout is captured
-    [50, 200].forEach(delay => setTimeout(() => map.invalidateSize(), delay));
+    [50, 200].forEach(delay => setTimeout(() => { if (mapRef.current) map.invalidateSize(); }, delay));
   };
 
   const handleZoomChange = (map: L.Map) => {
@@ -647,7 +647,7 @@ activeTab,
     if (!mapRef.current) return;
     const map = mapRef.current;
     [10, 200, 500].forEach(delay => {
-      setTimeout(() => map.invalidateSize({ animate: false }), delay);
+      setTimeout(() => { if (mapRef.current) map.invalidateSize({ animate: false }); }, delay);
     });
   }, [isAddingPoint, isMovingBusiness, editingSector]);
 
@@ -947,7 +947,7 @@ activeTab,
                   else setAddingPointType('business');
                   if (mapRef.current) {
                     const m = mapRef.current;
-                    [50, 200, 600].forEach(d => setTimeout(() => m.invalidateSize(), d));
+                    [50, 200, 600].forEach(d => setTimeout(() => { if (mapRef.current) m.invalidateSize(); }, d));
                   }
                 }}
                 className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint
@@ -993,7 +993,7 @@ activeTab,
                   else setAddingPointType('business');
                   if (mapRef.current) {
                     const m = mapRef.current;
-                    [50, 200, 600].forEach(d => setTimeout(() => m.invalidateSize(), d));
+                    [50, 200, 600].forEach(d => setTimeout(() => { if (mapRef.current) m.invalidateSize(); }, d));
                   }
                 }}
                 className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint
@@ -1037,7 +1037,7 @@ activeTab,
                 setAddingPointType('business');
                 if (mapRef.current) {
                   const m = mapRef.current;
-                  [50, 200, 600].forEach(d => setTimeout(() => m.invalidateSize(), d));
+                  [50, 200, 600].forEach(d => setTimeout(() => { if (mapRef.current) m.invalidateSize(); }, d));
                 }
               }}
               className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint

@@ -21,6 +21,24 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Error capturado:', error, errorInfo);
+    
+    // Auto-reload on chunk load / dynamic import failure
+    const isChunkError = 
+      error && error.message && (
+        error.message.includes('Failed to fetch dynamically imported module') ||
+        error.message.includes('Loading chunk') ||
+        error.message.includes('dynamic import')
+      );
+      
+    if (isChunkError) {
+      const lastReload = sessionStorage.getItem('last-chunk-reload');
+      const now = Date.now();
+      if (!lastReload || now - parseInt(lastReload, 10) > 15000) {
+        sessionStorage.setItem('last-chunk-reload', now.toString());
+        console.warn('Chunk loading / dynamic import error detected. Reloading page...');
+        window.location.reload();
+      }
+    }
   }
   
   render() {
