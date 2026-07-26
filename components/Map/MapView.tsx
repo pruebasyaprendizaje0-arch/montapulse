@@ -227,7 +227,7 @@ activeTab,
     }
     
     // Staggered invalidation to ensure layout is captured
-    [50, 200].forEach(delay => setTimeout(() => { if (mapRef.current) map.invalidateSize(); }, delay));
+    [50, 200].forEach(delay => setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize(); }, delay));
   };
 
   const handleZoomChange = (map: L.Map) => {
@@ -645,16 +645,14 @@ activeTab,
   // Invalidate map whenever UI interaction states change
   useEffect(() => {
     if (!mapRef.current) return;
-    const map = mapRef.current;
     [10, 200, 500].forEach(delay => {
-      setTimeout(() => { if (mapRef.current) map.invalidateSize({ animate: false }); }, delay);
+      setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize({ animate: false }); }, delay);
     });
   }, [isAddingPoint, isMovingBusiness, editingSector]);
 
   useEffect(() => {
     if (!containerRef.current || !mapRef.current) return;
-    const map = mapRef.current;
-    const refresh = () => map.invalidateSize();
+    const refresh = () => { if (mapRef.current) mapRef.current.invalidateSize(); };
     const resizeObserver = new ResizeObserver(refresh);
     resizeObserver.observe(containerRef.current);
     window.addEventListener('resize', refresh);

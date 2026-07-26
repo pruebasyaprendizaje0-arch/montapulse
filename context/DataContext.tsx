@@ -430,7 +430,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         description: '',
         imageUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&q=80&w=600',
         startAt: new Date().toISOString().slice(0, 16),
-        endAt: new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 16)
+        endAt: new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 16),
+        businessId: ''
     });
     const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
     const [generatedDesc, setGeneratedDesc] = useState('');
@@ -2144,7 +2145,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                 }
 
-                const bizId = user?.businessId || businesses.find(b => b.ownerId === authUser?.uid)?.id || user.id;
+                const defaultBizId = user?.businessId || businesses.find(b => b.ownerId === authUser?.uid)?.id || user.id;
+                const bizId = (isAdmin && newEvent.businessId) ? newEvent.businessId : defaultBizId;
 
                 const eventData = {
                     title: newEvent.title || 'Evento sin nombre',
@@ -2215,7 +2217,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     description: '',
                     imageUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&q=80&w=600',
                     startAt: new Date(baseDate.getTime() - baseDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
-                    endAt: new Date(baseDate.getTime() + 3 * 3600000 - baseDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+                    endAt: new Date(baseDate.getTime() + 3 * 3600000 - baseDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+                    businessId: ''
                 });
                 setEditingEventId(null);
                 setGeneratedDesc('');
@@ -2232,7 +2235,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     description: event.description || '',
                     imageUrl: event.imageUrl,
                     startAt: new Date(event.startAt).toISOString().slice(0, 16),
-                    endAt: new Date(event.endAt).toISOString().slice(0, 16)
+                    endAt: new Date(event.endAt).toISOString().slice(0, 16),
+                    businessId: event.businessId || ''
                 });
                 setShowHostWizard(true);
             },

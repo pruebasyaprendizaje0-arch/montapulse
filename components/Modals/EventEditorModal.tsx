@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { X, Camera, Upload, Sparkles, Calendar, Clock, MapPin, Tag, Zap, AlertTriangle, Crown } from 'lucide-react';
+import { X, Camera, Upload, Sparkles, Calendar, Clock, MapPin, Tag, Zap, AlertTriangle, Crown, Store } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Sector, Vibe, SubscriptionPlan } from '../../types';
 import { LOCALITIES, LOCALITY_SECTORS, PLAN_LIMITS, DEFAULT_NEW_LOCALITY_SECTORS } from '../../constants';
@@ -23,7 +23,8 @@ export const EventEditorModal: React.FC = () => {
         customLocalities,
         masterCategories,
         masterSectors,
-        masterVibes
+        masterVibes,
+        isAdmin
     } = useData();
 
     const userBusiness = user?.businessId && businesses ? businesses.find(b => b.id === user.businessId) : null;
@@ -121,6 +122,30 @@ export const EventEditorModal: React.FC = () => {
 
                 {/* Form Fields */}
                 <div className="space-y-6">
+                    {/* Admin Business Selector */}
+                    {isAdmin && (
+                        <div className="space-y-2 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl">
+                            <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest pl-1 flex items-center gap-1.5">
+                                <Store className="w-3.5 h-3.5" /> Adjudicar a Negocio / Punto de Interés (Solo Admin)
+                            </label>
+                            <select
+                                className="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-4 py-3 font-bold text-amber-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                                value={newEvent.businessId || ""}
+                                onChange={e => setNewEvent({ ...newEvent, businessId: e.target.value })}
+                            >
+                                <option value="">Mi propio perfil de usuario / negocio predeterminado</option>
+                                {(businesses || []).map(b => (
+                                    <option key={b.id} value={b.id}>
+                                        {b.name} ({b.locality || 'Sin localidad'} - {b.category})
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-[10px] text-amber-300/70 pl-1">
+                                Permite publicar eventos a nombre de un comercio o sitio para promocionarlo en la app.
+                            </p>
+                        </div>
+                    )}
+
                     <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-2">Título del Pulso</label>
                         <input
