@@ -44,7 +44,16 @@ export const EventModal: React.FC<EventModalProps> = ({
 }) => {
     const [imgError, setImgError] = React.useState(false);
     const { showToast, showConfirm } = useToast();
-    const { setShowPublicProfile, setPublicProfileId, setPublicProfileType, handleToggleFollow, isBusinessFollowed } = useData();
+    const {
+        events,
+        navigationEvents,
+        setSelectedEvent,
+        setShowPublicProfile,
+        setPublicProfileId,
+        setPublicProfileType,
+        handleToggleFollow,
+        isBusinessFollowed
+    } = useData();
 
     useSEO({
         title: event?.title || 'Evento',
@@ -53,16 +62,45 @@ export const EventModal: React.FC<EventModalProps> = ({
         url: BASE_URL + window.location.pathname
     });
 
+    const eventList = React.useMemo(() => {
+        if (navigationEvents && navigationEvents.length > 0) return navigationEvents;
+        if (events && events.length > 0) return events;
+        return [];
+    }, [navigationEvents, events]);
+
+    const currentIndex = React.useMemo(() => {
+        if (!event || eventList.length === 0) return -1;
+        return eventList.findIndex(e => e.id === event.id);
+    }, [event, eventList]);
+
+    const handlePrev = React.useCallback(() => {
+        if (eventList.length > 0) {
+            const prevIndex = currentIndex <= 0 ? eventList.length - 1 : currentIndex - 1;
+            setSelectedEvent(eventList[prevIndex]);
+        } else if (onPrevious) {
+            onPrevious();
+        }
+    }, [currentIndex, eventList, setSelectedEvent, onPrevious]);
+
+    const handleNextEvent = React.useCallback(() => {
+        if (eventList.length > 0) {
+            const nextIndex = (currentIndex >= eventList.length - 1 || currentIndex === -1) ? 0 : currentIndex + 1;
+            setSelectedEvent(eventList[nextIndex]);
+        } else if (onNext) {
+            onNext();
+        }
+    }, [currentIndex, eventList, setSelectedEvent, onNext]);
+
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'ArrowRight' && hasNext) onNext?.();
-            if (e.key === 'ArrowLeft' && hasPrevious) onPrevious?.();
+            if (e.key === 'ArrowRight') handleNextEvent();
+            if (e.key === 'ArrowLeft') handlePrev();
             if (e.key === 'Escape') onClose();
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [hasNext, hasPrevious, onNext, onPrevious, onClose]);
+    }, [handleNextEvent, handlePrev, onClose]);
 
     if (!event) return null;
 
@@ -205,31 +243,29 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                         </button>
                     </div>
 
-                    {/* Navigation Buttons */}
-                    <div className="fixed inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-4 z-[2020] pointer-events-none max-w-2xl mx-auto w-full">
-                        {hasPrevious && onPrevious ? (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onPrevious();
-                                }}
-                                className="pointer-events-auto p-5 bg-white/20 rounded-full border border-white/30 hover:bg-white/30 active:scale-90 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)] group"
-                            >
-                                <ChevronLeft className="w-10 h-10 text-white group-hover:-translate-x-1 transition-transform" />
-                            </button>
-                        ) : <div />}
+                    {/* Transparent Directional Navigation Buttons */}
+                    <div className="fixed inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-3 sm:px-6 z-[2020] pointer-events-none max-w-2xl mx-auto w-full">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handlePrev();
+                            }}
+                            title="Publicación anterior"
+                            className="pointer-events-auto p-4 sm:p-5 bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md rounded-full border border-white/30 active:scale-90 transition-all shadow-[0_0_30px_rgba(0,0,0,0.5)] group flex items-center justify-center"
+                        >
+                            <ChevronLeft className="w-8 h-8 sm:w-10 sm:h-10 text-white group-hover:-translate-x-1 transition-transform" />
+                        </button>
 
-                        {hasNext && onNext ? (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onNext();
-                                }}
-                                className="pointer-events-auto p-5 bg-white/20 rounded-full border border-white/30 hover:bg-white/30 active:scale-90 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)] group"
-                            >
-                                <ChevronRight className="w-10 h-10 text-white group-hover:translate-x-1 transition-transform" />
-                            </button>
-                        ) : <div />}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleNextEvent();
+                            }}
+                            title="Siguiente publicación"
+                            className="pointer-events-auto p-4 sm:p-5 bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md rounded-full border border-white/30 active:scale-90 transition-all shadow-[0_0_30px_rgba(0,0,0,0.5)] group flex items-center justify-center"
+                        >
+                            <ChevronRight className="w-8 h-8 sm:w-10 sm:h-10 text-white group-hover:translate-x-1 transition-transform" />
+                        </button>
                     </div>
 
                     {/* Badges */}

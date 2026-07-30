@@ -26,7 +26,7 @@ export const Notifications: React.FC = () => {
     const {
         user, isAdmin,
         notifications, markAsRead, businesses, businessFollowers: contextFollowers = [],
-        events, masterVibes = [], customLocalities = []
+        events, masterVibes = [], customLocalities = [], setSelectedEvent
     } = useData();
 
     // Announce modal state
@@ -393,8 +393,19 @@ export const Notifications: React.FC = () => {
                             // For mass announcements, open detail modal
                             if ((notif as any).isMassAnnouncement) {
                                 setSelectedAnnouncement(notif);
+                                markAsRead && markAsRead(notif.id);
                                 return;
                             }
+
+                            const eventId = (notif as any).eventId || (notif as any).data?.id;
+                            const targetEvent = eventId 
+                                ? events.find(e => e.id === eventId) 
+                                : events.find(e => e.title && notif.title && e.title.toLowerCase() === notif.title.toLowerCase());
+
+                            if (targetEvent) {
+                                setSelectedEvent(targetEvent);
+                            }
+
                             markAsRead && markAsRead(notif.id);
                         };
                         const handleImageClick = (e: React.MouseEvent) => {

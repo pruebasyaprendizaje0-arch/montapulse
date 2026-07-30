@@ -53,7 +53,7 @@ export const PulseModal: React.FC = () => {
         followedBusinessIds = []
     } = useData();
 
-    const [activeTab, setActiveTab] = useState<'all' | 'events' | 'posts' | 'references' | 'followed' | 'gifts' | 'notifications'>('all');
+    const [activeTab, setActiveTab] = useState<'all' | 'events' | 'weekend' | 'posts' | 'references' | 'followed' | 'gifts' | 'notifications'>('all');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [showMilitaryOnly, setShowMilitaryOnly] = useState(false);
     const [publicCoupons, setPublicCoupons] = useState<Coupon[]>([]);
@@ -281,6 +281,13 @@ export const PulseModal: React.FC = () => {
             feed = activityFeed;
         } else if (activeTab === 'events') {
             feed = activityFeed.filter(i => i.type === 'event');
+        } else if (activeTab === 'weekend') {
+            feed = activityFeed.filter(i => {
+                if (i.type !== 'event') return false;
+                const d = new Date(i.timestamp);
+                const day = d.getDay();
+                return day === 5 || day === 6 || day === 0;
+            });
         } else if (activeTab === 'posts') {
             feed = activityFeed.filter(i => i.type === 'post');
         } else if (activeTab === 'gifts') {
@@ -542,6 +549,7 @@ export const PulseModal: React.FC = () => {
                     {[
                         { id: 'all', label: 'Todo', count: filteredFeed.length },
                         { id: 'events', label: 'Eventos', count: upcomingEvents.length },
+                        { id: 'weekend', label: '⚡ Fin de Semana', count: activityFeed.filter(i => i.type === 'event' && (new Date(i.timestamp).getDay() === 5 || new Date(i.timestamp).getDay() === 6 || new Date(i.timestamp).getDay() === 0)).length },
                         { id: 'posts', label: 'Posts', count: todayPosts.length },
                         { id: 'references', label: 'Puntos de Interés', count: referencePoints.length + premiumBusinesses.length },
                         { id: 'followed', label: 'Me Siguen', count: businesses.filter(b => followedBusinessIds.includes(b.id)).length },
@@ -553,7 +561,7 @@ export const PulseModal: React.FC = () => {
                             onClick={() => setActiveTab(tab.id as any)}
                             className={`px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                                 activeTab === tab.id 
-                                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' 
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-lg shadow-amber-500/10' 
                                     : 'text-slate-500 hover:text-white bg-white/5 border border-transparent'
                             }`}
                         >
@@ -562,7 +570,7 @@ export const PulseModal: React.FC = () => {
                     ))}
                 </div>
 
-                {['all', 'events', 'posts', 'gifts'].includes(activeTab) && (
+                {['all', 'events', 'weekend', 'posts', 'gifts'].includes(activeTab) && (
                     <div className="px-6 py-4 flex gap-4 overflow-x-auto no-scrollbar border-b border-white/5 bg-black/20 shrink-0">
                         {premiumInFiltered > 0 && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-2xl border border-amber-500/30 shrink-0">
@@ -1059,7 +1067,18 @@ export const PulseModal: React.FC = () => {
                                         <div 
                                             key={n.id}
                                             onClick={() => {
-                                                if (!n.read && markAsRead) markAsRead(n.id);
+                                                const eventId = n.eventId || n.data?.id;
+                                                const targetEvent = eventId 
+                                                    ? eventsWithLiveCounts.find(e => e.id === eventId) 
+                                                    : eventsWithLiveCounts.find(e => e.title && n.title && e.title.toLowerCase() === n.title.toLowerCase());
+
+                                                if (targetEvent) {
+                                                    onClose();
+                                                    setTimeout(() => {
+                                                        setSelectedEvent(targetEvent);
+                                                    }, 150);
+                                                }
+                                                if (markAsRead) markAsRead(n.id);
                                             }}
                                             className={`p-4 rounded-[2rem] border transition-all cursor-pointer relative overflow-hidden group ${
                                                 !n.read 

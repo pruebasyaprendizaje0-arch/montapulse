@@ -1664,6 +1664,57 @@ export const checkExpiringReservations = onSchedule("every 30 minutes", async (e
 });
 
 /**
+ * Scheduled Task: Permanently delete events/pulsos 24 hours after their end date.
+ * Runs every 6 hours.
+ */
+export const cleanupExpiredEvents = onSchedule("every 6 hours", async (event) => {
+    try {
+        const now = new Date();
+        const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+        const DEFAULT_DURATION_MS = 4 * 60 * 60 * 1000;
+
+        logger.info('[Cleanup Events] Checking for events expired by more than 24 hours...');
+
+        const eventsSnapshot = await db.collection('events').get();
+        if (eventsSnapshot.empty) {
+            return logger.info('[Cleanup Events] No events found to clean up.');
+        }
+
+        const batch = db.batch();
+        let deletedCount = 0;
+
+        eventsSnapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            let eventEnd = null;
+
+            if (data.endAt) {
+                eventEnd = data.endAt.toDate ? data.endAt.toDate() : new Date(data.endAt);
+            } else if (data.startAt) {
+                const start = data.startAt.toDate ? data.startAt.toDate() : new Date(data.startAt);
+                eventEnd = new Date(start.getTime() + DEFAULT_DURATION_MS);
+            }
+
+            if (eventEnd && !isNaN(eventEnd.getTime())) {
+                const expirationCutoff = eventEnd.getTime() + TWENTY_FOUR_HOURS_MS;
+                if (now.getTime() >= expirationCutoff) {
+                    batch.delete(docSnap.ref);
+                    deletedCount++;
+                }
+            }
+        });
+
+        if (deletedCount > 0) {
+            await batch.commit();
+            logger.info(`[Cleanup Events] Permanently deleted ${deletedCount} expired events.`);
+        } else {
+            logger.info('[Cleanup Events] No expired events met 24h deletion threshold.');
+        }
+    } catch (error) {
+        logger.error('[Cleanup Events] Error during scheduled event cleanup:', error);
+    }
+});
+
+/**
  * Scheduled Task: Send weekly events newsletter (Thursday report) to users
  */
 export const sendWeeklyNewsletter = onSchedule({
@@ -1751,6 +1802,27 @@ export const sendWeeklyNewsletter = onSchedule({
         logger.info(`[Newsletter] Sending weekly newsletter to ${usuarios.length} users with ${eventos.length} events and ${communityPosts.length} community posts...`);
         const result = await enviarPulseSemanal(usuarios, eventos, communityPosts);
         logger.info('[Newsletter] Task finished. Result:', result);
+
+        // Send In-App Thursday Notifications to registered users
+        if (usersSnapshot.docs.length > 0 && eventos.length > 0) {
+            const notifBatch = db.batch();
+            const topEvent = eventos[0];
+            usersSnapshot.docs.forEach(uDoc => {
+                const notifRef = db.collection('notifications').doc();
+                notifBatch.set(notifRef, {
+                    userId: uDoc.id,
+                    title: '⚡ ¡Cartelera del Fin de Semana!',
+                    message: `Hay ${eventos.length} evento(s) activados para este fin de semana en Montañita. Destacado: "${topEvent.title}". ¡No te lo pierdas!`,
+                    type: 'event',
+                    eventId: topEvent.id || null,
+                    read: false,
+                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            await notifBatch.commit();
+            logger.info(`[Newsletter] Created ${usersSnapshot.docs.length} in-app Thursday notifications for users.`);
+        }
 
     } catch (error) {
         logger.error('[Newsletter] Critical error in weekly newsletter task:', error);

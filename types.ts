@@ -254,6 +254,7 @@ export interface PulseNotification {
   priority?: 'normal' | 'urgent';
   read: boolean;
   createdAt: any;
+  eventId?: string;
   businessId?: string;
   postId?: string;
   senderName?: string;

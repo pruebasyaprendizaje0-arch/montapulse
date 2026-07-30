@@ -348,6 +348,22 @@ export const Calendar: React.FC = () => {
                     ))}
 
                     <button
+                        onClick={() => {
+                            setAgendaRange('week');
+                            const now = new Date();
+                            const day = now.getDay();
+                            const daysUntilFriday = (5 - day + 7) % 7;
+                            const friday = new Date(now);
+                            friday.setDate(now.getDate() + (daysUntilFriday === 0 && now.getHours() >= 20 ? 7 : daysUntilFriday));
+                            setCalendarBaseDate(friday);
+                        }}
+                        className="py-2.5 px-3 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-amber-400 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shrink-0 active:scale-95"
+                        title="Ver eventos del fin de semana (Viernes - Domingo)"
+                    >
+                        <span>⚡ Fin de Semana</span>
+                    </button>
+
+                    <button
                         onClick={() => navigateCalendar('next')}
                         className="absolute -right-10 p-2 text-slate-500 hover:text-white active:scale-90 transition-all"
                     >

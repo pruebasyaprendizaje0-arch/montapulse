@@ -232,7 +232,8 @@ export const deleteEvent = async (id: string) => {
 export const cleanupOldEvents = async (): Promise<number> => {
     try {
         const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+        const DEFAULT_DURATION_MS = 4 * 60 * 60 * 1000;
         
         const eventsRef = collection(db, 'events');
         const snapshot = await getDocs(eventsRef);
@@ -240,18 +241,28 @@ export const cleanupOldEvents = async (): Promise<number> => {
         let deletedCount = 0;
         const deletePromises: Promise<void>[] = [];
         
-        snapshot.forEach((doc) => {
-            const eventData = doc.data();
-            const eventEnd = eventData.endAt ? new Date(eventData.endAt) : null;
-            
-            if (eventEnd && eventEnd < startOfMonth) {
-                deletePromises.push(deleteDoc(doc.ref));
-                deletedCount++;
+        snapshot.forEach((docSnap) => {
+            const eventData = docSnap.data();
+            let eventEndDate: Date | null = null;
+
+            if (eventData.endAt) {
+                eventEndDate = eventData.endAt?.toDate ? eventData.endAt.toDate() : new Date(eventData.endAt);
+            } else if (eventData.startAt) {
+                const startDate = eventData.startAt?.toDate ? eventData.startAt.toDate() : new Date(eventData.startAt);
+                eventEndDate = new Date(startDate.getTime() + DEFAULT_DURATION_MS);
+            }
+
+            if (eventEndDate && !isNaN(eventEndDate.getTime())) {
+                const expirationCutoff = eventEndDate.getTime() + TWENTY_FOUR_HOURS_MS;
+                if (now.getTime() >= expirationCutoff) {
+                    deletePromises.push(deleteDoc(docSnap.ref));
+                    deletedCount++;
+                }
             }
         });
         
         await Promise.all(deletePromises);
-        console.log(`Deleted ${deletedCount} old events`);
+        console.log(`[Cleanup] Deleted ${deletedCount} old events permanently (24h past end date)`);
         return deletedCount;
     } catch (error) {
         console.error('Error cleaning up old events:', error);
@@ -1468,28 +1479,48 @@ export const subscribeToNotifications = (userId: string, callback: (notification
     }, 'subscribeToNotifications');
 };
 
+export const deleteNotification = async (notificationId: string) => {
+    try {
+        if (!notificationId) return;
+        const notificationRef = doc(db, 'notifications', notificationId);
+        await deleteDoc(notificationRef);
+    } catch (error) {
+        console.error('Error deleting notification:', error);
+    }
+};
+
+export const deleteAllNotifications = async (userId: string) => {
+    try {
+        if (!userId) return;
+        const notificationRef = collection(db, 'notifications');
+        const q = query(notificationRef, where('userId', '==', userId));
+        const snapshot = await getDocs(q);
+        
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(docSnap => {
+            batch.delete(docSnap.ref);
+        });
+        await batch.commit();
+    } catch (error) {
+        console.error('Error deleting all notifications:', error);
+    }
+};
+
 export const markNotificationRead = async (notificationId: string) => {
     try {
-        const notificationRef = doc(db, 'notifications', notificationId);
-        await updateDoc(notificationRef, { read: true });
+        if (!notificationId) return;
+        await deleteNotification(notificationId);
     } catch (error) {
-        console.error('Error marking notification read:', error);
+        console.error('Error deleting notification on read:', error);
     }
 };
 
 export const markAllNotificationsRead = async (userId: string) => {
     try {
-        const notificationRef = collection(db, 'notifications');
-        const q = query(notificationRef, where('userId', '==', userId), where('read', '==', false));
-        const snapshot = await getDocs(q);
-        
-        const batch = writeBatch(db);
-        snapshot.docs.forEach(doc => {
-            batch.update(doc.ref, { read: true });
-        });
-        await batch.commit();
+        if (!userId) return;
+        await deleteAllNotifications(userId);
     } catch (error) {
-        console.error('Error marking all notifications read:', error);
+        console.error('Error deleting all notifications on read all:', error);
     }
 };
 

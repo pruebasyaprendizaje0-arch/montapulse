@@ -580,8 +580,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         notifications.filter(n => !n.read).length
         , [notifications]);
 
-    const markAllAsRead = () => {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const markAllAsRead = async () => {
+        setNotifications([]);
+        if (user?.id) {
+            await markAllNotificationsRead(user.id);
+        }
     };
     const [journeyCards, setJourneyCards] = useState(() => {
         const saved = localStorage.getItem('montapulse_journey_cards_v3');
@@ -748,11 +751,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     
                     const lastCleanup = localStorage.getItem('montapulse_event_cleanup');
                     const now = new Date();
-                    const currentMonth = `${now.getFullYear()}-${now.getMonth()}`;
+                    const currentDay = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
                     
-                    if (!lastCleanup || lastCleanup !== currentMonth) {
+                    if (!lastCleanup || lastCleanup !== currentDay) {
                         cleanupOldEvents().then(() => {
-                            localStorage.setItem('montapulse_event_cleanup', currentMonth);
+                            localStorage.setItem('montapulse_event_cleanup', currentDay);
                         });
                     }
                 }
@@ -2537,17 +2540,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             unreadNotificationsCount,
             markAsRead: async (id: string) => {
                 if (!id) {
-                    // Mark all as read
+                    setNotifications([]);
                     if (user?.id) await markAllNotificationsRead(user.id);
-                    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
                     return;
                 }
                 
-                // Mark individual as read
+                // Delete individual notification from state & database so it won't appear again
+                setNotifications(prev => prev.filter(n => n.id !== id));
                 await markNotificationRead(id);
-                setNotifications(prev => prev.map(n => 
-                    n.id === id ? { ...n, read: true } : n
-                ));
             },
             markIndividualAsRead: async (id: string) => {
                 await markNotificationRead(id);
