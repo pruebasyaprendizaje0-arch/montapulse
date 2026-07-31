@@ -50,7 +50,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
         incrementEventClickCount(event.id);
         onClick(event);
       }}
-      className={`antigravity bg-slate-900 border rounded-[2.5rem] overflow-hidden group active:scale-[0.98] transition-all duration-300 cursor-pointer relative flex flex-col hover:border-white/20 hover:shadow-2xl hover:shadow-orange-500/10 ${
+      className={`bg-slate-900 border rounded-[2.5rem] overflow-hidden group active:scale-[0.98] transition-all duration-300 cursor-pointer relative flex flex-col hover:border-white/20 hover:shadow-2xl hover:shadow-orange-500/10 ${
         isLive ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-white/5'
       }`}
     >
@@ -59,7 +59,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
       )}
 
       {/* Imagen con contenedor de aspecto fijo */}
-      <div className="relative w-full aspect-[4/3] sm:aspect-video rounded-[2.5rem] overflow-hidden">
+      <div className="relative w-full aspect-[4/3] sm:aspect-video rounded-[2.5rem] overflow-hidden bg-slate-800">
         {/* Skeleton placeholder mientras carga */}
         {!isLoaded && !hasError && (
           <div className="absolute inset-0">
@@ -72,11 +72,11 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
           <img
             src={event.imageUrl}
             alt={event.title}
-            loading="lazy"
+            loading="eager"
             onLoad={() => setIsLoaded(true)}
             onError={() => setHasError(true)}
-            className={`w-full h-full object-cover transition-all duration-700 group-hover:scale-110 ${
-              isLoaded ? 'opacity-100' : 'opacity-0'
+            className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${
+              isLoaded ? 'opacity-100' : 'opacity-90'
             }`}
           />
         ) : (
