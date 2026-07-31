@@ -50,7 +50,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
         incrementEventClickCount(event.id);
         onClick(event);
       }}
-      className={`bg-slate-900 border rounded-[2.5rem] overflow-hidden group active:scale-[0.98] transition-all duration-300 cursor-pointer relative flex flex-col hover:border-white/20 hover:shadow-2xl hover:shadow-orange-500/10 ${
+      className={`bg-slate-900 border rounded-[2.5rem] overflow-hidden group active:scale-[0.98] transition-all duration-300 cursor-pointer relative flex flex-col hover:border-white/20 hover:shadow-2xl hover:shadow-orange-500/10 h-auto ${
         isLive ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-white/5'
       }`}
     >

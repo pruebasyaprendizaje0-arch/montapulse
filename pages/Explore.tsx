@@ -781,7 +781,9 @@ export const Explore: React.FC<ExploreProps> = ({
                     </div>
                 </div>
 
-                <div className="flex-1 relative h-full min-h-0 z-10">
+                <div className={`w-full relative z-10 shrink-0 transition-all duration-300 lg:flex-1 lg:h-full ${
+                    isPanelMinimized ? 'h-[calc(100%-80px)]' : (isGridView ? 'h-[15%]' : 'h-[40%]')
+                }`}>
                     <MapView
                         onBusinessSelect={(b) => {
                             setTimeout(() => {
@@ -846,14 +848,14 @@ export const Explore: React.FC<ExploreProps> = ({
                 {!isEditorFocus && (
                     <div
                         onClick={() => isPanelMinimized && setIsPanelMinimized(false)}
-                        className={`bg-[#0f172a] lg:backdrop-blur-none border-t lg:border-t-0 lg:border-l border-white/5 px-6 pt-6 transition-[transform,top] duration-300 ease-in-out z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.6)] lg:shadow-none flex flex-col min-h-0 ${
+                        className={`bg-[#0f172a] lg:backdrop-blur-none border-t lg:border-t-0 lg:border-l border-white/5 px-6 pt-6 transition-all duration-300 ease-in-out z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.6)] lg:shadow-none flex flex-col min-h-0 ${
                             isPanelMinimized 
-                            ? 'max-[1023px]:absolute max-[1023px]:bottom-0 max-[1023px]:inset-x-0 max-[1023px]:top-[calc(100%-60px)] max-[1023px]:overflow-hidden cursor-pointer hover:bg-[#0f172a] lg:w-[450px]' 
+                            ? 'h-[80px] lg:h-auto overflow-hidden cursor-pointer hover:bg-[#0f172a] lg:w-[450px]' 
                             : (isGridView 
-                                ? 'lg:w-[85vw] pb-32 overflow-y-auto w-full absolute top-[15%] bottom-0 right-0 overscroll-contain' 
-                                : 'max-[1023px]:absolute max-[1023px]:top-[18%] max-[1023px]:bottom-0 max-[1023px]:inset-x-0 pb-32 overflow-y-auto lg:w-[450px] lg:h-full lg:relative overscroll-contain'
+                                ? 'flex-1 overflow-y-auto lg:absolute lg:top-[15%] lg:bottom-0 lg:right-0 lg:w-[85vw] pb-32 overscroll-contain' 
+                                : 'flex-1 overflow-y-auto lg:w-[450px] lg:h-full lg:relative pb-32 overscroll-contain'
                               )
-                        } lg:max-h-full lg:pb-10 rounded-t-[3.5rem] lg:rounded-none`}
+                        } lg:max-h-full lg:pb-10 rounded-t-[2.5rem] lg:rounded-none -mt-[2rem] lg:mt-0 relative`}
                         style={{ WebkitOverflowScrolling: 'touch' }}
                     >
                         <div
