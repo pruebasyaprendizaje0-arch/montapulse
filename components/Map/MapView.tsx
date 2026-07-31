@@ -159,7 +159,7 @@ activeTab,
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const userLocationMarkerRef = useRef<L.Marker | null>(null);
 
-  const [mapMode, setMapMode] = useState<'dark' | 'satellite'>('dark');
+  const [mapMode, setMapMode] = useState<'dark' | 'satellite'>('satellite');
   const [editingSector, setEditingSector] = useState<Sector | null>(null);
   const [tempCoords, setTempCoords] = useState<[number, number][]>([]);
   const [mousePos, setMousePos] = useState<[number, number] | null>(null);
