@@ -19,9 +19,10 @@ import { useData } from './context/DataContext';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from './hooks/useTheme';
 
+import { EventModal } from './components/EventModal';
+
 // Lazy load heavy components
 const EventCard = lazy(() => import('./components/EventCard').then(m => ({ default: m.EventCard })));
-const EventModal = lazy(() => import('./components/EventModal').then(m => ({ default: m.EventModal })));
 const MigrationPanel = lazy(() => import('./components/MigrationPanel').then(m => ({ default: m.MigrationPanel })));
 const LoginScreen = lazy(() => import('./components/LoginScreen').then(m => ({ default: m.LoginScreen })));
 const PulsePassModal = lazy(() => import('./components/Modals/PulsePassModal').then(m => ({ default: m.PulsePassModal })));
@@ -962,35 +963,29 @@ const Dashboard: React.FC = () => {
 
       {/* Event Modal with Navigation */}
       {selectedEvent && (
-        <Suspense fallback={
-          <div className="fixed inset-0 z-[4000] bg-black/60 backdrop-blur-sm flex items-center justify-center">
-            <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        }>
-          <EventModal
-            key={selectedEvent.id}
-            event={selectedEvent}
-            business={businesses.find(b => b.id === selectedEvent.businessId)}
-            dataLoading={loading}
-            onClose={() => setSelectedEvent(null)}
-            onNext={navigateToNextEvent}
-            onPrevious={navigateToPreviousEvent}
-            hasNext={hasNextEvent}
-            hasPrevious={hasPreviousEvent}
-            isAdmin={canEditAllBusiness}
-            onEdit={event => {
-              handleEditEvent(event);
-              setSelectedEvent(null);
-            }}
-            onDelete={id => {
-              handleDeleteEvent(id);
-              setSelectedEvent(null);
-            }}
-            onEditBusiness={handleEditBusiness}
-            onRsvp={() => handleRSVP(selectedEvent.id)}
-            isRsvp={!!rsvpStatus[selectedEvent.id]}
-          />
-        </Suspense>
+        <EventModal
+          key={selectedEvent.id}
+          event={selectedEvent}
+          business={businesses.find(b => b.id === selectedEvent.businessId)}
+          dataLoading={loading}
+          onClose={() => setSelectedEvent(null)}
+          onNext={navigateToNextEvent}
+          onPrevious={navigateToPreviousEvent}
+          hasNext={hasNextEvent}
+          hasPrevious={hasPreviousEvent}
+          isAdmin={canEditAllBusiness}
+          onEdit={event => {
+            handleEditEvent(event);
+            setSelectedEvent(null);
+          }}
+          onDelete={id => {
+            handleDeleteEvent(id);
+            setSelectedEvent(null);
+          }}
+          onEditBusiness={handleEditBusiness}
+          onRsvp={() => handleRSVP(selectedEvent.id)}
+          isRsvp={!!rsvpStatus[selectedEvent.id]}
+        />
       )}
 
       {/* Public Profile Modal */}

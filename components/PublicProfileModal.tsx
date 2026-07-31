@@ -56,6 +56,8 @@ export const PublicProfileModal = React.memo(({
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showPublicMenu, setShowPublicMenu] = useState(false);
+    const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
+    const avatarRef = React.useRef<HTMLImageElement>(null);
     
     const isMountedRef = React.useRef(false);
     const lastOpenTimeRef = React.useRef(0);
@@ -367,12 +369,14 @@ export const PublicProfileModal = React.memo(({
                     <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 p-2.5 bg-[#0f172a] rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-20 transition-transform hover:scale-105 duration-500">
                         <div className="w-36 h-36 rounded-[2.6rem] bg-slate-800 border-4 border-slate-900/50 overflow-hidden relative group ring-4 ring-white/5">
                             <img
+                                ref={avatarRef}
                                 src={avatar}
                                 alt={displayName}
-                                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
+                                className={`w-full h-full object-cover transition-all duration-700 group-hover:scale-110 ${
+                                    isAvatarLoaded ? 'opacity-100' : 'opacity-0'
+                                }`}
                                 loading="lazy"
-                                onLoad={e => (e.currentTarget.style.opacity = '1')}
-                                style={{ opacity: 0 }}
+                                onLoad={() => setIsAvatarLoaded(true)}
                             />
                             {!business && !userProfile?.avatarUrl && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-slate-800 text-slate-400">

@@ -1132,8 +1132,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // This ensures selectedEvent always has the latest "live" data from eventsWithLiveCounts
     const selectedEvent = useMemo(() => {
         if (!selectedEventId) return null;
-        return eventsWithLiveCounts.find(e => e.id === selectedEventId) || null;
-    }, [selectedEventId, eventsWithLiveCounts]);
+        return eventsWithLiveCounts.find(e => e.id === selectedEventId) || events.find(e => e.id === selectedEventId) || null;
+    }, [selectedEventId, eventsWithLiveCounts, events]);
 
     const setSelectedEvent = useCallback((event: MontanitaEvent | null) => {
         setSelectedEventId(event?.id || null);

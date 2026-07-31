@@ -43,6 +43,17 @@ export const EventModal: React.FC<EventModalProps> = ({
     dataLoading
 }) => {
     const [imgError, setImgError] = React.useState(false);
+    const [isImageLoaded, setIsImageLoaded] = React.useState(false);
+    const imgRef = React.useRef<HTMLImageElement>(null);
+
+    React.useEffect(() => {
+        setImgError(false);
+        setIsImageLoaded(false);
+        if (imgRef.current?.complete && imgRef.current?.naturalWidth !== 0) {
+            setIsImageLoaded(true);
+        }
+    }, [event?.id, event?.imageUrl]);
+
     const { showToast, showConfirm } = useToast();
     const {
         events,
@@ -189,15 +200,15 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                     {/* Actual image - overlays the gradient */}
                     {event.imageUrl && !imgError ? (
                         <img
+                            ref={imgRef}
                             src={event.imageUrl}
                             alt={event.title}
-                            className="absolute inset-0 w-full h-full object-cover"
+                            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                                isImageLoaded ? 'opacity-100' : 'opacity-0'
+                            }`}
                             loading="lazy"
-                            onLoad={(e) => {
-                                e.currentTarget.style.opacity = '1';
-                            }}
+                            onLoad={() => setIsImageLoaded(true)}
                             onError={() => setImgError(true)}
-                            style={{ opacity: 0, transition: 'opacity 0.3s ease' }}
                         />
                     ) : null}
 
