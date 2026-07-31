@@ -175,10 +175,10 @@ export const EventModal: React.FC<EventModalProps> = ({
             onClick={onClose}
         >
             <div
-                className="w-full max-w-2xl bg-slate-900 rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden h-[90vh] sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl relative"
+                className="w-full max-w-2xl bg-slate-900 rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl relative"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex-1 overflow-y-auto no-scrollbar">
+                <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 overscroll-contain">
                     {/* Header with Image */}
                     <div className="relative h-64 sm:h-96 w-full bg-slate-900 shrink-0">
                         {/* Fallback gradient - always visible */}
