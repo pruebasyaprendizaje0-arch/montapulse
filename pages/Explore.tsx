@@ -373,7 +373,6 @@ export const Explore: React.FC<ExploreProps> = ({
         return result;
     }, [eventsWithLiveCounts, businesses, activeFilter, searchQuery, selectedMood, currentLocality.name]);
 
-    const deferredFilteredEvents = useDeferredValue(filteredEvents);
 
     const filteredBusinesses = useMemo(() => {
         let result = [...businesses];
@@ -420,7 +419,6 @@ export const Explore: React.FC<ExploreProps> = ({
         return result;
     }, [businesses, activeFilter, searchQuery, selectedMood, selectedSector, activeTab, currentLocality.name]);
 
-    const deferredFilteredBusinesses = useDeferredValue(filteredBusinesses);
 
     // Eventos futuros para el mapa
     const upcomingEvents = useMemo(() => {
@@ -1144,7 +1142,7 @@ export const Explore: React.FC<ExploreProps> = ({
                         )}
 
                         {/* Flash Offers Carousel */}
-                        {(loading || deferredFilteredEvents.some(e => e.isFlashOffer)) && (
+                        {(loading || filteredEvents.some(e => e.isFlashOffer)) && (
                             <div className="mb-8">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-2">
@@ -1159,7 +1157,7 @@ export const Explore: React.FC<ExploreProps> = ({
                                             <Skeleton key={`flash-skeleton-${i}`} className="min-w-[280px] h-[350px]" />
                                         ))
                                     ) : (
-                                        deferredFilteredEvents.filter(e => e.isFlashOffer).map(event => (
+                                        filteredEvents.filter(e => e.isFlashOffer).map(event => (
                                             <div key={event.id} className="min-w-[280px] w-[280px] shrink-0">
                                                 <EventCard event={event} onClick={setSelectedEvent} />
                                             </div>
@@ -1450,7 +1448,7 @@ export const Explore: React.FC<ExploreProps> = ({
                                             <Skeleton key={`foryou-skeleton-${i}`} className="min-w-[280px] h-[350px]" />
                                         ))
                                     ) : (
-                                        deferredFilteredEvents.filter(e => e.vibe === user.preferredVibe).map(event => (
+                                        filteredEvents.filter(e => e.vibe === user.preferredVibe).map(event => (
                                             <div key={`foryou-${event.id}`} className="min-w-[280px] w-[280px] shrink-0 px-2 transform transition-all hover:scale-[1.02]">
                                                 <EventCard event={event} onClick={setSelectedEvent} />
                                             </div>
@@ -1466,8 +1464,8 @@ export const Explore: React.FC<ExploreProps> = ({
                                     [1, 2, 3, 4].map(i => (
                                         <Skeleton key={`event-skeleton-${i}`} className="w-full h-48 rounded-[2.5rem]" />
                                     ))
-                                ) : deferredFilteredEvents.length > 0 ? (
-                                    deferredFilteredEvents.map(event => (
+                                ) : filteredEvents.length > 0 ? (
+                                    filteredEvents.map(event => (
                                         <div key={event.id} className="relative">
                                             <EventCard event={event} onClick={setSelectedEvent} />
                                             <button
@@ -1507,7 +1505,7 @@ export const Explore: React.FC<ExploreProps> = ({
                                             <Skeleton key={`biz-skeleton-${i}`} className={`w-full ${isGridView ? 'h-[300px]' : 'h-48'} rounded-[2.5rem]`} />
                                         ))
                                     ) : (
-                                        deferredFilteredBusinesses.map(business => {
+                                        filteredBusinesses.map(business => {
                                             const status = business.openingHours ? isBusinessOpen(business.openingHours) : null;
                                             return (
                                                 <div
