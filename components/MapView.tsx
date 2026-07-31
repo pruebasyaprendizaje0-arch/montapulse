@@ -231,12 +231,12 @@ export const MapView: React.FC<MapViewProps> = ({
     }
 
     const url = mode === 'dark'
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+      ? 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png'
+      : 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 
     tileLayerRef.current = L.tileLayer(url, {
       maxZoom: 20,
-      attribution: mode === 'dark' ? '&copy; CartoDB' : '&copy; Esri'
+      attribution: mode === 'dark' ? '&copy; CartoDB' : '&copy; Google'
     }).addTo(map);
   };
 

@@ -846,12 +846,12 @@ export const Explore: React.FC<ExploreProps> = ({
                 {!isEditorFocus && (
                     <div
                         onClick={() => isPanelMinimized && setIsPanelMinimized(false)}
-                        className={`bg-[#0f172a] lg:backdrop-blur-none border-t lg:border-t-0 lg:border-l border-white/5 px-6 pt-6 transition-[transform,bottom] duration-300 ease-in-out z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.6)] lg:shadow-none flex flex-col min-h-0 ${
+                        className={`bg-[#0f172a] lg:backdrop-blur-none border-t lg:border-t-0 lg:border-l border-white/5 px-6 pt-6 transition-[transform,top] duration-300 ease-in-out z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.6)] lg:shadow-none flex flex-col min-h-0 ${
                             isPanelMinimized 
-                            ? 'max-[1023px]:fixed max-[1023px]:bottom-0 max-[1023px]:inset-x-0 max-[1023px]:h-[60px] max-[1023px]:overflow-hidden cursor-pointer hover:bg-[#0f172a] lg:w-[450px]' 
+                            ? 'max-[1023px]:absolute max-[1023px]:bottom-0 max-[1023px]:inset-x-0 max-[1023px]:top-[calc(100%-60px)] max-[1023px]:overflow-hidden cursor-pointer hover:bg-[#0f172a] lg:w-[450px]' 
                             : (isGridView 
-                                ? 'lg:w-[85vw] pb-32 overflow-y-auto w-full h-[85dvh] fixed lg:absolute bottom-0 right-0 overscroll-contain' 
-                                : 'max-[1023px]:fixed max-[1023px]:bottom-0 max-[1023px]:inset-x-0 max-[1023px]:h-[82dvh] pb-32 overflow-y-auto lg:w-[450px] lg:h-full lg:relative overscroll-contain'
+                                ? 'lg:w-[85vw] pb-32 overflow-y-auto w-full absolute top-[15%] bottom-0 right-0 overscroll-contain' 
+                                : 'max-[1023px]:absolute max-[1023px]:top-[18%] max-[1023px]:bottom-0 max-[1023px]:inset-x-0 pb-32 overflow-y-auto lg:w-[450px] lg:h-full lg:relative overscroll-contain'
                               )
                         } lg:max-h-full lg:pb-10 rounded-t-[3.5rem] lg:rounded-none`}
                         style={{ WebkitOverflowScrolling: 'touch' }}

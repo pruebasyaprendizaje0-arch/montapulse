@@ -175,7 +175,7 @@ export const EventModal: React.FC<EventModalProps> = ({
             onClick={onClose}
         >
             <div
-                className="w-full max-w-2xl bg-slate-900 rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl relative"
+                className="w-full max-w-2xl bg-slate-900 rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden absolute bottom-0 inset-x-0 top-[10%] sm:relative sm:top-auto sm:bottom-auto sm:inset-x-auto sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 overscroll-contain">
