@@ -964,6 +964,7 @@ const Dashboard: React.FC = () => {
       {/* Event Modal with Navigation */}
       {selectedEvent && (
         <EventModal
+          key={selectedEvent.id}
           event={selectedEvent}
           business={businesses.find(b => b.id === selectedEvent.businessId)}
           dataLoading={loading}

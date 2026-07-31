@@ -43,15 +43,10 @@ export const EventModal: React.FC<EventModalProps> = ({
     dataLoading
 }) => {
     const [imgError, setImgError] = React.useState(false);
-    const [isImageLoaded, setIsImageLoaded] = React.useState(false);
-    const imgRef = React.useRef<HTMLImageElement>(null);
 
+    // Reset error state when event changes
     React.useEffect(() => {
         setImgError(false);
-        setIsImageLoaded(false);
-        if (imgRef.current?.complete && imgRef.current?.naturalWidth !== 0) {
-            setIsImageLoaded(true);
-        }
     }, [event?.id, event?.imageUrl]);
 
     const { showToast, showConfirm } = useToast();
@@ -190,7 +185,6 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
             <div
                 className="w-full max-w-2xl bg-slate-900 rounded-t-[3rem] overflow-hidden h-full max-h-[92dvh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
-                style={{ contain: 'layout style paint', willChange: 'transform' }}
             >
                 <div className="flex-1 overflow-y-auto no-scrollbar">
                 {/* Header with Image */}
@@ -201,14 +195,10 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                     {/* Actual image - overlays the gradient */}
                     {event.imageUrl && !imgError ? (
                         <img
-                            ref={imgRef}
                             src={event.imageUrl}
                             alt={event.title}
-                            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-                                isImageLoaded ? 'opacity-100' : 'opacity-0'
-                            }`}
-                            loading="lazy"
-                            onLoad={() => setIsImageLoaded(true)}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            loading="eager"
                             onError={() => setImgError(true)}
                         />
                     ) : null}
@@ -256,16 +246,16 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                     </div>
 
                     {/* Transparent Directional Navigation Buttons */}
-                    <div className="fixed inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-3 sm:px-6 z-[2020] pointer-events-none max-w-2xl mx-auto w-full">
+                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-3 sm:px-6 z-[2020] pointer-events-none">
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
                                 handlePrev();
                             }}
                             title="Publicación anterior"
-                            className="pointer-events-auto p-4 sm:p-5 bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md rounded-full border border-white/30 active:scale-90 transition-all shadow-[0_0_30px_rgba(0,0,0,0.5)] group flex items-center justify-center"
+                            className="pointer-events-auto p-4 sm:p-5 bg-slate-900/70 text-white rounded-full border border-white/20 active:scale-90 transition-all shadow-lg group flex items-center justify-center"
                         >
-                            <ChevronLeft className="w-8 h-8 sm:w-10 sm:h-10 text-white group-hover:-translate-x-1 transition-transform" />
+                            <ChevronLeft className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                         </button>
 
                         <button
@@ -274,9 +264,9 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
                                 handleNextEvent();
                             }}
                             title="Siguiente publicación"
-                            className="pointer-events-auto p-4 sm:p-5 bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md rounded-full border border-white/30 active:scale-90 transition-all shadow-[0_0_30px_rgba(0,0,0,0.5)] group flex items-center justify-center"
+                            className="pointer-events-auto p-4 sm:p-5 bg-slate-900/70 text-white rounded-full border border-white/20 active:scale-90 transition-all shadow-lg group flex items-center justify-center"
                         >
-                            <ChevronRight className="w-8 h-8 sm:w-10 sm:h-10 text-white group-hover:translate-x-1 transition-transform" />
+                            <ChevronRight className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                         </button>
                     </div>
 
