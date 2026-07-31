@@ -1129,10 +1129,44 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [events, rsvpStatus, pulsingEvents]);
 
     // Define selectedEvent and setSelectedEvent derived from ID
-    // This ensures selectedEvent always has the latest "live" data from eventsWithLiveCounts
+    // Stabilized: only produce a new reference when the event ID changes or
+    // when meaningful display fields change, NOT on every live-count tick.
+    const selectedEventRef = useRef<MontanitaEvent | null>(null);
+
     const selectedEvent = useMemo(() => {
-        if (!selectedEventId) return null;
-        return eventsWithLiveCounts.find(e => e.id === selectedEventId) || events.find(e => e.id === selectedEventId) || null;
+        if (!selectedEventId) {
+            selectedEventRef.current = null;
+            return null;
+        }
+        const found = eventsWithLiveCounts.find(e => e.id === selectedEventId)
+            || events.find(e => e.id === selectedEventId)
+            || null;
+
+        if (!found) {
+            // Keep showing the previously cached event briefly to avoid flicker
+            return selectedEventRef.current;
+        }
+
+        const prev = selectedEventRef.current;
+        // Only create a new reference if the event ID changed or key display fields differ
+        if (
+            prev &&
+            prev.id === found.id &&
+            prev.title === found.title &&
+            prev.description === found.description &&
+            prev.imageUrl === found.imageUrl &&
+            prev.vibe === found.vibe &&
+            prev.sector === found.sector &&
+            prev.startAt === found.startAt &&
+            prev.endAt === found.endAt &&
+            prev.status === found.status &&
+            prev.businessId === found.businessId
+        ) {
+            return prev; // Same reference — no re-render
+        }
+
+        selectedEventRef.current = found;
+        return found;
     }, [selectedEventId, eventsWithLiveCounts, events]);
 
     const setSelectedEvent = useCallback((event: MontanitaEvent | null) => {

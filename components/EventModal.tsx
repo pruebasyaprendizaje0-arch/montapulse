@@ -184,12 +184,13 @@ ${business?.phone ? `📞 Teléfono: ${business.phone}` : ''}
 
     return (
         <div
-            className="antigravity fixed inset-0 z-[4000] bg-black/80 backdrop-blur-sm flex items-end justify-center"
+            className="antigravity fixed inset-0 z-[4000] bg-black/80 flex items-end justify-center"
             onClick={onClose}
         >
             <div
                 className="w-full max-w-2xl bg-slate-900 rounded-t-[3rem] overflow-hidden h-full max-h-[92dvh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
+                style={{ contain: 'layout style paint', willChange: 'transform' }}
             >
                 <div className="flex-1 overflow-y-auto no-scrollbar">
                 {/* Header with Image */}
