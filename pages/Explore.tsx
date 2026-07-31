@@ -343,8 +343,12 @@ export const Explore: React.FC<ExploreProps> = ({
     const filteredEvents = useMemo(() => {
         let result = [...eventsWithLiveCounts];
         
-        // Filter by locality
-        result = result.filter(e => e.locality === currentLocality.name);
+        // Filter by locality (fallback to business locality or 'Montañita')
+        result = result.filter(e => {
+            const biz = businesses.find(b => b.id === e.businessId);
+            const eventLocality = e.locality || biz?.locality || 'Montañita';
+            return eventLocality === currentLocality.name;
+        });
 
         if (activeFilter !== 'All') {
             result = result.filter(e => e.vibe === activeFilter);
@@ -364,7 +368,7 @@ export const Explore: React.FC<ExploreProps> = ({
             result = result.filter(e => (e.vibe || '') === selectedMood);
         }
         return result;
-    }, [eventsWithLiveCounts, activeFilter, searchQuery, selectedMood, currentLocality.name]);
+    }, [eventsWithLiveCounts, businesses, activeFilter, searchQuery, selectedMood, currentLocality.name]);
 
     const deferredFilteredEvents = useDeferredValue(filteredEvents);
 
@@ -372,7 +376,10 @@ export const Explore: React.FC<ExploreProps> = ({
         let result = [...businesses];
 
         // Filter by locality (keep 'ubicame.info' always visible for contact/buying services)
-        result = result.filter(b => b.locality === currentLocality.name || b.name?.toLowerCase().includes('ubicame.info'));
+        result = result.filter(b => {
+            const bizLocality = b.locality || 'Montañita';
+            return bizLocality === currentLocality.name || b.name?.toLowerCase().includes('ubicame.info');
+        });
 
         if (activeTab === 'directory') {
             // Only show actual businesses in directory
