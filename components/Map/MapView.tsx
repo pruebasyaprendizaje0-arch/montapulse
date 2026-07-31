@@ -197,7 +197,8 @@ activeTab,
     } else if (mode === 'google') {
       url = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
     } else {
-      url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+      // Google Hybrid satellite tiles (satellite + roads) - fast on mobile
+      url = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}';
     }
 
     if (tileLayerRef.current) {

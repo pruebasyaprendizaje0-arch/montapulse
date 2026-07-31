@@ -343,11 +343,14 @@ export const Explore: React.FC<ExploreProps> = ({
     const filteredEvents = useMemo(() => {
         let result = [...eventsWithLiveCounts];
         
-        // Filter by locality (fallback to business locality or 'Montañita')
+        // Filter by locality with accent normalization & fallback
         result = result.filter(e => {
+            if (!currentLocality?.name) return true;
             const biz = businesses.find(b => b.id === e.businessId);
             const eventLocality = e.locality || biz?.locality || 'Montañita';
-            return eventLocality === currentLocality.name;
+            const normLoc = (eventLocality || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const normCurr = (currentLocality.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return normLoc === normCurr || normLoc.includes(normCurr) || normCurr.includes(normLoc);
         });
 
         if (activeFilter !== 'All') {
@@ -375,10 +378,13 @@ export const Explore: React.FC<ExploreProps> = ({
     const filteredBusinesses = useMemo(() => {
         let result = [...businesses];
 
-        // Filter by locality (keep 'ubicame.info' always visible for contact/buying services)
+        // Filter by locality with accent normalization & fallback
         result = result.filter(b => {
+            if (!currentLocality?.name) return true;
             const bizLocality = b.locality || 'Montañita';
-            return bizLocality === currentLocality.name || b.name?.toLowerCase().includes('ubicame.info');
+            const normLoc = (bizLocality || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const normCurr = (currentLocality.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return normLoc === normCurr || normLoc.includes(normCurr) || normCurr.includes(normLoc) || b.name?.toLowerCase().includes('ubicame.info');
         });
 
         if (activeTab === 'directory') {
@@ -1461,7 +1467,7 @@ export const Explore: React.FC<ExploreProps> = ({
                                     [1, 2, 3, 4].map(i => (
                                         <Skeleton key={`event-skeleton-${i}`} className="w-full h-48 rounded-[2.5rem]" />
                                     ))
-                                ) : (
+                                ) : deferredFilteredEvents.length > 0 ? (
                                     deferredFilteredEvents.map(event => (
                                         <div key={event.id} className="relative">
                                             <EventCard event={event} onClick={setSelectedEvent} />
@@ -1473,6 +1479,27 @@ export const Explore: React.FC<ExploreProps> = ({
                                             </button>
                                         </div>
                                     ))
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-900/60 rounded-[2.5rem] border border-white/5 my-4">
+                                        <div className="p-4 bg-orange-500/10 rounded-full mb-3">
+                                            <Zap className="w-8 h-8 text-orange-400" />
+                                        </div>
+                                        <h4 className="text-base font-black text-white mb-2">No se encontraron eventos</h4>
+                                        <p className="text-xs text-slate-400 max-w-xs mb-5 leading-relaxed">
+                                            No hay eventos para los filtros seleccionados en {currentLocality.name}.
+                                        </p>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedSector(null);
+                                                setActiveFilter('All');
+                                                setSelectedMood(null);
+                                                setSearchQuery('');
+                                            }}
+                                            className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-widest rounded-2xl transition-all shadow-lg active:scale-95"
+                                        >
+                                            Ver todos los eventos
+                                        </button>
+                                    </div>
                                 )
                             ) : (
                                 <div className={`${isGridView ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' : 'flex flex-col gap-6'} pb-10`}>
