@@ -159,7 +159,7 @@ activeTab,
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const userLocationMarkerRef = useRef<L.Marker | null>(null);
 
-  const [mapMode, setMapMode] = useState<'dark' | 'satellite'>('satellite');
+  const [mapMode, setMapMode] = useState<'dark' | 'satellite'>('dark');
   const [editingSector, setEditingSector] = useState<Sector | null>(null);
   const [tempCoords, setTempCoords] = useState<[number, number][]>([]);
   const [mousePos, setMousePos] = useState<[number, number] | null>(null);
@@ -193,12 +193,12 @@ activeTab,
 
     let url: string;
     if (mode === 'dark') {
-      url = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+      url = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
     } else if (mode === 'google') {
       url = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
     } else {
-      // Google Hybrid satellite tiles (satellite + roads) - fast on mobile
-      url = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}';
+      // Google Satellite tiles (pure satellite without labels/clutter) - fast on mobile
+      url = 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
     }
 
     if (tileLayerRef.current) {
