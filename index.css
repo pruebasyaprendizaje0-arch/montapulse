@@ -76,10 +76,7 @@ body {
 
 /* Antigravity - Premium Floating Effect */
 .antigravity {
-    transform: translateZ(0);
     backface-visibility: hidden;
-    perspective: 1000px;
-    will-change: transform, opacity;
 }
 
 .glow-primary {

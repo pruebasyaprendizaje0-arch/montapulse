@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useDeferredValue, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, ShieldCheck, Flame, Star, Search, Filter, Layers, ChevronDown, ChevronUp, TrendingUp, Clock, Trash2, ArrowRight, Radio, Navigation, Route, Compass } from 'lucide-react';
-const MapView = lazy(() => import('../components/Map/MapView').then(m => ({ default: m.MapView })));
+import { MapView } from '../components/Map/MapView';
 import { EventCard } from '../components/EventCard';
 import { Sector, MontanitaEvent, Business, BusinessCategory, Vibe, SubscriptionPlan, MapEntryType } from '../types';
 import { LOCALITIES, LOCALITY_SECTORS, SECTOR_INFO, LOCALITY_POLYGONS, BASE_URL } from '../constants';
@@ -784,7 +784,6 @@ export const Explore: React.FC<ExploreProps> = ({
                 </div>
 
                 <div className="flex-1 relative h-full min-h-0 z-10">
-                    <Suspense fallback={<div className="w-full h-full bg-slate-900 animate-pulse flex items-center justify-center text-slate-500 uppercase font-black text-[10px] tracking-widest">Cargando Mapa...</div>}>
                     <MapView
                         onBusinessSelect={(b) => {
                             setTimeout(() => {
@@ -843,21 +842,21 @@ export const Explore: React.FC<ExploreProps> = ({
                         focusedBusinessId={focusedBusinessId}
                         focusCoords={focusCoords}
                     />
-                    </Suspense>
                 </div>
 
                 {/* Sliding Panel - Hidden in Editor Focus mode */}
                 {!isEditorFocus && (
                     <div
                         onClick={() => isPanelMinimized && setIsPanelMinimized(false)}
-                        className={`antigravity bg-[#0f172a]/90 backdrop-blur-xl lg:backdrop-blur-none border-t lg:border-t-0 lg:border-l border-white/5 px-6 pt-6 transition-all duration-500 ease-in-out z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.6)] lg:shadow-none no-scrollbar flex flex-col ${
+                        className={`bg-[#0f172a] lg:backdrop-blur-none border-t lg:border-t-0 lg:border-l border-white/5 px-6 pt-6 transition-all duration-300 ease-in-out z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.6)] lg:shadow-none flex flex-col ${
                             isPanelMinimized 
                             ? 'max-[1023px]:fixed max-[1023px]:bottom-0 max-[1023px]:inset-x-0 max-[1023px]:h-[60px] max-[1023px]:overflow-hidden cursor-pointer hover:bg-[#0f172a] lg:w-[450px]' 
                             : (isGridView 
-                                ? 'lg:w-[85vw] pb-32 overflow-y-auto w-full h-[85dvh] fixed lg:absolute bottom-0 right-0' 
-                                : 'max-[1023px]:fixed max-[1023px]:bottom-0 max-[1023px]:inset-x-0 max-[1023px]:h-[70dvh] pb-32 overflow-y-auto lg:w-[450px] lg:h-full lg:relative'
+                                ? 'lg:w-[85vw] pb-32 overflow-y-auto w-full h-[85vh] fixed lg:absolute bottom-0 right-0' 
+                                : 'max-[1023px]:fixed max-[1023px]:bottom-0 max-[1023px]:inset-x-0 max-[1023px]:h-[78vh] pb-32 overflow-y-auto lg:w-[450px] lg:h-full lg:relative'
                               )
                         } lg:max-h-full lg:pb-10 rounded-t-[3.5rem] lg:rounded-none`}
+                        style={{ WebkitOverflowScrolling: 'touch' }}
                     >
                         <div
                             onClick={(e) => {
