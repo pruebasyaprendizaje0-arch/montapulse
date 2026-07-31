@@ -62,8 +62,8 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
       <div className="relative w-full aspect-[4/3] sm:aspect-video rounded-[2.5rem] overflow-hidden bg-slate-800">
         {/* Skeleton placeholder mientras carga */}
         {!isLoaded && !hasError && (
-          <div className="absolute inset-0">
-            <Skeleton className="w-full h-full rounded-[2.5rem]" />
+          <div className="absolute inset-0 bg-slate-800 flex items-center justify-center">
+            <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin opacity-50"></div>
           </div>
         )}
 
@@ -72,7 +72,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
           <img
             src={event.imageUrl}
             alt={event.title}
-            loading="eager"
+            loading="lazy"
             onLoad={() => setIsLoaded(true)}
             onError={() => setHasError(true)}
             className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${
@@ -80,8 +80,10 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
             }`}
           />
         ) : (
-          <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-            <span className="text-sm text-slate-400 px-4 text-center">Imagen no disponible</span>
+          <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-slate-800 border border-white/5 flex items-center justify-center mb-2">
+              <span className="text-xl">🏔️</span>
+            </div>
           </div>
         )}
 
