@@ -194,9 +194,7 @@ export const EventModal: React.FC<EventModalProps> = ({
                             <img
                                 src={event.imageUrl}
                                 alt={event.title}
-                                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-                                    isImageLoading ? 'opacity-0' : 'opacity-100'
-                                }`}
+                                className="absolute inset-0 w-full h-full object-cover z-20"
                                 loading="eager"
                                 onLoad={() => setIsImageLoading(false)}
                                 onError={() => {

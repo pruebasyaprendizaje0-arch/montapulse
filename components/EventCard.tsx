@@ -75,9 +75,7 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
             loading="lazy"
             onLoad={() => setIsLoaded(true)}
             onError={() => setHasError(true)}
-            className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${
-              isLoaded ? 'opacity-100' : 'opacity-90'
-            }`}
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 group-hover:rotate-1 z-10"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex flex-col items-center justify-center">
