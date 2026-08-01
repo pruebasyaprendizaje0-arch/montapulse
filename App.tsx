@@ -33,7 +33,8 @@ const PublicProfileModal = lazy(() => import('./components/PublicProfileModal').
 // Lazy load pages for better performance
 const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
 const Passport = lazy(() => import('./pages/Passport').then(m => ({ default: m.Passport })));
-const Explore = lazy(() => import('./pages/Explore').then(m => ({ default: m.Explore })));
+const MapHome = lazy(() => import('./pages/MapHome').then(m => ({ default: m.MapHome })));
+const ExploreFeed = lazy(() => import('./pages/ExploreFeed').then(m => ({ default: m.ExploreFeed })));
 const InfoPage = lazy(() => import('./pages/InfoPage').then(m => ({ default: m.InfoPage })));
 const CalendarPage = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })));
 const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })));
@@ -148,6 +149,19 @@ const Dashboard: React.FC = () => {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiRecData, setAiRecData] = useState<any>(null);
   const [visitCount, setVisitCount] = useState<number>(0);
+
+  useEffect(() => {
+    const handleNavigateToFeed = () => setActiveView('feed');
+    const handleNavigateToMap = () => setActiveView('explore');
+    
+    window.addEventListener('NAVIGATE_TO_FEED', handleNavigateToFeed);
+    window.addEventListener('NAVIGATE_TO_MAP', handleNavigateToMap);
+    
+    return () => {
+      window.removeEventListener('NAVIGATE_TO_FEED', handleNavigateToFeed);
+      window.removeEventListener('NAVIGATE_TO_MAP', handleNavigateToMap);
+    };
+  }, []);
 
   useEffect(() => {
     // Increment visit count on mount
@@ -525,9 +539,22 @@ const Dashboard: React.FC = () => {
     switch (activeView) {
       case 'explore':
         return (
-          <ErrorBoundary name="Explore">
+          <ErrorBoundary name="MapHome">
             <Suspense fallback={<PageLoader />}>
-              <Explore
+              <MapHome
+                onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)}
+                userBusinessId={userBusiness?.id}
+                focusCoords={focusMapCoords}
+                onClearFocusCoords={() => setFocusMapCoords(null)}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        );
+      case 'feed':
+        return (
+          <ErrorBoundary name="ExploreFeed">
+            <Suspense fallback={<PageLoader />}>
+              <ExploreFeed
                 onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)}
                 userBusinessId={userBusiness?.id}
                 focusCoords={focusMapCoords}
@@ -595,9 +622,9 @@ const Dashboard: React.FC = () => {
         );
       default:
         return (
-          <ErrorBoundary name="Default Explore">
+          <ErrorBoundary name="Default MapHome">
             <Suspense fallback={<PageLoader />}>
-              <Explore 
+              <MapHome 
                 onEditBusiness={handleEditBusiness} 
                 focusCoords={focusMapCoords}
                 onClearFocusCoords={() => setFocusMapCoords(null)}

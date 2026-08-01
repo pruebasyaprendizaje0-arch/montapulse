@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "spatial-fetch": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-fetch"
+      ]
+    },
+    "spatial-filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Users\\Frank\\Documents\\montapulse\\public"
+      ]
+    }
+  }
+}

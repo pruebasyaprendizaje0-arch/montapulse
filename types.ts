@@ -293,7 +293,7 @@ export interface HelpSupportSettings {
 
 export type AgendaRange = 'day' | 'week' | 'month';
 
-export type ViewType = 'explore' | 'calendar' | 'favorites' | 'host' | 'history' | 'all-favorites' | 'plans' | 'community' | 'chat'    | 'admin-users'
+export type ViewType = 'explore' | 'feed' | 'calendar' | 'favorites' | 'host' | 'history' | 'all-favorites' | 'plans' | 'community' | 'chat'    | 'admin-users'
     | 'policies'
  | 'services'
  | 'info';
