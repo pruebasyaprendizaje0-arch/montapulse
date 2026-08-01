@@ -299,6 +299,15 @@ export const EventModal: React.FC<EventModalProps> = ({
                                 </p>
                             )}
 
+                            {/* Back Button */}
+                            <button
+                                onClick={onClose}
+                                className="flex items-center gap-1.5 px-5 py-2.5 bg-slate-800/80 backdrop-blur-xl hover:bg-slate-800 text-white rounded-full border border-white/20 active:scale-90 transition-all shadow-xl"
+                            >
+                                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                                <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest">Volver</span>
+                            </button>
+
                             {/* Business Info */}
                             {business ? (
                                 <div className="mt-8 p-4 bg-slate-800/80 rounded-3xl border border-white/5 w-full max-w-md mx-auto relative z-30">
