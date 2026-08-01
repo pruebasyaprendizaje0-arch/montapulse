@@ -445,7 +445,7 @@ export const MapHome: React.FC<ExploreProps> = ({
             ) : (
                 <div className="h-full relative flex flex-col lg:flex-row bg-[#020617] overflow-hidden">
                 {/* Search Bar & Admin Tools */}
-                <div className="absolute top-6 inset-x-0 lg:left-0 lg:right-[450px] z-50 flex flex-col items-center gap-4 pointer-events-none px-6 transition-all duration-500">
+                <div className="absolute top-6 inset-x-0 lg:left-0 lg:right-0 z-50 flex flex-col items-center gap-4 pointer-events-none px-6 transition-all duration-500">
                     <div className="w-full max-w-xl pointer-events-auto relative group">
                         <div className="relative flex items-center bg-[#020617]/40 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-1.5 shadow-2xl shadow-black/60 ring-1 ring-white/5 transition-all group-focus-within:border-sky-500/30 group-hover:bg-[#020617]/60">
                             {/* Selector de Localidad */}
@@ -781,9 +781,7 @@ export const MapHome: React.FC<ExploreProps> = ({
                     </div>
                 </div>
 
-                <div className={`w-full relative z-10 shrink-0 transition-all duration-300 lg:flex-1 lg:h-full ${
-                    isPanelMinimized ? 'h-[calc(100%-80px)]' : (isGridView ? 'h-[15%]' : 'h-[40%]')
-                }`}>
+                <div className="w-full relative z-10 shrink-0 transition-all duration-300 flex-1 h-full">
                     <MapView
                         onBusinessSelect={(b) => {
                             setTimeout(() => {
@@ -860,8 +858,8 @@ export const MapHome: React.FC<ExploreProps> = ({
                             className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 active:scale-95 text-white font-black text-sm uppercase tracking-widest rounded-full shadow-2xl shadow-sky-500/40 transition-all border border-sky-400/30 cursor-pointer"
                         >
                             <span className="animate-pulse w-2 h-2 rounded-full bg-white inline-block shadow-[0_0_10px_#fff]" />
-                            Ver Lista de Eventos
-                            <span className="text-lg leading-none">🔍</span>
+                            ¿Cómo te sientes hoy?
+                            <span className="text-lg leading-none">🎯</span>
                         </button>
                     </div>
                 )}

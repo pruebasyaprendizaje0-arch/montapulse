@@ -445,7 +445,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
             ) : (
                 <div className="h-full relative flex flex-col lg:flex-row bg-[#020617] overflow-hidden">
                 {/* Search Bar & Admin Tools */}
-                <div className="absolute top-6 inset-x-0 lg:left-0 lg:right-[450px] z-50 flex flex-col items-center gap-4 pointer-events-none px-6 transition-all duration-500">
+                <div className="absolute top-6 inset-x-0 lg:left-0 lg:right-0 z-50 flex flex-col items-center gap-4 pointer-events-none px-6 transition-all duration-500">
                     <div className="w-full max-w-xl pointer-events-auto relative group">
                         <div className="relative flex items-center bg-[#020617]/40 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-1.5 shadow-2xl shadow-black/60 ring-1 ring-white/5 transition-all group-focus-within:border-sky-500/30 group-hover:bg-[#020617]/60">
                             {/* Selector de Localidad */}
@@ -781,59 +781,19 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                     </div>
                 </div>
 
-                {/* Sliding Panel - Hidden in Editor Focus mode */}
+                {/* Feed Panel */}
                 {!isEditorFocus && (
-                    <div
-                        onClick={() => isPanelMinimized && setIsPanelMinimized(false)}
-                        className={`flex-1 flex flex-col h-full bg-[#0f172a] overflow-y-auto no-scrollbar relative z-[100] pb-32 px-6 pt-6 ${
-                            isPanelMinimized 
-                            ? 'h-[80px] lg:h-auto overflow-hidden cursor-pointer hover:bg-[#0f172a] lg:w-[450px]' 
-                            : (isGridView 
-                                ? 'flex-1 h-full overflow-y-auto lg:absolute lg:top-[15%] lg:bottom-0 lg:right-0 lg:w-[85vw] pb-32' 
-                                : 'flex-1 h-full overflow-y-auto lg:w-[450px] lg:relative pb-32'
-                              )
-                        } lg:max-h-full lg:pb-10 rounded-t-[2.5rem] lg:rounded-none -mt-[2rem] lg:mt-0 relative transform-gpu z-0`}
-                    >
-                        <div
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setIsPanelMinimized(!isPanelMinimized);
-                            }}
-                            className="w-12 h-1.5 bg-slate-800 rounded-full mx-auto mb-6 opacity-50 cursor-pointer hover:bg-slate-600 transition-colors lg:hidden"
-                        ></div>
-
-                        {/* Top Tab Switcher */}
-                        <div className="flex p-1.5 bg-black/40 backdrop-blur-3xl rounded-[2rem] border border-white/5 mb-8 ring-1 ring-white/5 mx-2">
-                            <button
-                                onClick={() => setIsPanelMinimized(true)}
-                                className="flex items-center justify-center gap-2 py-3 px-4 rounded-[1.6rem] transition-all duration-500 text-slate-400 hover:text-white hover:bg-white/5"
-                            >
-                                <MapPin className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t('explore.seeMap')}</span>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('events')}
-                                className={`flex-1 flex items-center justify-center gap-3 py-3.5 rounded-[1.6rem] transition-all duration-500 relative overflow-hidden group ${activeTab === 'events' ? 'text-white shadow-2xl shadow-sky-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                {activeTab === 'events' && (
-                                    <div className="absolute inset-0 bg-gradient-to-tr from-sky-600 to-indigo-600 animate-in fade-in zoom-in duration-500" />
-                                )}
-                                <div className="relative flex items-center gap-2.5">
-                                    <Zap className={`w-4 h-4 ${activeTab === 'events' ? 'fill-white animate-pulse' : 'group-hover:scale-110 transition-transform'}`} />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t('explore.title')}</span>
-                                </div>
-                            </button>
-                        </div>
+                    <div className="flex-1 flex flex-col h-full bg-[#0f172a] overflow-y-auto no-scrollbar relative z-[100] pb-32 px-6 pt-6">
 
                         {/* Section 1: ¿Cómo te sientes? - Pink (from masterVibes) */}
                         <div className="px-4 py-3 border-b border-white/5 relative">
-                            <p style={{ color: '#ec4899', fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>🎯 ¿Cómo te sientes?</p>
+                            <p style={{ color: '#ec4899', fontSize: '18px', fontWeight: 'bold', marginBottom: '10px' }}>🎯 ¿Cómo te sientes?</p>
                             
                             {/* Custom Dropdown Selector */}
                             <div className="relative">
                                 <button
                                     onClick={() => setShowVibesDropdown(!showVibesDropdown)}
-                                    className="w-full flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-sm font-semibold text-slate-300 transition-all active:scale-[0.98] outline-none focus:outline-none"
+                                    className="w-full flex items-center justify-between px-4 py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-lg font-semibold text-slate-300 transition-all active:scale-[0.98] outline-none focus:outline-none"
                                 >
                                     <span className="flex items-center gap-2">
                                         <span className="text-base">🎯</span>
@@ -876,7 +836,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                                                     setSelectedMood(null);
                                                     setShowVibesDropdown(false);
                                                 }}
-                                                className={`w-full text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors hover:bg-white/10 ${!selectedMood ? 'text-[#ec4899] bg-[#ec4899]/10 font-black' : 'text-slate-400'}`}
+                                                className={`w-full text-left px-4 py-2.5 text-sm font-bold uppercase tracking-wider transition-colors hover:bg-white/10 ${!selectedMood ? 'text-[#ec4899] bg-[#ec4899]/10 font-black' : 'text-slate-400'}`}
                                             >
                                                 Todos los ánimos
                                             </button>
@@ -891,7 +851,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                                                                 setSelectedMood(isSelected ? null : vibeName);
                                                                 setShowVibesDropdown(false);
                                                             }}
-                                                            className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#ec4899] bg-[#ec4899]/10 font-black' : 'text-slate-300'}`}
+                                                            className={`w-full text-left px-4 py-2.5 text-base font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#ec4899] bg-[#ec4899]/10 font-black' : 'text-slate-300'}`}
                                                         >
                                                             {vibeName}
                                                         </button>
@@ -907,7 +867,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                                                                 setSelectedMood(isSelected ? null : mood as Vibe);
                                                                 setShowVibesDropdown(false);
                                                             }}
-                                                            className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#ec4899] bg-[#ec4899]/10 font-black' : 'text-slate-300'}`}
+                                                            className={`w-full text-left px-4 py-2.5 text-base font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#ec4899] bg-[#ec4899]/10 font-black' : 'text-slate-300'}`}
                                                         >
                                                             {mood}
                                                         </button>
@@ -922,13 +882,13 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
 
                         {/* Section 2: ¿Qué quieres hacer? - Amber (from masterActivities) */}
                         <div className="px-4 py-3 border-b border-white/5 relative">
-                            <p style={{ color: '#f59e0b', fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>⚡ ¿Qué quieres hacer?</p>
+                            <p style={{ color: '#f59e0b', fontSize: '18px', fontWeight: 'bold', marginBottom: '10px' }}>⚡ ¿Qué quieres hacer?</p>
                             
                             {/* Custom Dropdown Selector */}
                             <div className="relative">
                                 <button
                                     onClick={() => setShowActivitiesDropdown(!showActivitiesDropdown)}
-                                    className="w-full flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-sm font-semibold text-slate-300 transition-all active:scale-[0.98] outline-none focus:outline-none"
+                                    className="w-full flex items-center justify-between px-4 py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-lg font-semibold text-slate-300 transition-all active:scale-[0.98] outline-none focus:outline-none"
                                 >
                                     <span className="flex items-center gap-2">
                                         <span className="text-base">⚡</span>
@@ -971,7 +931,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                                                     setSelectedMood(null);
                                                     setShowActivitiesDropdown(false);
                                                 }}
-                                                className={`w-full text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors hover:bg-white/10 ${!selectedMood ? 'text-[#f59e0b] bg-[#f59e0b]/10 font-black' : 'text-slate-400'}`}
+                                                className={`w-full text-left px-4 py-2.5 text-sm font-bold uppercase tracking-wider transition-colors hover:bg-white/10 ${!selectedMood ? 'text-[#f59e0b] bg-[#f59e0b]/10 font-black' : 'text-slate-400'}`}
                                             >
                                                 Todas las actividades
                                             </button>
@@ -985,7 +945,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                                                                 setSelectedMood(isSelected ? null : activity.name);
                                                                 setShowActivitiesDropdown(false);
                                                             }}
-                                                            className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#f59e0b] bg-[#f59e0b]/10 font-black' : 'text-slate-300'}`}
+                                                            className={`w-full text-left px-4 py-2.5 text-base font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#f59e0b] bg-[#f59e0b]/10 font-black' : 'text-slate-300'}`}
                                                         >
                                                             {activity.name}
                                                         </button>
@@ -1001,7 +961,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                                                                 setSelectedMood(isSelected ? null : activity as Vibe);
                                                                 setShowActivitiesDropdown(false);
                                                             }}
-                                                            className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#f59e0b] bg-[#f59e0b]/10 font-black' : 'text-slate-300'}`}
+                                                            className={`w-full text-left px-4 py-2.5 text-base font-semibold transition-colors hover:bg-white/10 ${isSelected ? 'text-[#f59e0b] bg-[#f59e0b]/10 font-black' : 'text-slate-300'}`}
                                                         >
                                                             {activity}
                                                         </button>

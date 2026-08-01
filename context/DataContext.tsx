@@ -1226,6 +1226,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const activeView = useMemo(() => {
         const path = location.pathname;
         if (path === '/') return 'explore';
+        if (path === '/feed') return 'feed';
         if (path === '/calendar') return 'calendar';
         if (path === '/passport') return 'favorites';
 
@@ -2675,6 +2676,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setActiveView: (view: ViewType) => {
                 const paths: Record<string, string> = {
                     'explore': '/',
+                    'feed': '/feed',
                     'calendar': '/calendar',
                     'community': '/community',
                     'host': '/host',
