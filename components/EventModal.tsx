@@ -171,15 +171,15 @@ export const EventModal: React.FC<EventModalProps> = ({
 
     return (
         <div
-            className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4 transform-gpu isolate"
+            className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-md flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4 isolate"
             style={{ WebkitTransform: 'translateZ(0)' }}
             onClick={onClose}
         >
             <div
-                className="w-full max-w-2xl bg-slate-900 rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden absolute bottom-0 inset-x-0 top-[10%] sm:relative sm:top-auto sm:bottom-auto sm:inset-x-auto sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl"
+                className="w-full max-w-2xl bg-slate-900 rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden relative h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex-1 h-full overflow-y-auto no-scrollbar min-h-0 transform-gpu z-0">
+                <div className="flex-1 h-full overflow-y-auto no-scrollbar min-h-0">
                     {/* Header with Image */}
                     <div className="relative h-64 sm:h-96 w-full bg-slate-900 shrink-0">
                         {/* Fallback gradient - always visible */}
