@@ -855,8 +855,7 @@ export const Explore: React.FC<ExploreProps> = ({
                                 ? 'flex-1 h-full overflow-y-auto lg:absolute lg:top-[15%] lg:bottom-0 lg:right-0 lg:w-[85vw] pb-32' 
                                 : 'flex-1 h-full overflow-y-auto lg:w-[450px] lg:relative pb-32'
                               )
-                        } lg:max-h-full lg:pb-10 rounded-t-[2.5rem] lg:rounded-none -mt-[2rem] lg:mt-0 relative`}
-                        style={{ WebkitOverflowScrolling: 'touch' }}
+                        } lg:max-h-full lg:pb-10 rounded-t-[2.5rem] lg:rounded-none -mt-[2rem] lg:mt-0 relative transform-gpu z-0`}
                     >
                         <div
                             onClick={(e) => {
