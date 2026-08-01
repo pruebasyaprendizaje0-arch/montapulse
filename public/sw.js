@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ubicame-pulse-v4';
+const CACHE_NAME = 'ubicame-pulse-v5';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

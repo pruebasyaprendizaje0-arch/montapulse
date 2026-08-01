@@ -171,7 +171,8 @@ export const EventModal: React.FC<EventModalProps> = ({
 
     return (
         <div
-            className="fixed inset-0 z-[4000] bg-black/80 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4 transform-gpu isolate"
+            style={{ WebkitTransform: 'translateZ(0)' }}
             onClick={onClose}
         >
             <div
