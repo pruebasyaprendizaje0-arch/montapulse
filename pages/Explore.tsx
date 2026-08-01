@@ -852,8 +852,8 @@ export const Explore: React.FC<ExploreProps> = ({
                             isPanelMinimized 
                             ? 'h-[80px] lg:h-auto overflow-hidden cursor-pointer hover:bg-[#0f172a] lg:w-[450px]' 
                             : (isGridView 
-                                ? 'flex-1 overflow-y-auto lg:absolute lg:top-[15%] lg:bottom-0 lg:right-0 lg:w-[85vw] pb-32 overscroll-contain' 
-                                : 'flex-1 overflow-y-auto lg:w-[450px] lg:h-full lg:relative pb-32 overscroll-contain'
+                                ? 'flex-1 overflow-y-auto lg:absolute lg:top-[15%] lg:bottom-0 lg:right-0 lg:w-[85vw] pb-32' 
+                                : 'flex-1 overflow-y-auto lg:w-[450px] lg:h-full lg:relative pb-32'
                               )
                         } lg:max-h-full lg:pb-10 rounded-t-[2.5rem] lg:rounded-none -mt-[2rem] lg:mt-0 relative`}
                         style={{ WebkitOverflowScrolling: 'touch' }}

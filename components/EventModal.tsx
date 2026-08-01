@@ -178,7 +178,7 @@ export const EventModal: React.FC<EventModalProps> = ({
                 className="w-full max-w-2xl bg-slate-900 rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden absolute bottom-0 inset-x-0 top-[10%] sm:relative sm:top-auto sm:bottom-auto sm:inset-x-auto sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 overscroll-contain">
+                <div className="flex-1 overflow-y-auto no-scrollbar min-h-0">
                     {/* Header with Image */}
                     <div className="relative h-64 sm:h-96 w-full bg-slate-900 shrink-0">
                         {/* Fallback gradient - always visible */}

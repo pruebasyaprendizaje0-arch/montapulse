@@ -609,7 +609,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className={`relative h-[100dvh] w-screen bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden flex flex-row font-sans select-none transition-colors duration-500`}>
+    <div className={`fixed inset-0 w-screen bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden flex flex-row font-sans select-none transition-colors duration-500`}>
       <Sidebar />
       <div className={`flex-1 flex flex-col h-full relative ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history', 'services'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
         <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--glass)] backdrop-blur-xl border-b border-[var(--glass-border)] h-16 flex items-center justify-between px-6 transition-colors duration-500">
