@@ -337,10 +337,19 @@ export const EventModal: React.FC<EventModalProps> = ({
                                                     </button>
                                                 )}
                                             </div>
-                                            <div className="flex flex-col items-start flex-1 min-w-0">
-                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">Publicado por</p>
+                                            <div 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (onClose) onClose();
+                                                    setPublicProfileType('business');
+                                                    setPublicProfileId(business.id);
+                                                    setShowPublicProfile(true);
+                                                }}
+                                                className="flex flex-col items-start flex-1 min-w-0 cursor-pointer group/pub"
+                                            >
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none group-hover/pub:text-orange-400 transition-colors">Publicado por</p>
                                                 <div className="flex items-center gap-2">
-                                                    <p className="text-sm font-black text-white truncate">{business.name}</p>
+                                                    <p className="text-sm font-black text-white truncate group-hover/pub:text-orange-400 transition-colors">{business.name}</p>
                                                 </div>
                                             </div>
                                         </div>
