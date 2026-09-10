@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass } from 'lucide-react';
+import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass, QrCode, ExternalLink } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS } from '../../constants';
 import { Sector, BusinessCategory, MapEntryType } from '../../types';
@@ -432,6 +432,37 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                     className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
                                     placeholder="Número para llamadas"
                                 />
+                            </div>
+
+                            {/* Enlace a Menú QR / Carta Digital externa */}
+                            <div className="p-5 bg-gradient-to-br from-pink-500/10 via-rose-500/5 to-purple-500/10 border border-pink-500/20 rounded-3xl space-y-3">
+                                <label className="text-xs font-black text-pink-400 uppercase tracking-widest flex items-center gap-2">
+                                    <QrCode className="w-4 h-4 text-pink-400" />
+                                    Enlace a Menú QR / Carta Digital
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type="url"
+                                        value={data.menuUrl || ''}
+                                        onChange={(e) => updateField('menuUrl', e.target.value)}
+                                        placeholder="https://tu-menuqr.com/..."
+                                        className="w-full bg-slate-900/80 border border-white/10 rounded-2xl px-5 py-3.5 text-white font-medium text-sm focus:ring-2 focus:ring-pink-500 outline-none transition-all placeholder:text-slate-600"
+                                    />
+                                    {data.menuUrl && (
+                                        <a
+                                            href={data.menuUrl.startsWith('http') ? data.menuUrl : `https://${data.menuUrl}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-pink-500/20 hover:bg-pink-500/30 text-pink-400 rounded-xl transition-colors"
+                                            title="Probar enlace"
+                                        >
+                                            <ExternalLink className="w-4 h-4" />
+                                        </a>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                    Ingresa el enlace de tu menú digital o carta QR externa para que tus clientes puedan abrirlo directamente desde tu perfil público y tarjeta de negocio.
+                                </p>
                             </div>
                         </>
                     )}

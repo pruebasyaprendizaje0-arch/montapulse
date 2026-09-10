@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronLeft, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2, Compass } from 'lucide-react';
+import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronLeft, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2, Compass, QrCode, ExternalLink } from 'lucide-react';
 import { Business, UserProfile, MontanitaEvent, ProfileReview, Coupon, Sector, MapEntryType } from '../types';
 import { useData } from '../context/DataContext';
 import { BASE_URL, SECTOR_INFO } from '../constants';
@@ -10,8 +10,7 @@ import { useToast } from '../context/ToastContext';
 import { getEcuadorDate, isBusinessOpen } from '../utils/timeUtils';
 import { useSEO } from '../hooks/useSEO';
 import { BookingWidget } from './BookingWidget';
-import { Utensils } from 'lucide-react';
-import { PublicMenuModal } from './Modals/PublicMenuModal';
+
 
 
 
@@ -55,7 +54,6 @@ export const PublicProfileModal = React.memo(({
     const [reviews, setReviews] = useState<ProfileReview[]>([]);
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [showPublicMenu, setShowPublicMenu] = useState(false);
     const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
     const avatarRef = React.useRef<HTMLImageElement>(null);
     
@@ -509,6 +507,22 @@ export const PublicProfileModal = React.memo(({
                                 </div>
                             )}
 
+                            {/* Menú QR / Carta Digital Link */}
+                            {business && business.menuUrl && (
+                                <div className="w-full">
+                                    <a
+                                        href={business.menuUrl.startsWith('http') ? business.menuUrl : `https://${business.menuUrl}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full flex items-center justify-center gap-2.5 px-4 py-4 bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-pink-500/20 group border border-white/10 text-white"
+                                    >
+                                        <QrCode className="w-4 h-4 text-white group-hover:rotate-12 transition-transform" />
+                                        <span className="text-[10px] font-black text-white uppercase tracking-[0.1em]">Ver Menú / Carta Digital</span>
+                                        <ExternalLink className="w-3.5 h-3.5 text-white/80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                    </a>
+                                </div>
+                            )}
+
                             {/* Primary Actions Row */}
                             <div className="flex gap-3 w-full">
                                 <button
@@ -628,18 +642,6 @@ export const PublicProfileModal = React.memo(({
                         )}
                     </div>
 
-                    {/* Digital Menu Button */}
-                    {business && (business as any).menu_premium_active && (
-                        <div className="w-full max-w-sm px-4">
-                            <button
-                                onClick={() => setShowPublicMenu(true)}
-                                className="w-full flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-pink-500/20 group border border-white/10"
-                            >
-                                <Utensils className="w-5 h-5 text-white group-hover:rotate-12 transition-transform" />
-                                <span className="text-xs font-black text-white uppercase tracking-[0.2em]">Ver Menú Digital</span>
-                            </button>
-                        </div>
-                    )}
 
                     {/* Stats - Centered Grid */}
                     <div className="grid grid-cols-3 gap-4 py-4 border-y border-white/5 w-full">
@@ -819,15 +821,6 @@ export const PublicProfileModal = React.memo(({
             </div>
             </div>
             </div>
-
-            {business && (
-                <PublicMenuModal
-                    isOpen={showPublicMenu}
-                    onClose={() => setShowPublicMenu(false)}
-                    businessId={business.id}
-                    businessName={business.name}
-                />
-            )}
         </>
     );
 });

@@ -1,6 +1,6 @@
 import React from 'react';
-import { X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings, Share2, UserPlus, UserCheck } from 'lucide-react';
-import { MontanitaEvent, Business, Sector } from '../types';
+import { X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings, Share2, UserPlus, UserCheck, QrCode, ExternalLink, Utensils } from 'lucide-react';
+import { MontanitaEvent, Business, Sector, BusinessCategory } from '../types';
 import { Skeleton } from './Skeleton';
 import { SECTOR_INFO, BASE_URL } from '../constants';
 import { useToast } from '../context/ToastContext';
@@ -56,8 +56,16 @@ export const EventModal: React.FC<EventModalProps> = ({
         setPublicProfileId,
         setPublicProfileType,
         handleToggleFollow,
-        isBusinessFollowed
+        isBusinessFollowed,
+        businesses
     } = useData();
+
+    const targetBusiness = business || (event?.businessId ? businesses.find(b => b.id === event.businessId) : undefined);
+    const isRestaurant = targetBusiness?.category === BusinessCategory.RESTAURANTE ||
+        (targetBusiness?.category as string)?.toLowerCase().includes('restaurante') ||
+        (event as any)?.category?.toLowerCase() === 'gastronomia' ||
+        (event as any)?.category?.toLowerCase() === 'restaurante' ||
+        !!targetBusiness?.menuUrl;
 
     useSEO({
         title: event?.title || 'Evento',
@@ -309,7 +317,7 @@ export const EventModal: React.FC<EventModalProps> = ({
                             </button>
 
                             {/* Business Info */}
-                            {business ? (
+                            {targetBusiness ? (
                                 <div className="mt-8 p-4 bg-slate-800/80 rounded-3xl border border-white/5 w-full max-w-md mx-auto relative z-30">
                                     <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
                                         <div className="flex items-center gap-3 flex-1 w-full">
@@ -318,19 +326,19 @@ export const EventModal: React.FC<EventModalProps> = ({
                                                     e.stopPropagation();
                                                     if (onClose) onClose();
                                                     setPublicProfileType('business');
-                                                    setPublicProfileId(business.id);
+                                                    setPublicProfileId(targetBusiness.id);
                                                     setShowPublicProfile(true);
                                                 }}
                                                 className="relative group cursor-pointer"
                                             >
                                                 <img
-                                                    src={business.imageUrl}
-                                                    alt={business.name}
+                                                    src={targetBusiness.imageUrl}
+                                                    alt={targetBusiness.name}
                                                     className="w-10 h-10 rounded-full border-2 border-white/20 object-cover shadow-2xl"
                                                 />
                                                 {isAdmin && (
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); onEditBusiness?.(business.id); }}
+                                                        onClick={(e) => { e.stopPropagation(); onEditBusiness?.(targetBusiness.id); }}
                                                         className="absolute -top-1 -right-1 bg-orange-500 p-1.5 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
                                                     >
                                                         <Settings className="w-3 h-3 text-white" />
@@ -342,30 +350,43 @@ export const EventModal: React.FC<EventModalProps> = ({
                                                     e.stopPropagation();
                                                     if (onClose) onClose();
                                                     setPublicProfileType('business');
-                                                    setPublicProfileId(business.id);
+                                                    setPublicProfileId(targetBusiness.id);
                                                     setShowPublicProfile(true);
                                                 }}
                                                 className="flex flex-col items-start flex-1 min-w-0 cursor-pointer group/pub"
                                             >
                                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none group-hover/pub:text-orange-400 transition-colors">Publicado por</p>
                                                 <div className="flex items-center gap-2">
-                                                    <p className="text-sm font-black text-white truncate group-hover/pub:text-orange-400 transition-colors">{business.name}</p>
+                                                    <p className="text-sm font-black text-white truncate group-hover/pub:text-orange-400 transition-colors">{targetBusiness.name}</p>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 w-full sm:w-auto">
+                                            {targetBusiness.menuUrl && isRestaurant && (
+                                                <a
+                                                    href={targetBusiness.menuUrl.startsWith('http') ? targetBusiness.menuUrl : `https://${targetBusiness.menuUrl}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-pink-500/20 text-pink-300 border border-pink-500/30 hover:bg-pink-500/30 transition-all shadow-lg shadow-pink-500/10"
+                                                    title="Ver Menú / Carta Digital"
+                                                >
+                                                    <QrCode className="w-3.5 h-3.5 text-pink-400" />
+                                                    <span>Menú</span>
+                                                </a>
+                                            )}
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    handleToggleFollow(business.id);
+                                                    handleToggleFollow(targetBusiness.id);
                                                 }}
                                                 className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                                                    isBusinessFollowed(business.id)
+                                                    isBusinessFollowed(targetBusiness.id)
                                                         ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
                                                         : 'bg-white/5 text-white border border-white/10'
                                                 }`}
                                             >
-                                                {isBusinessFollowed(business.id) ? (
+                                                {isBusinessFollowed(targetBusiness.id) ? (
                                                     <>
                                                         <UserCheck className="w-3.5 h-3.5" />
                                                         <span>Siguiendo</span>
@@ -437,8 +458,24 @@ export const EventModal: React.FC<EventModalProps> = ({
                             </div>
                         </div>
 
-                        {/* Botón RSVP */}
-                        <div className="pt-4">
+                        {/* Botones de Acción y RSVP */}
+                        <div className="pt-4 space-y-3">
+                            {/* Botón Ver Menú / Carta Digital para Restaurantes */}
+                            {targetBusiness && targetBusiness.menuUrl && isRestaurant && (
+                                <a
+                                    href={targetBusiness.menuUrl.startsWith('http') ? targetBusiness.menuUrl : `https://${targetBusiness.menuUrl}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-full py-4 px-6 bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-pink-500/20 group border border-white/10 text-white flex items-center justify-center gap-2.5 font-black uppercase text-xs tracking-wider"
+                                >
+                                    <QrCode className="w-5 h-5 text-white group-hover:rotate-12 transition-transform" />
+                                    <span>Ver Menú / Carta Digital</span>
+                                    <ExternalLink className="w-4 h-4 text-white/80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                </a>
+                            )}
+
+                            {/* Botón RSVP */}
                             <button
                                 onClick={onRsvp}
                                 className={`w-full py-5 font-black rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 uppercase tracking-wider relative overflow-hidden transition-all active:scale-95 group ${(event as any).isPulsing
@@ -461,11 +498,11 @@ export const EventModal: React.FC<EventModalProps> = ({
                                 )}
                             </button>
 
-                            {business?.whatsapp && (
+                            {targetBusiness?.whatsapp && (
                                 <div className="mt-4 flex flex-col items-center gap-2">
                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Contacto Directo</p>
                                     <a
-                                        href={`https://wa.me/${business.whatsapp}`}
+                                        href={`https://wa.me/${targetBusiness.whatsapp}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-2 px-6 py-3 bg-green-500/10 text-green-400 rounded-full border border-green-500/20"
