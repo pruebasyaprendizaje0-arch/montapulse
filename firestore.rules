@@ -233,69 +233,6 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
-    
-    // Booking Addons
-    match /booking_addons/{businessId} {
-      allow read: if true;
-      allow write: if isAdmin() || (
-        isAuthenticated() && 
-        get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid
-      );
-    }
-
-    // Booking Configs
-    match /booking_configs/{businessId} {
-      allow read: if true;
-      allow write: if isAdmin() || (
-        isAuthenticated() && 
-        get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid
-      );
-    }
-
-    // Booking Inventories
-    match /room_inventories/{itemId} {
-      allow read: if true;
-      allow write: if isAdmin() || (
-        isAuthenticated() && 
-        (
-          (request.resource != null && get(/databases/$(database)/documents/businesses/$(request.resource.data.businessId)).data.ownerId == request.auth.uid) ||
-          (resource != null && get(/databases/$(database)/documents/businesses/$(resource.data.businessId)).data.ownerId == request.auth.uid)
-        )
-      );
-    }
-    match /table_inventories/{itemId} {
-      allow read: if true;
-      allow write: if isAdmin() || (
-        isAuthenticated() && 
-        (
-          (request.resource != null && get(/databases/$(database)/documents/businesses/$(request.resource.data.businessId)).data.ownerId == request.auth.uid) ||
-          (resource != null && get(/databases/$(database)/documents/businesses/$(resource.data.businessId)).data.ownerId == request.auth.uid)
-        )
-      );
-    }
-    match /slot_inventories/{itemId} {
-      allow read: if true;
-      allow write: if isAdmin() || (
-        isAuthenticated() && 
-        (
-          (request.resource != null && get(/databases/$(database)/documents/businesses/$(request.resource.data.businessId)).data.ownerId == request.auth.uid) ||
-          (resource != null && get(/databases/$(database)/documents/businesses/$(resource.data.businessId)).data.ownerId == request.auth.uid)
-        )
-      );
-    }
-
-    // Bookings
-    match /bookings/{bookingId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if isAdmin() || (
-        isAuthenticated() && 
-        (
-          (request.resource != null && get(/databases/$(database)/documents/businesses/$(request.resource.data.businessId)).data.ownerId == request.auth.uid) ||
-          (resource != null && get(/databases/$(database)/documents/businesses/$(resource.data.businessId)).data.ownerId == request.auth.uid)
-        )
-      );
-    }
 
     // Master data: Público read, Admin write
     match /categories/{id} {

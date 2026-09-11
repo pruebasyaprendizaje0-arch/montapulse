@@ -9,7 +9,7 @@ import { db } from '../../../firebase.config';
 import { collection, doc, getDoc, getDocs, updateDoc, setDoc } from 'firebase/firestore';
 import { useToast } from '../../../context/ToastContext';
 
-type AdminPaymentTab = 'plans' | 'bookings' | 'menus';
+type AdminPaymentTab = 'plans' | 'menus';
 
 export const PaymentsPanel: React.FC = () => {
     const { transactions, allUsers, businesses } = useData();
@@ -19,12 +19,6 @@ export const PaymentsPanel: React.FC = () => {
     const [filterPlan, setFilterPlan] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
     const [selectedTx, setSelectedTx] = useState<any | null>(null);
-
-    // Bookings Addon approvals
-    const [addons, setAddons] = useState<any[]>([]);
-    const [loadingAddons, setLoadingAddons] = useState(false);
-    const [addonSearch, setAddonSearch] = useState('');
-    const [addonFilterStatus, setAddonFilterStatus] = useState('all');
 
     // Menus Addon approvals
     const [menuSearch, setMenuSearch] = useState('');
@@ -58,84 +52,7 @@ export const PaymentsPanel: React.FC = () => {
         return map;
     }, [businesses]);
 
-    useEffect(() => {
-        if (activeTab === 'bookings') {
-            loadAddons();
-        }
-    }, [activeTab]);
 
-    const loadAddons = async () => {
-        try {
-            setLoadingAddons(true);
-            const snap = await getDocs(collection(db, 'booking_addons'));
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            setAddons(list);
-        } catch (err) {
-            console.error('Error fetching addons:', err);
-            showToast('Error al cargar suscripciones de reservas.', 'error');
-        } finally {
-            setLoadingAddons(false);
-        }
-    };
-
-    const handleApproveAddon = async (bizId: string) => {
-        try {
-            const now = new Date();
-            const expires = new Date();
-            expires.setDate(now.getDate() + 30);
-
-            // Update subscription to active using setDoc with merge to support non-existent docs
-            const addonRef = doc(db, 'booking_addons', bizId);
-            await setDoc(addonRef, {
-                businessId: bizId,
-                status: 'active',
-                activatedAt: now,
-                expiresAt: expires,
-                updatedAt: now
-            }, { merge: true });
-
-            // Auto initialize config
-            const configRef = doc(db, 'booking_configs', bizId);
-            const configSnap = await getDoc(configRef);
-            if (!configSnap.exists()) {
-                await setDoc(configRef, {
-                    businessId: bizId,
-                    bookingType: 'rooms',
-                    isEnabled: true,
-                    updatedAt: now
-                });
-            } else {
-                await setDoc(configRef, {
-                    isEnabled: true,
-                    updatedAt: now
-                }, { merge: true });
-            }
-
-            showToast('Add-on de reservas aprobado y activado con éxito.', 'success');
-            loadAddons();
-        } catch (err) {
-            console.error('Error approving addon:', err);
-            showToast('Error al aprobar el add-on.', 'error');
-        }
-    };
-
-    const handleRejectAddon = async (bizId: string) => {
-        const confirmReject = window.confirm('¿Seguro que deseas rechazar este pago de reservas?');
-        if (!confirmReject) return;
-
-        try {
-            const addonRef = doc(db, 'booking_addons', bizId);
-            await setDoc(addonRef, {
-                status: 'inactive',
-                updatedAt: new Date()
-            }, { merge: true });
-            showToast('Add-on de reservas rechazado.', 'success');
-            loadAddons();
-        } catch (err) {
-            console.error('Error rejecting addon:', err);
-            showToast('Error al rechazar el add-on.', 'error');
-        }
-    };
 
     const handleApproveMenu = async (bizId: string) => {
         try {
@@ -207,31 +124,6 @@ export const PaymentsPanel: React.FC = () => {
         });
     }, [transactions, searchQuery, filterPlan, filterStatus, userMap]);
 
-    // Filtered Addons (maps over all businesses so they all show up)
-    const filteredAddons = useMemo(() => {
-        const allAddons = businesses.map(biz => {
-            const ad = addons.find(a => a.businessId === biz.id);
-            return {
-                id: biz.id,
-                businessId: biz.id,
-                name: biz.name,
-                category: biz.category,
-                sector: biz.sector,
-                status: ad ? ad.status : 'inactive',
-                paymentMethod: ad ? ad.paymentMethod : null,
-                paymentReceiptUrl: ad ? ad.paymentReceiptUrl : null,
-                expiresAt: ad ? ad.expiresAt : null
-            };
-        });
-
-        return allAddons.filter(ad => {
-            const searchStr = addonSearch.toLowerCase();
-            const matchesSearch = !addonSearch || ad.name.toLowerCase().includes(searchStr);
-            const matchesStatus = addonFilterStatus === 'all' || ad.status === addonFilterStatus;
-
-            return matchesSearch && matchesStatus;
-        });
-    }, [businesses, addons, addonSearch, addonFilterStatus]);
 
     // Filtered Menus (maps over all businesses so they all show up)
     const filteredMenus = useMemo(() => {
@@ -288,12 +180,6 @@ export const PaymentsPanel: React.FC = () => {
                     className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'plans' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-400 hover:text-white bg-white/5'}`}
                 >
                     Suscripciones a Planes
-                </button>
-                <button 
-                    onClick={() => setActiveTab('bookings')}
-                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'bookings' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-400 hover:text-white bg-white/5'}`}
-                >
-                    Aprobación Reservas ($5 Add-on)
                 </button>
                 <button 
                     onClick={() => setActiveTab('menus')}
@@ -435,140 +321,6 @@ export const PaymentsPanel: React.FC = () => {
                         </div>
                     </div>
                 </>
-            ) : activeTab === 'bookings' ? (
-                <div className="space-y-4">
-                    {/* Addons filters */}
-                    <div className="flex flex-col sm:flex-row gap-3">
-                        <div className="flex-1 flex items-center gap-3 bg-neutral-900/50 p-3 sm:p-4 rounded-2xl border border-white/5 shadow-xl">
-                            <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                            <input 
-                                type="text" 
-                                placeholder="Buscar por negocio..." 
-                                className="bg-transparent border-none text-white text-xs sm:text-sm w-full focus:outline-none"
-                                value={addonSearch}
-                                onChange={e => setAddonSearch(e.target.value)}
-                            />
-                        </div>
-                        <select 
-                            value={addonFilterStatus}
-                            onChange={e => setAddonFilterStatus(e.target.value)}
-                            className="bg-neutral-900/50 border border-white/5 text-white text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl outline-none focus:border-orange-500/50 cursor-pointer"
-                        >
-                            <option value="all">Todos los Estados</option>
-                            <option value="pending_approval">Pendientes de Aprobación</option>
-                            <option value="active">Activos</option>
-                            <option value="inactive">Inactivos</option>
-                        </select>
-                    </div>
-
-                    {loadingAddons ? (
-                        <div className="py-12 flex items-center justify-center">
-                            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                    ) : (
-                        <div className="bg-neutral-900/40 rounded-2xl border border-white/5 overflow-hidden shadow-2xl">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="border-b border-white/5 bg-black/40 text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                            <th className="p-4">Negocio</th>
-                                            <th className="p-4">Método</th>
-                                            <th className="p-4">Estado</th>
-                                            <th className="p-4 text-center">Comprobante</th>
-                                            <th className="p-4 text-center">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {filteredAddons.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={5} className="p-8 text-center text-xs text-slate-500 font-medium">
-                                                    No se encontraron suscripciones Add-on.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            filteredAddons.map(ad => {
-                                                return (
-                                                    <tr key={ad.id} className="hover:bg-white/[0.02] transition-colors text-xs text-slate-300">
-                                                        <td className="p-4 text-left">
-                                                            <p className="font-bold text-white">{ad.name || 'Negocio Desconocido'}</p>
-                                                            <p className="text-[10px] text-slate-500">{ad.category} · {ad.sector}</p>
-                                                        </td>
-                                                        <td className="p-4 capitalize">
-                                                            {ad.paymentMethod === 'manual' ? (
-                                                                <span className="flex items-center gap-1.5 text-indigo-400 font-bold">
-                                                                    <Banknote className="w-3.5 h-3.5" /> Manual
-                                                                </span>
-                                                            ) : ad.paymentMethod === 'dlocal' ? (
-                                                                <span className="flex items-center gap-1.5 text-sky-400 font-bold">
-                                                                    <CreditCard className="w-3.5 h-3.5" /> Automático
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-slate-500 text-[10px]">Ninguno (Manual)</span>
-                                                            )}
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${ad.status === 'active' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20' : ad.status === 'pending_approval' ? 'bg-amber-500/20 text-amber-500 border border-amber-500/20 animate-pulse' : 'bg-red-500/20 text-red-400'}`}>
-                                                                {ad.status === 'pending_approval' ? 'Pte. Aprobación' : ad.status === 'active' ? 'Activo' : 'Inactivo'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-4 text-center">
-                                                            {ad.paymentReceiptUrl ? (
-                                                                <button 
-                                                                    onClick={() => setPreviewImage(ad.paymentReceiptUrl)}
-                                                                    className="p-1 px-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1 mx-auto"
-                                                                >
-                                                                    <Image className="w-3 h-3" /> Ver Recibo
-                                                                </button>
-                                                            ) : (
-                                                                <span className="text-slate-600 text-[10px]">-</span>
-                                                            )}
-                                                        </td>
-                                                        <td className="p-4 text-center">
-                                                            {ad.status === 'pending_approval' ? (
-                                                                <div className="flex gap-2 justify-center">
-                                                                    <button 
-                                                                        onClick={() => handleApproveAddon(ad.businessId)}
-                                                                        className="p-1 px-2 bg-emerald-500 hover:bg-emerald-600 text-black rounded-lg text-[9px] font-black uppercase flex items-center gap-1"
-                                                                        title="Aprobar Pago"
-                                                                    >
-                                                                        <Check className="w-3 h-3" /> Aprobar
-                                                                    </button>
-                                                                    <button 
-                                                                        onClick={() => handleRejectAddon(ad.businessId)}
-                                                                        className="p-1 px-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"
-                                                                        title="Rechazar Pago"
-                                                                    >
-                                                                        <X className="w-3 h-3" /> Rechazar
-                                                                    </button>
-                                                                </div>
-                                                            ) : ad.status === 'active' ? (
-                                                                <button 
-                                                                    onClick={() => handleRejectAddon(ad.businessId)}
-                                                                    className="p-1 px-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 rounded-lg text-[9px] font-black uppercase flex items-center gap-1 mx-auto"
-                                                                    title="Desactivar Reservas"
-                                                                >
-                                                                    <X className="w-3 h-3" /> Desactivar
-                                                                </button>
-                                                            ) : (
-                                                                <button 
-                                                                    onClick={() => handleApproveAddon(ad.businessId)}
-                                                                    className="p-1 px-3 bg-emerald-500 hover:bg-emerald-600 text-black rounded-lg text-[9px] font-black uppercase flex items-center gap-1 mx-auto"
-                                                                    title="Activar Reservas"
-                                                                >
-                                                                    <Check className="w-3 h-3" /> Activar Manual
-                                                                </button>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-                </div>
             ) : (
                 <div className="space-y-4">
                     {/* Menus filters */}

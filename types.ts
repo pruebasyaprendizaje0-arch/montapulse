@@ -142,6 +142,7 @@ export interface Business {
   phone?: string;
   instagram?: string;
   menuUrl?: string;
+  bookingUrl?: string;
   address?: string;
   ownerId?: string;
   plan: SubscriptionPlan;

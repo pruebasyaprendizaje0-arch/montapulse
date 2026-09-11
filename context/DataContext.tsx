@@ -64,6 +64,7 @@ interface DataContextType {
         phone: string;
         instagram: string;
         menuUrl?: string;
+        bookingUrl?: string;
         address?: string;
         category: BusinessCategory;
         coordinates?: [number, number];
@@ -87,6 +88,7 @@ interface DataContextType {
         phone: string;
         instagram: string;
         menuUrl?: string;
+        bookingUrl?: string;
         address?: string;
         category: BusinessCategory;
         coordinates?: [number, number];
@@ -378,6 +380,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         phone: '',
         instagram: '',
         menuUrl: '',
+        bookingUrl: '',
         address: '',
         category: BusinessCategory.RESTAURANTE,
         coordinates: null as any,
@@ -659,6 +662,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     phone: business.phone || '',
                     instagram: business.instagram || '',
                     menuUrl: business.menuUrl || '',
+                    bookingUrl: business.bookingUrl || '',
                     address: business.address || '',
                     category: business.category || BusinessCategory.RESTAURANTE,
                     imageUrl: business.imageUrl || '',

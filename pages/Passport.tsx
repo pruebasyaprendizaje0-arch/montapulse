@@ -26,8 +26,7 @@ import { DownloadManuals } from '../components/Passport/DownloadManuals';
 import { SuperAdminCenter } from '../components/Admin/SuperAdminCenter';
 import { AIMarketingModal } from '../components/Modals/AIMarketingModal';
 import CouponManagerModal from '../components/Modals/CouponManagerModal';
-import { BookingManagerModal } from '../components/Modals/BookingManagerModal';
-import { CalendarDays, QrCode } from 'lucide-react';
+import { QrCode, CalendarCheck } from 'lucide-react';
 import { UserWalletModal } from '../components/Coupons/UserWalletModal';
 import { subscribeToPublicCoupons, obtainCoupon, subscribeToUserWallet } from '../services/couponService';
 import { CouponCard } from '../components/Coupons/CouponCard';
@@ -97,7 +96,6 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const [showAdminCenter, setShowAdminCenter] = useState(false);
     const [showAIMarketing, setShowAIMarketing] = useState(false);
     const [showCouponManager, setShowCouponManager] = useState(false);
-    const [showBookingManager, setShowBookingManager] = useState(false);
     const [showUserWallet, setShowUserWallet] = useState(false);
     const [initialWalletRedemptionId, setInitialWalletRedemptionId] = useState<string | null>(null);
     const [showCopied, setShowCopied] = useState(false);
@@ -855,16 +853,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                                 <Ticket className="w-3.5 h-3.5" />
                                                 Cupones
                                             </button>
-                                            <button
-                                                 onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setShowBookingManager(true);
-                                                }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-orange-500/10 flex items-center gap-1.5 shrink-0"
-                                            >
-                                                <CalendarDays className="w-3.5 h-3.5" />
-                                                Reservas
-                                            </button>
+
                                             <button
                                                  onClick={(e) => {
                                                     e.stopPropagation();
@@ -881,6 +870,23 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                                             >
                                                 <QrCode className="w-3.5 h-3.5" />
                                                 Menú QR
+                                            </button>
+                                            <button
+                                                 onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (biz.bookingUrl) {
+                                                        window.open(biz.bookingUrl.startsWith('http') ? biz.bookingUrl : `https://${biz.bookingUrl}`, '_blank');
+                                                    } else {
+                                                        setEditingBusinessId(biz.id);
+                                                        setShowBusinessEdit(true);
+                                                        showToast('Configura el enlace a tu Sistema de Reservas en la sección de edición.', 'info');
+                                                    }
+                                                }}
+                                                className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-orange-500/10 flex items-center gap-1.5 shrink-0"
+                                                title={biz.bookingUrl ? "Abrir Sistema de Reservas" : "Configurar enlace de Reservas"}
+                                            >
+                                                <CalendarCheck className="w-3.5 h-3.5" />
+                                                Reservas
                                             </button>
                                             <button
                                                  onClick={(e) => {
@@ -1723,13 +1729,6 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                 />
             )}
 
-            {showBookingManager && userBusiness && (
-                <BookingManagerModal
-                    isOpen={showBookingManager}
-                    onClose={() => setShowBookingManager(false)}
-                    businessId={userBusiness.id}
-                />
-            )}
 
             {showUserWallet && user && (
                 <UserWalletModal

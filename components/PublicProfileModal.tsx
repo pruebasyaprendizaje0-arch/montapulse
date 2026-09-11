@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronLeft, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2, Compass, QrCode, ExternalLink } from 'lucide-react';
+import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronLeft, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2, Compass, QrCode, ExternalLink, CalendarCheck } from 'lucide-react';
 import { Business, UserProfile, MontanitaEvent, ProfileReview, Coupon, Sector, MapEntryType } from '../types';
 import { useData } from '../context/DataContext';
 import { BASE_URL, SECTOR_INFO } from '../constants';
@@ -9,7 +9,7 @@ import { useAuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { getEcuadorDate, isBusinessOpen } from '../utils/timeUtils';
 import { useSEO } from '../hooks/useSEO';
-import { BookingWidget } from './BookingWidget';
+
 
 
 
@@ -523,6 +523,22 @@ export const PublicProfileModal = React.memo(({
                                 </div>
                             )}
 
+                            {/* Enlace a Sistema de Reservas Digital */}
+                            {business && business.bookingUrl && (
+                                <div className="w-full">
+                                    <a
+                                        href={business.bookingUrl.startsWith('http') ? business.bookingUrl : `https://${business.bookingUrl}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full flex items-center justify-center gap-2.5 px-4 py-4 bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-orange-500/20 group border border-white/10 text-white"
+                                    >
+                                        <CalendarCheck className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
+                                        <span className="text-[10px] font-black text-white uppercase tracking-[0.1em]">Reservar Online</span>
+                                        <ExternalLink className="w-3.5 h-3.5 text-white/80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                    </a>
+                                </div>
+                            )}
+
                             {/* Primary Actions Row */}
                             <div className="flex gap-3 w-full">
                                 <button
@@ -587,12 +603,6 @@ export const PublicProfileModal = React.memo(({
                         <div className="absolute -bottom-4 -right-4 text-4xl text-white/5 font-serif">"</div>
                     </div>
 
-                    {/* Booking Module */}
-                    {business && (
-                        <div className="w-full">
-                            <BookingWidget businessId={business.id} />
-                        </div>
-                    )}
 
 
                     {/* Products and Services Section */}

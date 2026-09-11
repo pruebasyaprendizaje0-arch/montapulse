@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings, Share2, UserPlus, UserCheck, QrCode, ExternalLink, Utensils } from 'lucide-react';
+import { X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings, Share2, UserPlus, UserCheck, QrCode, ExternalLink, Utensils, CalendarCheck } from 'lucide-react';
 import { MontanitaEvent, Business, Sector, BusinessCategory } from '../types';
 import { Skeleton } from './Skeleton';
 import { SECTOR_INFO, BASE_URL } from '../constants';
@@ -375,6 +375,19 @@ export const EventModal: React.FC<EventModalProps> = ({
                                                     <span>Menú</span>
                                                 </a>
                                             )}
+                                            {targetBusiness.bookingUrl && (
+                                                <a
+                                                    href={targetBusiness.bookingUrl.startsWith('http') ? targetBusiness.bookingUrl : `https://${targetBusiness.bookingUrl}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:bg-orange-500/30 transition-all shadow-lg shadow-orange-500/10"
+                                                    title="Reservar Online"
+                                                >
+                                                    <CalendarCheck className="w-3.5 h-3.5 text-orange-400" />
+                                                    <span>Reservas</span>
+                                                </a>
+                                            )}
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -471,6 +484,21 @@ export const EventModal: React.FC<EventModalProps> = ({
                                 >
                                     <QrCode className="w-5 h-5 text-white group-hover:rotate-12 transition-transform" />
                                     <span>Ver Menú / Carta Digital</span>
+                                    <ExternalLink className="w-4 h-4 text-white/80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                </a>
+                            )}
+
+                            {/* Botón Reservar Online */}
+                            {targetBusiness && targetBusiness.bookingUrl && (
+                                <a
+                                    href={targetBusiness.bookingUrl.startsWith('http') ? targetBusiness.bookingUrl : `https://${targetBusiness.bookingUrl}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-full py-4 px-6 bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-600 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-orange-500/20 group border border-white/10 text-white flex items-center justify-center gap-2.5 font-black uppercase text-xs tracking-wider"
+                                >
+                                    <CalendarCheck className="w-5 h-5 text-white group-hover:scale-110 transition-transform" />
+                                    <span>Reservar Online</span>
                                     <ExternalLink className="w-4 h-4 text-white/80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                                 </a>
                             )}

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass, QrCode, ExternalLink } from 'lucide-react';
+import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass, QrCode, ExternalLink, CalendarCheck } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS } from '../../constants';
 import { Sector, BusinessCategory, MapEntryType } from '../../types';
@@ -462,6 +462,37 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                 </div>
                                 <p className="text-[11px] text-slate-400 leading-relaxed">
                                     Ingresa el enlace de tu menú digital o carta QR externa para que tus clientes puedan abrirlo directamente desde tu perfil público y tarjeta de negocio.
+                                </p>
+                            </div>
+
+                            {/* Enlace a Sistema de Reservas Digital */}
+                            <div className="p-5 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-yellow-500/10 border border-orange-500/20 rounded-3xl space-y-3">
+                                <label className="text-xs font-black text-orange-400 uppercase tracking-widest flex items-center gap-2">
+                                    <CalendarCheck className="w-4 h-4 text-orange-400" />
+                                    Enlace a Sistema de Reservas Digital
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type="url"
+                                        value={data.bookingUrl || ''}
+                                        onChange={(e) => updateField('bookingUrl', e.target.value)}
+                                        placeholder="https://tureserva.com/... o Booking / Calendly / WhatsApp"
+                                        className="w-full bg-slate-900/80 border border-white/10 rounded-2xl px-5 py-3.5 text-white font-medium text-sm focus:ring-2 focus:ring-orange-500 outline-none transition-all placeholder:text-slate-600"
+                                    />
+                                    {data.bookingUrl && (
+                                        <a
+                                            href={data.bookingUrl.startsWith('http') ? data.bookingUrl : `https://${data.bookingUrl}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-xl transition-colors"
+                                            title="Probar enlace"
+                                        >
+                                            <ExternalLink className="w-4 h-4" />
+                                        </a>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                    Ingresa el enlace de tu sistema de reservas externo (Booking, Airbnb, Calendly, WhatsApp directo o motor propio) para que tus clientes puedan reservar con un solo clic.
                                 </p>
                             </div>
                         </>
