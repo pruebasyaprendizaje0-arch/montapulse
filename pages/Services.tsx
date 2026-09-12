@@ -261,7 +261,11 @@ const BusinessCard: React.FC<BusinessCardProps> = ({ business, onOpenProfile, on
 
 // ── Main Services Page ─────────────────────────────────
 export const Services: React.FC = () => {
-    const { businesses, masterCategories = [], customLocalities = [], loading } = useData();
+    const { 
+        businesses, masterCategories = [], customLocalities = [], loading,
+        isAdmin, isSuperAdmin, isSuperUser, setShowBusinessEdit, setEditingBusinessId,
+        handleDeleteBusiness
+    } = useData();
     const navigate = useNavigate();
 
     const [search, setSearch] = useState('');
@@ -543,11 +547,18 @@ export const Services: React.FC = () => {
                 )}
             </div>
 
-            {/* ── Business Detail Modal ── */}
+            {/* ── Business Detail Page ── */}
             <PublicProfileModal
                 isOpen={!!selectedBusinessId}
                 onClose={() => setSelectedBusinessId(null)}
                 businessId={selectedBusinessId ?? undefined}
+                canEditAll={isAdmin || isSuperAdmin || isSuperUser}
+                onEditBusiness={(business) => {
+                    setSelectedBusinessId(null);
+                    setEditingBusinessId(business.id);
+                    setShowBusinessEdit(true);
+                }}
+                onDeleteBusiness={handleDeleteBusiness}
             />
         </div>
     );

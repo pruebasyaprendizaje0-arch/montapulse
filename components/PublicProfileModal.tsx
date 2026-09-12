@@ -243,41 +243,46 @@ export const PublicProfileModal = React.memo(({
 
     if (isDataLoading) {
         return (
-            <div className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
-                <div className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl animate-in zoom-in duration-300">
-                    {/* Close button */}
-                    <div className="absolute top-6 right-6 z-10">
-                        <button onClick={onClose} className="p-2 bg-black/20 hover:bg-black/40 rounded-full text-white/80 hover:text-white transition-all">
+            <div className="fixed inset-0 z-[4000] bg-slate-950 overflow-y-auto overflow-x-hidden min-h-screen text-slate-100 flex flex-col animate-in fade-in duration-200">
+                <div className="w-full max-w-2xl mx-auto flex-1 flex flex-col min-h-screen">
+                    {/* Header bar */}
+                    <div className="p-4 sm:p-6 flex items-center justify-between border-b border-white/5 bg-slate-900/40 backdrop-blur-md sticky top-0 z-30">
+                        <button
+                            onClick={onClose}
+                            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-all text-xs font-bold"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                            <span>Volver</span>
+                        </button>
+                        <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-white/80 hover:text-white transition-all">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
                     {/* Skeleton Header */}
-                    <div className="relative h-48 bg-slate-800/50 animate-pulse">
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent" />
+                    <div className="relative h-64 bg-slate-800/50 animate-pulse">
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent" />
                     </div>
-                    <div className="px-8 pb-10 -mt-12 space-y-6">
+                    <div className="px-6 sm:px-8 pb-12 -mt-16 space-y-6 flex flex-col items-center text-center">
                         {/* Avatar skeleton */}
-                        <div className="flex items-end gap-6">
-                            <div className="w-24 h-24 rounded-[1.8rem] bg-slate-700/80 border-4 border-slate-900 animate-pulse shrink-0" />
-                            <div className="pb-2 flex-1 space-y-3">
-                                <div className="h-6 w-48 bg-slate-700/80 rounded-xl animate-pulse" />
-                                <div className="h-4 w-32 bg-slate-800/80 rounded-lg animate-pulse" />
-                            </div>
+                        <div className="w-32 h-32 rounded-[2.5rem] bg-slate-800 border-4 border-slate-900 animate-pulse shadow-2xl" />
+                        <div className="space-y-3 w-full max-w-sm flex flex-col items-center">
+                            <div className="h-7 w-56 bg-slate-800 rounded-xl animate-pulse" />
+                            <div className="h-4 w-36 bg-slate-800/60 rounded-lg animate-pulse" />
                         </div>
                         {/* Stats skeleton */}
-                        <div className="grid grid-cols-3 gap-4">
-                            {[1,2,3].map(i => (
-                                <div key={i} className="bg-slate-800/50 rounded-2xl p-4 space-y-2 animate-pulse">
-                                    <div className="h-6 w-12 bg-slate-700/80 rounded mx-auto" />
-                                    <div className="h-3 w-16 bg-slate-700/60 rounded mx-auto" />
+                        <div className="grid grid-cols-3 gap-4 w-full max-w-md pt-4">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="bg-slate-900/60 rounded-2xl p-4 space-y-2 animate-pulse border border-white/5">
+                                    <div className="h-6 w-12 bg-slate-800 rounded mx-auto" />
+                                    <div className="h-3 w-16 bg-slate-800/60 rounded mx-auto" />
                                 </div>
                             ))}
                         </div>
                         {/* Content skeleton */}
-                        <div className="space-y-3">
+                        <div className="space-y-3 w-full max-w-md pt-4">
                             <div className="h-4 w-full bg-slate-800/60 rounded-lg animate-pulse" />
-                            <div className="h-4 w-5/6 bg-slate-800/60 rounded-lg animate-pulse" />
-                            <div className="h-4 w-4/6 bg-slate-800/60 rounded-lg animate-pulse" />
+                            <div className="h-4 w-5/6 bg-slate-800/60 rounded-lg animate-pulse mx-auto" />
+                            <div className="h-4 w-4/6 bg-slate-800/60 rounded-lg animate-pulse mx-auto" />
                         </div>
                     </div>
                 </div>
@@ -302,44 +307,49 @@ export const PublicProfileModal = React.memo(({
     const totalEventClicks = allBusinessPulses.reduce((sum, e) => sum + (e.clickCount || 0), 0);
 
     return (
-        <>
-            <div
-                className="fixed inset-0 z-[4000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300"
-                onClick={onClose}
-            >
-            <div
-                className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto no-scrollbar"
-                onClick={e => e.stopPropagation()}
-            >
+        <div className="fixed inset-0 z-[4000] bg-slate-950 overflow-y-auto overflow-x-hidden min-h-screen text-slate-100 flex flex-col animate-in fade-in duration-200">
+            <div className="w-full max-w-2xl mx-auto flex-1 flex flex-col min-h-screen pb-16 bg-slate-950">
                 {/* Profile Header */}
-                <div className="relative h-56 shrink-0">
+                <div className="relative h-64 sm:h-72 shrink-0">
                     {/* Background Image/Gradient */}
-                    <div className="absolute inset-0 bg-slate-800">
+                    <div className="absolute inset-0 bg-slate-900">
                         {business?.imageUrl ? (
                             <img 
                                 src={business.imageUrl} 
-                                className="w-full h-full object-cover opacity-40 blur-[1px]" 
+                                className="w-full h-full object-cover opacity-50 blur-[1px]" 
                                 alt="" 
                             />
                         ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-indigo-600 to-purple-800" />
+                            <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-950" />
                         )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent" />
                     </div>
 
-                    <div className="absolute top-6 right-6 flex items-center gap-2 z-10">
-                        {canEditAll && business && (
-                            <>
+                    {/* Top Bar Floating Controls */}
+                    <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-6 sm:right-6 flex items-center justify-between z-20">
+                        {/* Volver button on top left */}
+                        <button
+                            onClick={onClose}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-black/50 hover:bg-black/70 rounded-full text-white/95 hover:text-white transition-all backdrop-blur-md border border-white/10 text-xs font-black shadow-lg cursor-pointer select-none"
+                        >
+                            <ChevronLeft className="w-4 h-4 text-white" />
+                            <span>Volver</span>
+                        </button>
+
+                        <div className="flex items-center gap-2">
+                            {business && (canEditAll || (currentUser && (business.ownerId === currentUser.id || currentUser.businessId === business.id))) && (
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         onEditBusiness?.(business);
                                     }}
-                                    className="p-2.5 bg-sky-500/80 hover:bg-sky-500 rounded-full text-white transition-all shadow-lg shadow-sky-500/20 backdrop-blur-md"
+                                    className="p-2.5 bg-sky-500/80 hover:bg-sky-500 rounded-full text-white transition-all shadow-lg shadow-sky-500/20 backdrop-blur-md border border-white/10"
                                     title="Editar Negocio"
                                 >
-                                    <Edit3 className="w-5 h-5" />
+                                    <Edit3 className="w-4 h-4" />
                                 </button>
+                            )}
+                            {canEditAll && business && (
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -348,19 +358,20 @@ export const PublicProfileModal = React.memo(({
                                             onClose();
                                         }
                                     }}
-                                    className="p-2.5 bg-rose-500/80 hover:bg-rose-500 rounded-full text-white transition-all shadow-lg shadow-rose-500/20 backdrop-blur-md"
+                                    className="p-2.5 bg-rose-500/80 hover:bg-rose-500 rounded-full text-white transition-all shadow-lg shadow-rose-500/20 backdrop-blur-md border border-white/10"
                                     title="Eliminar Negocio"
                                 >
-                                    <Trash2 className="w-5 h-5" />
+                                    <Trash2 className="w-4 h-4" />
                                 </button>
-                            </>
-                        )}
-                        <button
-                            onClick={onClose}
-                            className="p-2.5 bg-black/40 hover:bg-black/60 rounded-full text-white/90 hover:text-white transition-all backdrop-blur-md"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
+                            )}
+                            <button
+                                onClick={onClose}
+                                className="p-2.5 bg-black/50 hover:bg-black/70 rounded-full text-white/90 hover:text-white transition-all backdrop-blur-md border border-white/10"
+                                title="Cerrar"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
 
                     {/* Main Image - Even more centered and prominent */}
@@ -540,10 +551,10 @@ export const PublicProfileModal = React.memo(({
                             )}
 
                             {/* Primary Actions Row */}
-                            <div className="flex gap-3 w-full">
+                            <div className="w-full">
                                 <button
                                     onClick={() => businessId && handleToggleFollow(businessId)}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
+                                    className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
                                         isFollowing 
                                         ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' 
                                         : 'bg-white/5 text-white border border-white/10 hover:bg-white/10'
@@ -552,18 +563,6 @@ export const PublicProfileModal = React.memo(({
                                     {isFollowing ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
                                     {isFollowing ? 'Siguiendo' : 'Seguir'}
                                 </button>
-
-                                {business?.whatsapp && (
-                                    <a
-                                        href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex-1 flex items-center justify-center gap-2 py-4 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 font-black text-[10px] uppercase tracking-widest hover:bg-emerald-500/20 transition-all shadow-lg shadow-emerald-500/5"
-                                    >
-                                        <MessageCircle className="w-4 h-4" />
-                                        WhatsApp
-                                    </a>
-                                )}
                             </div>
 
                             {/* Secondary Actions / Info */}
@@ -827,10 +826,26 @@ export const PublicProfileModal = React.memo(({
                         </div>
                     )}
 
-                    
+                    </div>
+                </div>
+
+                {/* Floating WhatsApp Action Button */}
+                {business?.whatsapp && (
+                    <a
+                        href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`¡Hola ${business.name}! Los encontré en MontaPulse.`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="fixed bottom-6 right-6 z-[4100] flex items-center gap-2.5 px-5 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs uppercase tracking-wider rounded-full shadow-[0_10px_30px_rgba(16,185,129,0.45)] hover:shadow-[0_15px_40px_rgba(16,185,129,0.6)] hover:scale-105 active:scale-95 transition-all duration-300 border border-white/20 group animate-in slide-in-from-bottom-5"
+                        title="Contactar por WhatsApp"
+                    >
+                        <div className="relative flex items-center justify-center">
+                            <MessageCircle className="w-5 h-5 text-white fill-white/20 group-hover:rotate-12 transition-transform" />
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-300 rounded-full animate-ping" />
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-300 rounded-full" />
+                        </div>
+                        <span className="font-black tracking-widest text-[11px]">WhatsApp</span>
+                    </a>
+                )}
             </div>
-            </div>
-            </div>
-        </>
     );
 });

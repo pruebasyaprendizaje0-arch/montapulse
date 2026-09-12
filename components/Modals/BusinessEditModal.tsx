@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass, QrCode, ExternalLink, CalendarCheck } from 'lucide-react';
+import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass, QrCode, ExternalLink, CalendarCheck, ChevronLeft } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS } from '../../constants';
 import { Sector, BusinessCategory, MapEntryType } from '../../types';
@@ -80,23 +80,38 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
     };
 
     return (
-        <div className="fixed inset-0 z-[2000] bg-slate-900/80 backdrop-blur-md flex items-end justify-center p-4 overflow-y-auto no-scrollbar pt-20">
-            <div className="w-full max-w-lg bg-slate-900 rounded-[3.5rem] p-8 pb-12 max-h-[90vh] overflow-y-auto border border-white/10 shadow-2xl no-scrollbar animate-in slide-in-from-bottom duration-500">
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <h2 className="text-2xl font-black text-white tracking-tight">
-                            {isRegistration 
-                                ? (data.mapType === MapEntryType.SECTOR ? 'Registrar Sector' : data.isReference ? 'Registrar Referencia' : 'Registrar Negocio') 
-                                : (data.mapType === MapEntryType.SECTOR ? 'Editar Sector' : data.isReference ? 'Editar Referencia' : 'Editar Negocio')}
-                        </h2>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">
-                            {isRegistration 
-                                ? (data.mapType === MapEntryType.SECTOR ? 'Identifica un barrio o zona' : data.isReference ? 'Crea un punto de interés' : 'Crea tu perfil comercial') 
-                                : (data.mapType === MapEntryType.SECTOR ? 'Configuración de zona' : data.isReference ? 'Configuración del punto de interés' : 'Configuración del perfil comercial')}
-                        </p>
+        <div className="fixed inset-0 z-[5000] bg-slate-950 overflow-y-auto overflow-x-hidden min-h-screen text-slate-100 flex flex-col animate-in fade-in duration-200">
+            <div className="w-full max-w-2xl mx-auto flex-1 flex flex-col min-h-screen p-4 sm:p-8 pb-20 bg-slate-950">
+                <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5 sticky top-0 bg-slate-950/90 backdrop-blur-md z-30 pt-2">
+                    <div className="flex items-center gap-3">
+                        <button 
+                            type="button"
+                            onClick={handleClose} 
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-white/5 hover:bg-white/10 rounded-full text-white/90 hover:text-white transition-all text-xs font-bold border border-white/10 shadow-sm"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                            <span>Volver</span>
+                        </button>
+                        <div>
+                            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                                {isRegistration 
+                                    ? (data.mapType === MapEntryType.SECTOR ? 'Registrar Sector' : data.isReference ? 'Registrar Referencia' : 'Registrar Negocio') 
+                                    : (data.mapType === MapEntryType.SECTOR ? 'Editar Sector' : data.isReference ? 'Editar Referencia' : 'Editar Negocio')}
+                            </h2>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                                {isRegistration 
+                                    ? (data.mapType === MapEntryType.SECTOR ? 'Identifica un barrio o zona' : data.isReference ? 'Crea un punto de interés' : 'Crea tu perfil comercial') 
+                                    : (data.mapType === MapEntryType.SECTOR ? 'Configuración de zona' : data.isReference ? 'Configuración del punto de interés' : 'Configuración del perfil comercial')}
+                            </p>
+                        </div>
                     </div>
-                    <button onClick={handleClose} className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors group">
-                        <X className="w-6 h-6 text-slate-400 group-hover:text-white transition-colors" />
+                    <button 
+                        type="button"
+                        onClick={handleClose} 
+                        className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors border border-white/10"
+                        title="Cerrar"
+                    >
+                        <X className="w-5 h-5" />
                     </button>
                 </div>
 

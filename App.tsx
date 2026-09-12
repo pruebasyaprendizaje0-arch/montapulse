@@ -1031,7 +1031,11 @@ const Dashboard: React.FC = () => {
             businessId={publicProfileType === 'business' ? publicProfileId || undefined : undefined}
             userId={publicProfileType === 'user' ? publicProfileId || undefined : undefined}
             dataLoading={loading}
-            onEditBusiness={(business) => handleEditBusiness(business.id)}
+            onEditBusiness={(business) => {
+              setShowPublicProfile(false);
+              setPublicProfileId(null);
+              handleEditBusiness(business.id);
+            }}
             onDeleteBusiness={handleDeleteBusiness}
             canEditAll={canEditAllBusiness}
             onViewOnMap={(coords) => {
