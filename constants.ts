@@ -1,8 +1,91 @@
-import { Sector, Vibe, Business, MontanitaEvent, SubscriptionPlan, BusinessCategory, PolicyData, PlanFeatureDefinition } from './types';
+import { Sector, Vibe, Business, MontanitaEvent, SubscriptionPlan, BusinessCategory, PolicyData, PlanFeatureDefinition, Landmark } from './types';
 export type { PlanFeatureDefinition };
 
 export const BASE_URL = 'https://www.ubicame.info';
 
+export const LANDMARKS: Landmark[] = [
+  {
+    id: 'la-punta-montanita',
+    slug: 'la-punta-montanita',
+    name: 'La Punta de Montañita',
+    locality: 'Montañita',
+    sector: Sector.PLAYA,
+    coordinates: [-1.8215, -80.7585],
+    category: 'sports',
+    description: 'Punto icónico de surf con ola derecha de clase mundial y ambiente tranquilo frente al mar.',
+    wikidataUrl: 'https://www.wikidata.org/wiki/Q1018368'
+  },
+  {
+    id: 'el-tigrillo-montanita',
+    slug: 'el-tigrillo-montanita',
+    name: 'Barrio El Tigrillo',
+    locality: 'Montañita',
+    sector: Sector.MONTANA,
+    coordinates: [-1.8210, -80.7485],
+    category: 'natural',
+    description: 'Sector ecológico y residencial rodeado de naturaleza y senderos, apartado del ruido central.'
+  },
+  {
+    id: 'terminal-clp-montanita',
+    slug: 'terminal-clp-montanita',
+    name: 'Terminal de Buses CLP Montañita',
+    locality: 'Montañita',
+    sector: Sector.CENTRO,
+    coordinates: [-1.8270, -80.7530],
+    category: 'transport',
+    description: 'Terminal principal de transporte interprovincial con rutas directas hacia Guayaquil y la costa.'
+  },
+  {
+    id: 'calle-cocteles-montanita',
+    slug: 'calle-cocteles-montanita',
+    name: 'Calle de los Cócteles',
+    locality: 'Montañita',
+    sector: Sector.CENTRO,
+    coordinates: [-1.8258, -80.7540],
+    category: 'cultural',
+    description: 'Paseo peatonal emblemático con puestos de coctelería tropical, música y vida nocturna.'
+  },
+  {
+    id: 'santuario-olon',
+    slug: 'santuario-olon',
+    name: 'Santuario Blanca Estrella de la Mar',
+    locality: 'Olón',
+    sector: Sector.PLAYA,
+    coordinates: [-1.8020, -80.7675],
+    category: 'religious',
+    description: 'Santuario sobre el acantilado con vista panorámica al océano Pacífico y arquitectura en forma de barco.'
+  },
+  {
+    id: 'cascada-alex-olon',
+    slug: 'cascada-alex-olon',
+    name: 'Cascada de Alex en Olón',
+    locality: 'Olón',
+    sector: Sector.MONTANA,
+    coordinates: [-1.7850, -80.7300],
+    category: 'natural',
+    description: 'Sendero ecológico en la Cordillera Chongón-Colonche con cascadas y pozas naturales.'
+  },
+  {
+    id: 'estero-manglaralto',
+    slug: 'estero-manglaralto',
+    name: 'Estero y Malecón de Manglaralto',
+    locality: 'Manglaralto',
+    sector: Sector.PLAYA,
+    coordinates: [-1.8550, -80.7535],
+    category: 'natural',
+    description: 'Extensa playa tranquila y estero de agua dulce con avistamiento de aves marinas y mariscos frescos.'
+  },
+  {
+    id: 'hospital-manglaralto',
+    slug: 'hospital-manglaralto',
+    name: 'Hospital de Manglaralto',
+    locality: 'Manglaralto',
+    sector: Sector.CENTRO,
+    coordinates: [-1.8510, -80.7480],
+    category: 'health',
+    description: 'Centro de salud público de referencia con atención médica y emergencias para la zona norte de Santa Elena.'
+  }
+];
 
 export const LOCALITIES = [
   { name: 'Montañita', coords: [-1.8253, -80.7523] as [number, number], zoom: 15 },

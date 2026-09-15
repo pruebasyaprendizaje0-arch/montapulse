@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronLeft, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2, Compass, QrCode, ExternalLink, CalendarCheck } from 'lucide-react';
+import { X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, User, Building2, ChevronLeft, ChevronRight, Clock, Circle, Ticket, Edit3, Trash2, Navigation2, UserCircle, Share2, Compass, QrCode, ExternalLink, CalendarCheck, Wifi, CreditCard, Dog, Car, Sparkles } from 'lucide-react';
 import { Business, UserProfile, MontanitaEvent, ProfileReview, Coupon, Sector, MapEntryType } from '../types';
 import { useData } from '../context/DataContext';
-import { BASE_URL, SECTOR_INFO } from '../constants';
+import { BASE_URL, SECTOR_INFO, LANDMARKS } from '../constants';
 import { subscribeToProfileReviews, addProfileReview, getUser, incrementBusinessViewCount } from '../services/firestoreService';
 import { subscribeToBusinessCoupons, obtainCoupon } from '../services/couponService';
 import { useAuthContext } from '../context/AuthContext';
@@ -438,10 +438,10 @@ export const PublicProfileModal = React.memo(({
                     {/* Name & Role */}
                     <div className="space-y-4 w-full flex flex-col items-center">
                         <div className="space-y-2">
-                            <h2 className="text-3xl font-black text-white flex items-center justify-center gap-3">
+                            <h1 className="text-3xl font-black text-white flex items-center justify-center gap-3">
                                 {displayName}
                                 {business && <Star className="w-6 h-6 text-amber-400 fill-current animate-pulse" />}
-                            </h2>
+                            </h1>
                         </div>
                         
                         <div className="flex items-center justify-center gap-3 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] flex-wrap max-w-md">
@@ -647,6 +647,62 @@ export const PublicProfileModal = React.memo(({
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Verified Attributes & AEO Info */}
+                        {business && (business.hasWifi || business.hasParking || business.petFriendly || business.isBeachfront || (business.paymentMethods && business.paymentMethods.length > 0) || business.containedInLandmarkId) && (
+                            <div className="space-y-3 w-full bg-slate-900/60 p-5 rounded-[2rem] border border-white/5 text-left">
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                    <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+                                    Detalles y Comodidades Verificadas
+                                </h4>
+                                
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                    {business.hasWifi && (
+                                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/10 border border-sky-500/20 text-sky-400 rounded-xl text-[10px] font-bold">
+                                            <Wifi className="w-3.5 h-3.5" />
+                                            <span>Wi-Fi Gratis {business.wifiSpeedMbps ? `(${business.wifiSpeedMbps} Mbps)` : ''}</span>
+                                        </div>
+                                    )}
+                                    {business.hasParking && (
+                                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl text-[10px] font-bold">
+                                            <Car className="w-3.5 h-3.5" />
+                                            <span>Parqueo Privado</span>
+                                        </div>
+                                    )}
+                                    {business.petFriendly && (
+                                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-xl text-[10px] font-bold">
+                                            <Dog className="w-3.5 h-3.5" />
+                                            <span>Pet Friendly</span>
+                                        </div>
+                                    )}
+                                    {business.isBeachfront && (
+                                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 text-orange-400 rounded-xl text-[10px] font-bold">
+                                            <Store className="w-3.5 h-3.5" />
+                                            <span>Frente al Mar</span>
+                                        </div>
+                                    )}
+                                    {business.containedInLandmarkId && (
+                                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded-xl text-[10px] font-bold">
+                                            <MapPin className="w-3.5 h-3.5" />
+                                            <span>Cerca de: {LANDMARKS.find(l => l.id === business.containedInLandmarkId)?.name || 'Punto de referencia'}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {business.paymentMethods && business.paymentMethods.length > 0 && (
+                                    <div className="pt-2 border-t border-white/5 flex items-center gap-2 flex-wrap text-[10px]">
+                                        <span className="text-slate-500 font-bold flex items-center gap-1">
+                                            <CreditCard className="w-3 h-3 text-emerald-400" /> Pagos:
+                                        </span>
+                                        {business.paymentMethods.map((m, i) => (
+                                            <span key={i} className="text-slate-300 font-semibold bg-white/5 px-2 py-0.5 rounded-md">
+                                                {m === 'cash' ? 'Efectivo' : m === 'transfer_pichincha' ? 'Banco Pichincha' : m === 'deuna' ? 'Deuna' : m === 'credit_card' ? 'Tarjetas' : m}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

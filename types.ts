@@ -5,6 +5,19 @@ export enum MapEntryType {
   SECTOR = 'sector'
 }
 
+export interface Landmark {
+  id: string;
+  slug: string;
+  name: string;
+  locality: string;
+  sector?: Sector;
+  coordinates: [number, number];
+  category: 'natural' | 'religious' | 'transport' | 'sports' | 'cultural' | 'health';
+  description: string;
+  wikidataUrl?: string;
+  wikipediaUrl?: string;
+}
+
 export enum Sector {
   PLAYA = 'Playa',
   CENTRO = 'Centro',
@@ -126,6 +139,7 @@ export interface UserProfile {
 export interface Business {
   id: string;
   slug?: string;
+  legacySlugs?: string[];
   name: string;
   sector: Sector;
   locality?: string;
@@ -170,6 +184,21 @@ export interface Business {
   openingHours?: {
     [key: string]: { open: string; close: string; closed?: boolean } | null;
   };
+  // Datos operativos verificados para respuestas GEO/AEO y Schema.org.
+  officialName?: string;
+  containedInLandmarkId?: string;
+  distanceToLandmarkMeters?: number;
+  hasWifi?: boolean;
+  wifiSpeedMbps?: number;
+  hasCoworkingSpace?: boolean;
+  paymentMethods?: ('cash' | 'credit_card' | 'deuna' | 'transfer_pichincha' | 'crypto')[];
+  petFriendly?: boolean;
+  hasParking?: boolean;
+  isBeachfront?: boolean;
+  priceCurrency?: 'USD';
+  priceRange?: '$' | '$$' | '$$$' | '$$$$';
+  googleBusinessProfileUrl?: string;
+  customFaqs?: Array<{ question: string; answer: string }>;
   moods?: Vibe[];
   mapType?: MapEntryType;
   referredBy?: string;
@@ -295,7 +324,7 @@ export interface HelpSupportSettings {
 
 export type AgendaRange = 'day' | 'week' | 'month';
 
-export type ViewType = 'explore' | 'feed' | 'calendar' | 'favorites' | 'host' | 'history' | 'all-favorites' | 'plans' | 'community' | 'chat'    | 'admin-users'
+export type ViewType = 'explore' | 'feed' | 'calendar' | 'favorites' | 'host' | 'history' | 'guide' | 'all-favorites' | 'plans' | 'community' | 'chat'    | 'admin-users'
     | 'policies'
  | 'services'
  | 'info';
@@ -438,5 +467,3 @@ export interface MenuProduct {
   order_index: number;
   created_at: any;
 }
-
-

@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass, QrCode, ExternalLink, CalendarCheck, ChevronLeft } from 'lucide-react';
+import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass, QrCode, ExternalLink, CalendarCheck, ChevronLeft, Wifi, CreditCard, Sparkles, Dog, Car } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS } from '../../constants';
+import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS, LANDMARKS } from '../../constants';
 import { Sector, BusinessCategory, MapEntryType } from '../../types';
 import { IconMap } from '../../utils/icons';
 import { OptimizedImageUploader } from '../OptimizedImageUploader';
@@ -579,6 +579,169 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                         </div>
                                     );
                                 })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Optimización SEO, GEO y AEO */}
+                    {!data.isReference && (
+                        <div className="bg-slate-900/80 p-6 rounded-[2.5rem] border border-orange-500/20 space-y-6">
+                            <div className="flex items-center gap-2 pb-3 border-b border-white/5">
+                                <Sparkles className="w-5 h-5 text-orange-400" />
+                                <div>
+                                    <h4 className="text-white font-black text-sm">Optimización SEO, GEO & AEO</h4>
+                                    <p className="text-[10px] text-slate-400">Datos verificados para Google y motores de Inteligencia Artificial (ChatGPT, Perplexity)</p>
+                                </div>
+                            </div>
+
+                            {/* Slug Semántico */}
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">URL / Slug Canónico</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const cleanName = (data.name || '').trim().toLowerCase()
+                                                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                                                .replace(/[^a-z0-9]+/g, '-')
+                                                .replace(/^-+|-+$/g, '');
+                                            const cleanLoc = (data.locality || 'montanita').trim().toLowerCase()
+                                                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                                                .replace(/[^a-z0-9]+/g, '-')
+                                                .replace(/^-+|-+$/g, '');
+                                            if (cleanName) {
+                                                updateField('slug', `${cleanName}-${cleanLoc}`);
+                                            }
+                                        }}
+                                        className="text-[10px] text-orange-400 hover:text-orange-300 font-bold underline"
+                                    >
+                                        Generar automáticamente
+                                    </button>
+                                </div>
+                                <div className="flex items-center bg-slate-800/50 border border-white/10 rounded-2xl px-4 py-3 text-xs text-slate-300">
+                                    <span className="text-slate-500 font-mono">ubicame.info/negocio/</span>
+                                    <input
+                                        type="text"
+                                        value={data.slug || ''}
+                                        onChange={(e) => updateField('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                                        placeholder="ej-hostal-roses-montanita"
+                                        className="bg-transparent text-orange-400 font-mono font-bold outline-none flex-1 ml-1"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Hito Geográfico de Referencia */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block flex items-center gap-1.5">
+                                    <MapPin className="w-4 h-4 text-sky-400" /> Hito Cercano de Referencia (GEO)
+                                </label>
+                                <select
+                                    value={data.containedInLandmarkId || ''}
+                                    onChange={(e) => updateField('containedInLandmarkId', e.target.value || null)}
+                                    className="w-full bg-slate-800/50 border border-white/10 rounded-2xl px-4 py-3 text-white text-xs font-medium focus:ring-1 focus:ring-orange-500 outline-none appearance-none"
+                                >
+                                    <option value="">Sin hito específico (Automático por localidad)</option>
+                                    {LANDMARKS.map(l => (
+                                        <option key={l.id} value={l.id}>{l.name} ({l.locality})</option>
+                                    ))}
+                                </select>
+                                <p className="text-[10px] text-slate-500 mt-1.5">Triangula la ubicación para recomendaciones precisas en Perplexity y ChatGPT.</p>
+                            </div>
+
+                            {/* Métodos de Pago */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block flex items-center gap-1.5">
+                                    <CreditCard className="w-4 h-4 text-emerald-400" /> Métodos de Pago Aceptados (AEO)
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        { id: 'cash', label: 'Efectivo' },
+                                        { id: 'transfer_pichincha', label: 'Banco Pichincha' },
+                                        { id: 'deuna', label: 'Deuna' },
+                                        { id: 'credit_card', label: 'Tarjetas Crédito/Débito' },
+                                        { id: 'crypto', label: 'Criptomonedas' }
+                                    ].map(method => {
+                                        const currentMethods = Array.isArray(data.paymentMethods) ? data.paymentMethods : ['cash'];
+                                        const isSelected = currentMethods.includes(method.id as any);
+                                        return (
+                                            <button
+                                                key={method.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    let updated = [...currentMethods];
+                                                    if (isSelected) {
+                                                        updated = updated.filter(m => m !== method.id);
+                                                    } else {
+                                                        updated.push(method.id as any);
+                                                    }
+                                                    updateField('paymentMethods', updated);
+                                                }}
+                                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isSelected ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                            >
+                                                {isSelected ? '✓ ' : '+ '}{method.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Conectividad & Servicios Nómadas */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                                <div className="flex items-center justify-between p-3.5 bg-slate-800/40 rounded-2xl border border-white/5">
+                                    <div className="flex items-center gap-2">
+                                        <Wifi className="w-4 h-4 text-sky-400" />
+                                        <span className="text-xs font-bold text-slate-200">Wi-Fi Gratis</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateField('hasWifi', !data.hasWifi)}
+                                        className={`w-10 h-5 rounded-full transition-all relative ${data.hasWifi ? 'bg-sky-500' : 'bg-slate-700'}`}
+                                    >
+                                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${data.hasWifi ? 'left-[calc(100%-1.15rem)]' : 'left-0.5'}`} />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-between p-3.5 bg-slate-800/40 rounded-2xl border border-white/5">
+                                    <div className="flex items-center gap-2">
+                                        <Car className="w-4 h-4 text-amber-400" />
+                                        <span className="text-xs font-bold text-slate-200">Parqueo / Garage</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateField('hasParking', !data.hasParking)}
+                                        className={`w-10 h-5 rounded-full transition-all relative ${data.hasParking ? 'bg-amber-500' : 'bg-slate-700'}`}
+                                    >
+                                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${data.hasParking ? 'left-[calc(100%-1.15rem)]' : 'left-0.5'}`} />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-between p-3.5 bg-slate-800/40 rounded-2xl border border-white/5">
+                                    <div className="flex items-center gap-2">
+                                        <Dog className="w-4 h-4 text-purple-400" />
+                                        <span className="text-xs font-bold text-slate-200">Pet Friendly</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateField('petFriendly', !data.petFriendly)}
+                                        className={`w-10 h-5 rounded-full transition-all relative ${data.petFriendly ? 'bg-purple-500' : 'bg-slate-700'}`}
+                                    >
+                                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${data.petFriendly ? 'left-[calc(100%-1.15rem)]' : 'left-0.5'}`} />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-between p-3.5 bg-slate-800/40 rounded-2xl border border-white/5">
+                                    <div className="flex items-center gap-2">
+                                        <Store className="w-4 h-4 text-orange-400" />
+                                        <span className="text-xs font-bold text-slate-200">Frente al Mar</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateField('isBeachfront', !data.isBeachfront)}
+                                        className={`w-10 h-5 rounded-full transition-all relative ${data.isBeachfront ? 'bg-orange-500' : 'bg-slate-700'}`}
+                                    >
+                                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${data.isBeachfront ? 'left-[calc(100%-1.15rem)]' : 'left-0.5'}`} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}

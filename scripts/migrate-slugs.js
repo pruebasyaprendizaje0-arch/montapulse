@@ -4,73 +4,88 @@ import { readFileSync } from 'fs';
 
 dotenv.config();
 
-// Debes descargar tu serviceAccountKey.json desde Firebase Console
-// y colocarlo en la misma carpeta que este script
+const APPLY = process.argv.includes('--apply');
+const NORMALIZE_BUSINESS_SLUGS = process.argv.includes('--normalize-business-slugs');
+const SERVICE_ACCOUNT_FILE = './montapulse-app-firebase-adminsdk-fbsvc-d87cd4f957.json';
+
 let serviceAccount;
 try {
-  serviceAccount = JSON.parse(readFileSync('./montapulse-app-firebase-adminsdk-fbsvc-d87cd4f957.json', 'utf8'));
-} catch (e) {
-  console.error("Error: No se encontró serviceAccountKey.json. Por favor, asegúrate de tenerlo en esta carpeta.");
+  serviceAccount = JSON.parse(readFileSync(SERVICE_ACCOUNT_FILE, 'utf8'));
+} catch {
+  console.error(`No se encontró la credencial requerida: ${SERVICE_ACCOUNT_FILE}`);
   process.exit(1);
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
-
+admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-// Helper para generar slugs a partir del texto
-function generateSlug(text) {
-  return text
-    .toString()
-    .normalize('NFD') // Normaliza acentos
-    .replace(/[\u0300-\u036f]/g, '') // Elimina los acentos
+function slugify(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9 -]/g, '') // Elimina caracteres no alfanuméricos
-    .replace(/\s+/g, '-') // Reemplaza espacios con guiones
-    .replace(/-+/g, '-'); // Elimina múltiples guiones
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
-async function migrateSlugs() {
-  console.log('Iniciando migración de slugs...');
-  
-  // 1. Migrar Negocios
-  const businessesSnapshot = await db.collection('businesses').get();
-  console.log(`Encontrados ${businessesSnapshot.size} negocios.`);
-  
-  let bizCount = 0;
-  for (const doc of businessesSnapshot.docs) {
-    const data = doc.data();
-    if (!data.slug && data.name) {
-      const baseSlug = generateSlug(data.name);
-      // Opcional: Agregar sufijo aleatorio para unicidad
-      const uniqueSlug = `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
-      await doc.ref.update({ slug: uniqueSlug });
-      bizCount++;
-    }
-  }
-  console.log(`Actualizados ${bizCount} negocios.`);
-
-  // 2. Migrar Eventos
-  const eventsSnapshot = await db.collection('events').get();
-  console.log(`Encontrados ${eventsSnapshot.size} eventos.`);
-  
-  let eventCount = 0;
-  for (const doc of eventsSnapshot.docs) {
-    const data = doc.data();
-    if (!data.slug && data.title) {
-      const baseSlug = generateSlug(data.title);
-      const uniqueSlug = `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
-      await doc.ref.update({ slug: uniqueSlug });
-      eventCount++;
-    }
-  }
-  console.log(`Actualizados ${eventCount} eventos.`);
-
-  console.log('Migración completada exitosamente.');
-  process.exit(0);
+function proposedSlug(data, id, label) {
+  const name = slugify(label);
+  const locality = slugify(data.locality);
+  if (!name) return `ubicame-${id.toLowerCase()}`;
+  // No repite "montanita" cuando ya forma parte del nombre comercial.
+  return locality && !name.includes(locality) ? `${name}-${locality}` : name;
 }
 
-migrateSlugs().catch(console.error);
+function uniqueSlug(candidate, id, used) {
+  if (!used.has(candidate)) return candidate;
+  return `${candidate}-${id.slice(0, 6).toLowerCase()}`;
+}
+
+async function migrateCollection(collectionName, labelField) {
+  const snapshot = await db.collection(collectionName).get();
+  const used = new Set(snapshot.docs.map(doc => doc.data().slug).filter(Boolean));
+  const updates = [];
+  const skipped = [];
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (data.slug) continue;
+    if (!data[labelField]) {
+      skipped.push(doc.id);
+      continue;
+    }
+
+    const slug = uniqueSlug(proposedSlug(data, doc.id, data[labelField]), doc.id, used);
+    used.add(slug);
+    updates.push({ ref: doc.ref, id: doc.id, slug });
+  }
+
+  console.log(`${collectionName}: ${snapshot.size} registros, ${updates.length} slugs por crear, ${skipped.length} omitidos sin ${labelField}.`);
+  updates.forEach(({ id, slug }) => console.log(`  ${id} -> ${slug}`));
+
+  if (!APPLY || updates.length === 0) return { updated: 0, skipped: skipped.length };
+
+  for (let index = 0; index < updates.length; index += 400) {
+    const batch = db.batch();
+    updates.slice(index, index + 400).forEach(({ ref, slug }) => {
+      batch.update(ref, { slug, slugUpdatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    });
+    await batch.commit();
+  }
+
+  return { updated: updates.length, skipped: skipped.length };
+}
+
+async function main() {
+  console.log(APPLY ? 'Aplicando migración determinista de slugs…' : 'Auditoría de slugs (sin escribir cambios)…');
+  const businesses = await migrateCollection('businesses', 'name');
+  const events = await migrateCollection('events', 'title');
+  console.log(`${APPLY ? 'Migración completada' : 'Auditoría completada'}: ${businesses.updated + events.updated} slugs ${APPLY ? 'creados' : 'propuestos'}.`);
+  if (!APPLY) console.log('Revisa esta salida y ejecuta `node scripts/migrate-slugs.js --apply` para aplicar los cambios.');
+}
+
+main().catch(error => {
+  console.error('Error en migración de slugs:', error);
+  process.exitCode = 1;
+});

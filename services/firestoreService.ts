@@ -42,6 +42,12 @@ const sanitizeData = (data: any): any => {
     return data;
 };
 
+const generateLocalSlug = (name: string, locality?: string): string => {
+    const base = generateSlug(name);
+    const localitySlug = locality ? generateSlug(locality) : '';
+    return localitySlug && !base.includes(localitySlug) ? `${base}-${localitySlug}` : base;
+};
+
 // Error handling for Firestore SDK bugs
 export const handleFirestoreError = (error: any, context: string) => {
     const rawErrorStr = String(error);
@@ -178,7 +184,7 @@ export const createEvent = async (event: Omit<MontanitaEvent, 'id'>, userPlan?: 
 
         const eventsRef = collection(db, 'events');
         
-        const slug = generateSlug(event.title) + '-' + Date.now().toString().slice(-4);
+        const slug = generateLocalSlug(event.title, event.locality) + '-' + Date.now().toString().slice(-4);
         
         const docRef = await addDoc(eventsRef, {
             ...sanitizeData(event),
@@ -356,7 +362,7 @@ export const createBusiness = async (business: Omit<Business, 'id'>) => {
         console.log('Creating business with sanitized data:', JSON.stringify(sanitized, null, 2));
 
         // Generar slug
-        const slug = generateSlug(business.name) + '-' + Date.now().toString().slice(-4);
+        const slug = generateLocalSlug(business.name, business.locality) + '-' + Date.now().toString().slice(-4);
 
         // Reference points need a custom ID with the ref- prefix for map styling
         if ((business as any).isReference) {

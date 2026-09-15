@@ -471,6 +471,49 @@ export const History: React.FC = () => {
                     </div>
                 </section>
 
+                {/* Guías Turísticas del Corredor */}
+                <section className="space-y-6">
+                    <div className="text-center max-w-2xl mx-auto">
+                        <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em] flex items-center justify-center gap-1.5 mb-2">
+                            <Sparkles className="w-3.5 h-3.5" /> Exploración Local
+                        </span>
+                        <h2 className="text-3xl font-black text-white uppercase tracking-tight">Guías Oficiales del Corredor</h2>
+                        <p className="text-slate-400 text-xs mt-1">Conoce a fondo los sectores e hitos más emblemáticos de Santa Elena.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {[
+                            { title: 'Ruta del Spondylus', desc: 'Manglaralto, Montañita y Olón', url: '/ruta-del-spondylus', badge: 'Corredor Completo' },
+                            { title: 'La Punta de Montañita', desc: 'Surf de clase mundial y relax frente al mar', url: '/guia/la-punta-montanita', badge: 'Montañita' },
+                            { title: 'Barrio El Tigrillo', desc: 'Cabañas, naturaleza y tranquilidad', url: '/guia/el-tigrillo-montanita', badge: 'Montañita' },
+                            { title: 'Santuario de Olón', desc: 'Mirador del acantilado y atardeceres', url: '/guia/santuario-olon', badge: 'Olón' },
+                            { title: 'Terminal y Buses CLP', desc: 'Horarios y frecuencias de transporte', url: '/guia/terminal-clp-montanita', badge: 'Transporte' }
+                        ].map((g, i) => (
+                            <div
+                                key={i}
+                                onClick={() => navigate(g.url)}
+                                className="p-6 bg-slate-900/60 hover:bg-slate-900 border border-white/5 hover:border-orange-500/30 rounded-[2rem] transition-all cursor-pointer group flex flex-col justify-between space-y-4"
+                            >
+                                <div>
+                                    <span className="text-[9px] font-black text-orange-400 uppercase tracking-widest bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/20">
+                                        {g.badge}
+                                    </span>
+                                    <h3 className="text-lg font-bold text-white group-hover:text-orange-400 transition-colors mt-3">
+                                        {g.title}
+                                    </h3>
+                                    <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                                        {g.desc}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-orange-400 text-xs font-bold pt-2">
+                                    <span>Leer Guía</span>
+                                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
 
                 {/* Footer CTA */}
                 <section className="text-center py-20 border-t border-white/5">

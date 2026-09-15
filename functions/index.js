@@ -25,6 +25,61 @@ dotenv.config();
 const app = express();
 const db = admin.firestore();
 
+// Reutiliza la plantilla de Hosting durante la vida de la instancia SSR.
+const baseHtmlCache = new Map();
+const BASE_HTML_TTL_MS = 5 * 60 * 1000;
+const LOCAL_LANDMARKS = {
+    'Olón': 'el Santuario Blanca Estrella de la Mar, la Cascada de Alex y la Cordillera Chongón-Colonche',
+    'Montañita': 'La Punta, la terminal de buses CLP y la Calle de los Cócteles',
+    'Manglaralto': 'el Estero de Manglaralto, el Malecón Comunal y el Subcentro de Salud de Manglaralto',
+    'Sitio Nuevo': 'el corredor turístico de la Ruta del Spondylus y la provincia de Santa Elena'
+};
+
+function escapeHtml(value = '') {
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+function jsonLdScript(data) {
+    return JSON.stringify(data).replace(/</g, '\\u003c');
+}
+
+function landmarkText(locality) {
+    return LOCAL_LANDMARKS[locality] || 'el corredor turístico de la Ruta del Spondylus, Santa Elena';
+}
+
+function buildBreadcrumbList(items) {
+    return {
+        '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+        itemListElement: items.map((item, index) => ({ '@type': 'ListItem', position: index + 1, name: item.name, item: item.url }))
+    };
+}
+
+function buildFaqPage(faqs) {
+    return {
+        '@context': 'https://schema.org', '@type': 'FAQPage',
+        mainEntity: faqs.map(faq => ({ '@type': 'Question', name: faq.question, acceptedAnswer: { '@type': 'Answer', text: faq.answer } }))
+    };
+}
+
+async function getBaseHtml(baseUrl) {
+    const cached = baseHtmlCache.get(baseUrl);
+    if (cached && Date.now() - cached.createdAt < BASE_HTML_TTL_MS) return cached.html;
+    try {
+        const htmlRes = await axios.get(`${baseUrl}/index.html`, { timeout: 5000 });
+        baseHtmlCache.set(baseUrl, { html: htmlRes.data, createdAt: Date.now() });
+        return htmlRes.data;
+    } catch (err) {
+        logger.error('[SEO] Error fetching base HTML', err.message);
+        return '<!DOCTYPE html><html lang="es"><head><title>MontaPulse</title></head><body><div id="root"></div></body></html>';
+    }
+}
+
+function injectRootHtml(baseHtml, content) {
+    // La plantilla de Vite incluye contenido de arranque para la home. Las
+    // páginas SSR deben sustituirlo por su contenido específico.
+    return baseHtml.replace(/<div id="root">[\s\S]*?<\/div>/, `<div id="root">${content}</div>`);
+}
+
 // Middlewares
 app.use(cors({ origin: true }));
 app.use(express.json());
@@ -97,18 +152,11 @@ app.get('/', async (req, res) => {
         }
 
         // 2. Descargar el archivo index.html estático de Firebase Hosting (usando index.html directamente para evitar bucles infinitos)
-        let baseHtml = '';
-        try {
-            const htmlRes = await axios.get(`${baseUrl}/index.html`);
-            baseHtml = htmlRes.data;
-        } catch (err) {
-            logger.error('[SEO Home] Error fetching base index.html:', err.message);
-            baseHtml = `<!DOCTYPE html><html lang="es"><head><title>MontaPulse | Guía Local Costa de Santa Elena, Ecuador</title></head><body><div id="root"></div></body></html>`;
-        }
+        let baseHtml = await getBaseHtml(baseUrl);
 
         // 3. Crear el bloque HTML de feed semántico oculto
         const semanticFeed = `
-            <div id="seo-home-feed" style="display: none;" aria-hidden="true">
+            <div id="seo-home-feed">
                 <main>
                     <h1>MontaPulse - Guía de Eventos y Negocios en la Costa de Santa Elena, Ecuador</h1>
                     <p>Directorio verídico y actualizado en tiempo real de atractivos turísticos, gastronomía y espectáculos en Montañita, Olón, Manglaralto y Sitio Nuevo.</p>
@@ -139,7 +187,15 @@ app.get('/', async (req, res) => {
         // 4. Inyectar el feed semántico en la base HTML
         baseHtml = baseHtml
             .replace(/<link rel="canonical" href=".*?"\s*\/?>/is, `<link rel="canonical" href="${canonicalUrl}" />`)
-            .replace('<div id="root"></div>', `<div id="root">${semanticFeed}</div>`);
+            .replace(/<title>.*?<\/title>/is, '<title>MontaPulse | Guía Local Costa de Santa Elena, Ecuador</title>')
+            .replace(/<meta name="description".*?>/is, '<meta name="description" content="Guía de negocios, eventos y experiencias en Montañita, Olón y Manglaralto, Santa Elena, Ecuador." />')
+            .replace(/<link rel="canonical" href=".*?"\s*\/?>/is, `<link rel="canonical" href="${canonicalUrl}" />`)
+            .replace(/<script type="application\/ld\+json">.*?WebSite.*?<\/script>/is, '')
+            .replace('</head>', `<script type="application/ld+json">${jsonLdScript({
+                '@context': 'https://schema.org', '@type': 'WebSite', name: 'MontaPulse', url: canonicalUrl,
+                description: 'Directorio de negocios, eventos y experiencias en la Ruta del Spondylus, Santa Elena, Ecuador.'
+            })}</script></head>`);
+        baseHtml = injectRootHtml(baseHtml, semanticFeed);
 
         // 5. Configurar caché en el servidor CDN por 1 hora
         res.set('Content-Type', 'text/html');
@@ -209,6 +265,11 @@ app.get('/sitemap.xml', async (req, res) => {
             xml += `  <url>\n    <loc>${origin}/localidad/${hub.pueblo}/${hub.categoria}</loc>\n    <lastmod>${todayStr}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
         });
 
+        ['ruta-del-spondylus', 'la-punta-montanita', 'el-tigrillo-montanita', 'santuario-olon', 'terminal-clp-montanita'].forEach(slug => {
+            const route = slug === 'ruta-del-spondylus' ? '/ruta-del-spondylus' : `/guia/${slug}`;
+            xml += `  <url>\n    <loc>${origin}${route}</loc>\n    <lastmod>${todayStr}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
+        });
+
         xml += `</urlset>`;
 
         res.set('Content-Type', 'text/xml');
@@ -219,6 +280,182 @@ app.get('/sitemap.xml', async (req, res) => {
         res.status(500).send('Error generando sitemap');
     }
 });
+
+function agendaLocality(pueblo = '') {
+    const value = pueblo.toLowerCase();
+    if (value.includes('olon') || value.includes('olón')) return 'Olón';
+    if (value.includes('manglaralto')) return 'Manglaralto';
+    if (value.includes('sitio')) return 'Sitio Nuevo';
+    return 'Montañita';
+}
+
+function ecuadorDayStart(date = new Date()) {
+    const ecuador = new Date(date.getTime() - (5 * 60 * 60 * 1000));
+    return new Date(Date.UTC(ecuador.getUTCFullYear(), ecuador.getUTCMonth(), ecuador.getUTCDate(), 5));
+}
+
+function agendaRange(period) {
+    const today = ecuadorDayStart();
+    if (period === 'hoy') return { start: today, end: new Date(today.getTime() + 24 * 60 * 60 * 1000), label: 'Hoy' };
+
+    const day = new Date(today.getTime() - (5 * 60 * 60 * 1000)).getUTCDay();
+    const daysUntilFriday = day <= 4 ? 5 - day : -(day - 5);
+    const start = new Date(today.getTime() + daysUntilFriday * 24 * 60 * 60 * 1000);
+    return { start, end: new Date(start.getTime() + 3 * 24 * 60 * 60 * 1000), label: 'Este fin de semana' };
+}
+
+function eventDate(event) {
+    const value = event.startAt;
+    return value?.toDate ? value.toDate() : new Date(value);
+}
+
+/** Agenda pública indexable: /agenda/montanita/hoy y /agenda/montanita/fin-de-semana */
+app.get('/agenda/:pueblo/:periodo', async (req, res) => {
+    try {
+        const { pueblo, periodo } = req.params;
+        if (!['hoy', 'fin-de-semana'].includes(periodo)) return res.status(404).send('Agenda no encontrada');
+
+        const locality = agendaLocality(pueblo);
+        const range = agendaRange(periodo);
+        const host = req.headers['x-forwarded-host'] || req.hostname;
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
+        const baseUrl = `${protocol}://${host}`;
+        const canonicalUrl = `${baseUrl}/agenda/${pueblo}/${periodo}`;
+        const snapshot = await db.collection('events').where('status', '==', 'active').get();
+        const events = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(event => event.locality === locality)
+            .filter(event => {
+                const start = eventDate(event);
+                return !Number.isNaN(start.getTime()) && start >= range.start && start < range.end;
+            })
+            .sort((a, b) => eventDate(a) - eventDate(b));
+
+        const title = `${range.label}: eventos en ${locality} | Ubícame`;
+        const description = events.length
+            ? `Consulta eventos confirmados ${range.label.toLowerCase()} en ${locality}, Santa Elena: horarios, ubicación y cómo asistir.`
+            : `No hay eventos confirmados ${range.label.toLowerCase()} en ${locality}. Consulta la agenda actualizada de Ubícame.`;
+        const itemList = {
+            '@context': 'https://schema.org', '@type': 'ItemList',
+            name: `${range.label}: eventos en ${locality}`,
+            numberOfItems: events.length,
+            itemListOrder: 'https://schema.org/ItemListOrderAscending',
+            itemListElement: events.map((event, index) => ({
+                '@type': 'ListItem', position: index + 1,
+                name: event.title || 'Evento', url: `${baseUrl}/evento/${encodeURIComponent(event.slug || event.id)}`
+            }))
+        };
+        const breadcrumb = buildBreadcrumbList([
+            { name: 'Ecuador', url: 'https://www.ubicame.info/' },
+            { name: 'Santa Elena', url: 'https://www.ubicame.info/' },
+            { name: locality, url: `${baseUrl}/agenda/${pueblo}/hoy` },
+            { name: range.label, url: canonicalUrl }
+        ]);
+        const faq = buildFaqPage([
+            { question: `¿Qué eventos hay ${range.label.toLowerCase()} en ${locality}?`, answer: events.length ? `Ubícame muestra ${events.length} evento${events.length === 1 ? '' : 's'} activo${events.length === 1 ? '' : 's'} con horario y ubicación confirmados.` : `No hay eventos confirmados para este periodo. La agenda se actualiza cuando los organizadores publican actividades.` },
+            { question: `¿Dónde se realizan los eventos de ${locality}?`, answer: `Cada evento publicado incluye su localidad, sector y datos del organizador cuando están disponibles.` }
+        ]);
+        const metaRobots = events.length ? '' : '<meta name="robots" content="noindex, follow" />';
+        const metaTags = `<title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}" />${metaRobots}<link rel="canonical" href="${canonicalUrl}" /><meta property="og:title" content="${escapeHtml(title)}" /><meta property="og:description" content="${escapeHtml(description)}" /><meta property="og:url" content="${canonicalUrl}" /><meta property="og:type" content="website" /><script type="application/ld+json">${jsonLdScript(itemList)}</script><script type="application/ld+json">${jsonLdScript(breadcrumb)}</script><script type="application/ld+json">${jsonLdScript(faq)}</script>`;
+        const semanticPayload = `<main id="agenda-payload"><h1>${escapeHtml(range.label)}: eventos en ${escapeHtml(locality)}</h1><p>${escapeHtml(description)}</p><section><h2>Agenda de eventos</h2>${events.length ? `<ol>${events.map(event => { const start = eventDate(event); const date = new Intl.DateTimeFormat('es-EC', { dateStyle: 'full', timeStyle: 'short', timeZone: 'America/Guayaquil' }).format(start); return `<li><h3><a href="/evento/${encodeURIComponent(event.slug || event.id)}">${escapeHtml(event.title || 'Evento')}</a></h3><p>${escapeHtml(date)} · ${escapeHtml(event.sector || 'Montañita')}</p><p>${escapeHtml(redactarDescripcionFactual(event.title || 'Evento', event.description, event.sector, event.category))}</p></li>`; }).join('')}</ol>` : '<p>Aún no hay eventos confirmados para este periodo. Vuelve a consultar la agenda actualizada.</p>'}</section></main>`;
+
+        let baseHtml = await getBaseHtml(baseUrl);
+        baseHtml = baseHtml
+            .replace(/<title>.*?<\/title>/is, '')
+            .replace(/<meta name="description".*?>/is, '')
+            .replace(/<link rel="canonical".*?>/is, '')
+            .replace(/<script type="application\/ld\+json">.*?WebSite.*?<\/script>/is, '')
+            .replace('<head>', `<head>${metaTags}`);
+        baseHtml = injectRootHtml(baseHtml, semanticPayload);
+        if (!events.length) res.set('X-Robots-Tag', 'noindex, follow');
+        res.set('Cache-Control', 'public, max-age=900, s-maxage=900');
+        res.status(200).send(baseHtml);
+    } catch (error) {
+        logger.error('[SEO Agenda] Error:', error);
+        res.status(500).send('Error interno');
+    }
+});
+
+const GEO_GUIDES = {
+    'ruta-del-spondylus': {
+        title: 'Guía de la Ruta del Spondylus entre Manglaralto, Montañita y Olón',
+        description: 'Guía local para recorrer Manglaralto, Montañita y Olón en la costa de Santa Elena, Ecuador.',
+        sections: [
+            ['El corredor costero', 'La Ruta del Spondylus conecta comunidades costeras de Santa Elena. Ubícame reúne negocios, eventos y puntos de referencia publicados por localidad.'],
+            ['Planifica tu recorrido', 'Consulta fichas de negocios y la agenda antes de salir. Confirma directamente horarios, disponibilidad, tarifas y condiciones de transporte.']
+        ]
+    },
+    'la-punta-montanita': {
+        title: 'La Punta de Montañita: guía de surf, negocios y servicios',
+        description: 'Información local para explorar el sector La Punta en Montañita, Santa Elena, Ecuador.',
+        sections: [
+            ['Sobre La Punta', 'La Punta es un sector de Montañita referenciado en fichas locales de Ubícame. Consulta el mapa para ubicar negocios y servicios publicados.'],
+            ['Antes de visitar', 'Verifica en cada ficha los horarios, contacto y ubicación. Las condiciones de mar, actividades y disponibilidad cambian según el día.']
+        ]
+    },
+    'el-tigrillo-montanita': {
+        title: 'Barrio El Tigrillo en Montañita: hospedaje y servicios',
+        description: 'Guía local del sector El Tigrillo en Montañita, Santa Elena, Ecuador.',
+        sections: [
+            ['El sector El Tigrillo', 'El Tigrillo aparece como referencia territorial en negocios publicados de Montañita. Esta guía ayuda a localizar hospedaje y servicios cercanos.'],
+            ['Información útil', 'Consulta directamente con cada negocio sus reglas de llegada, servicios, precios y medios de pago antes de reservar.']
+        ]
+    },
+    'santuario-olon': {
+        title: 'Santuario de Olón: guía local y cómo llegar',
+        description: 'Información para ubicar el Santuario Blanca Estrella de la Mar en Olón, Santa Elena, Ecuador.',
+        sections: [
+            ['Referencia de Olón', 'El Santuario Blanca Estrella de la Mar es un hito de referencia en Olón. Ubícame lo usa para contextualizar negocios y servicios de la localidad.'],
+            ['Planifica la visita', 'Revisa la ruta en el mapa y confirma directamente con fuentes locales cualquier horario, acceso o actividad especial antes de tu visita.']
+        ]
+    },
+    'terminal-clp-montanita': {
+        title: 'Terminal y transporte CLP en Montañita: guía local',
+        description: 'Guía para ubicar la terminal y referencias de transporte CLP en Montañita, Santa Elena.',
+        sections: [
+            ['Transporte en Montañita', 'La terminal de buses CLP es una referencia de movilidad en Montañita. Usa las fichas y el mapa para encontrar negocios y servicios cercanos.'],
+            ['Consulta antes de viajar', 'Los horarios, rutas, tarifas y frecuencias de transporte pueden cambiar. Confírmalos directamente con el operador antes de organizar tu viaje.']
+        ]
+    }
+};
+
+function renderGeoGuide(req, res, guide, slug) {
+    const host = req.headers['x-forwarded-host'] || req.hostname;
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const baseUrl = `${protocol}://${host}`;
+    const canonicalUrl = `${baseUrl}/guia/${slug}`;
+    const breadcrumb = buildBreadcrumbList([
+        { name: 'Ecuador', url: 'https://www.ubicame.info/' },
+        { name: 'Santa Elena', url: 'https://www.ubicame.info/' },
+        { name: 'Ruta del Spondylus', url: `${baseUrl}/guia/ruta-del-spondylus` },
+        { name: guide.title, url: canonicalUrl }
+    ]);
+    const faq = buildFaqPage([
+        { question: `¿Qué ofrece esta guía sobre ${guide.title}?`, answer: `${guide.description} La información se complementa con fichas locales y el mapa de Ubícame.` },
+        { question: '¿Cómo confirmo horarios y disponibilidad?', answer: 'Consulta los datos de contacto de cada ficha y confirma directamente con el negocio u operador antes de tu visita.' }
+    ]);
+    return getBaseHtml(baseUrl).then(baseHtml => {
+        const metaTags = `<title>${escapeHtml(guide.title)} | Ubícame</title><meta name="description" content="${escapeHtml(guide.description)}" /><link rel="canonical" href="${canonicalUrl}" /><meta property="og:title" content="${escapeHtml(guide.title)} | Ubícame" /><meta property="og:description" content="${escapeHtml(guide.description)}" /><meta property="og:url" content="${canonicalUrl}" /><meta property="og:type" content="article" /><script type="application/ld+json">${jsonLdScript(breadcrumb)}</script><script type="application/ld+json">${jsonLdScript(faq)}</script>`;
+        const content = `<main id="guide-payload"><article><h1>${escapeHtml(guide.title)}</h1><p>${escapeHtml(guide.description)}</p>${guide.sections.map(([heading, text]) => `<section><h2>${escapeHtml(heading)}</h2><p>${escapeHtml(text)}</p></section>`).join('')}<p><a href="/explore">Explorar el mapa de Ubícame</a></p></article></main>`;
+        baseHtml = baseHtml.replace(/<title>.*?<\/title>/is, '').replace(/<meta name="description".*?>/is, '').replace(/<link rel="canonical".*?>/is, '').replace(/<script type="application\/ld\+json">.*?WebSite.*?<\/script>/is, '').replace('<head>', `<head>${metaTags}`);
+        res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+        res.status(200).send(injectRootHtml(baseHtml, content));
+    });
+}
+
+app.get('/guia/:slug', (req, res) => {
+    const guide = GEO_GUIDES[req.params.slug];
+    if (!guide) return res.status(404).send('Guía no encontrada');
+    return renderGeoGuide(req, res, guide, req.params.slug).catch(error => {
+        logger.error('[SEO Guide] Error:', error);
+        res.status(500).send('Error interno');
+    });
+});
+
+app.get('/ruta-del-spondylus', (req, res) => renderGeoGuide(req, res, GEO_GUIDES['ruta-del-spondylus'], 'ruta-del-spondylus').catch(error => {
+    logger.error('[SEO Guide] Error:', error);
+    res.status(500).send('Error interno');
+}));
 
 /**
  * Route: Category Hubs (Páginas de Destino agrupadas por Localidad y Categoría)
@@ -257,24 +494,19 @@ app.get('/localidad/:pueblo/:categoria', async (req, res) => {
         }
 
         // Consultar Firestore
-        let query = db.collection('businesses')
+        // Evita depender de un índice compuesto para una landing pública. El
+        // filtro final preserva la misma regla de publicación y borrado lógico.
+        const snapshot = await db.collection('businesses')
             .where('isPublished', '==', true)
-            .where('isDeleted', '!=', true);
-
-        if (officialLocality) {
-            query = query.where('locality', '==', officialLocality);
-        }
-
-        const snapshot = await query.get();
+            .get();
         const results = [];
         
         snapshot.forEach(doc => {
             const data = doc.data();
-            if (dbCategories.length > 0) {
-                if (dbCategories.includes(data.category)) {
-                    results.push({ id: doc.id, ...data });
-                }
-            } else {
+            const belongsToLocality = data.locality === officialLocality;
+            const isActive = data.isDeleted !== true;
+            const belongsToCategory = dbCategories.length === 0 || dbCategories.includes(data.category);
+            if (belongsToLocality && isActive && belongsToCategory) {
                 results.push({ id: doc.id, ...data });
             }
         });
@@ -282,14 +514,7 @@ app.get('/localidad/:pueblo/:categoria', async (req, res) => {
         // Ordenar destacados primero
         results.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
 
-        let baseHtml = '';
-        try {
-            const htmlRes = await axios.get(`${baseUrl}/`);
-            baseHtml = htmlRes.data;
-        } catch (err) {
-            logger.error('[SEO] Error fetching base HTML', err.message);
-            baseHtml = `<!DOCTYPE html><html><head><title>MontaPulse</title></head><body><div id="root"></div></body></html>`;
-        }
+        let baseHtml = await getBaseHtml(baseUrl);
 
         const title = `${categoryTitle} en ${officialLocality} | MontaPulse`;
         const cleanDescription = `Directorio y guía de los mejores ${categoryTitle.toLowerCase()} en ${officialLocality}, costa de Santa Elena, Ecuador. Información verídica y en tiempo real.`;
@@ -309,10 +534,32 @@ app.get('/localidad/:pueblo/:categoria', async (req, res) => {
             "description": cleanDescription,
             "itemListElement": itemListElement
         };
+        const hubFaq = buildFaqPage([
+            {
+                question: `¿Dónde encontrar ${categoryTitle.toLowerCase()} en ${officialLocality}?`,
+                answer: `Esta guía reúne negocios publicados de ${categoryTitle.toLowerCase()} en ${officialLocality}, Santa Elena, Ecuador, dentro de la Ruta del Spondylus.`
+            },
+            {
+                question: `¿Qué información muestra esta guía de ${officialLocality}?`,
+                answer: 'Cada ficha publicada incluye categoría, ubicación, descripción factual y datos de contacto cuando el negocio los ha proporcionado.'
+            },
+            {
+                question: `¿Qué lugares de referencia hay cerca de ${officialLocality}?`,
+                answer: `Como referencias locales están ${landmarkText(officialLocality)}.`
+            }
+        ]);
+        const breadcrumb = buildBreadcrumbList([
+            { name: 'Ecuador', url: 'https://www.ubicame.info/' },
+            { name: 'Santa Elena', url: 'https://www.ubicame.info/' },
+            { name: officialLocality, url: `${baseUrl}/localidad/${req.params.pueblo}/${req.params.categoria}` },
+            { name: categoryTitle, url: canonicalUrl }
+        ]);
 
+        const hubRobots = results.length ? '' : '<meta name="robots" content="noindex, follow" />';
         const metaTags = `
             <title>${title}</title>
             <meta name="description" content="${cleanDescription}" />
+            ${hubRobots}
             <link rel="canonical" href="${canonicalUrl}" />
             <meta property="og:title" content="${title}" />
             <meta property="og:description" content="${cleanDescription}" />
@@ -322,24 +569,27 @@ app.get('/localidad/:pueblo/:categoria', async (req, res) => {
             <meta name="twitter:card" content="summary" />
             <meta name="twitter:title" content="${title}" />
             <meta name="twitter:description" content="${cleanDescription}" />
-            <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+            <script type="application/ld+json">${jsonLdScript(jsonLd)}</script>
+            <script type="application/ld+json">${jsonLdScript(hubFaq)}</script>
+            <script type="application/ld+json">${jsonLdScript(breadcrumb)}</script>
         `;
 
         // Payload HTML semántico tipo "Hub" / enciclopédico
         const semanticPayload = `
-            <div id="seo-payload-hub" style="display: none;" aria-hidden="true">
+            <div id="seo-payload-hub">
                 <article>
                     <h1>Guía de ${categoryTitle} en ${officialLocality}, Ecuador</h1>
-                    <p>${cleanDescription}</p>
+                    <p>${escapeHtml(cleanDescription)}</p>
+                    <p>Referencias geográficas de ${escapeHtml(officialLocality)}: ${escapeHtml(landmarkText(officialLocality))}.</p>
                     <section>
                         <h2>Negocios e Instalaciones Recomendadas:</h2>
                         <ol>
                             ${results.map(biz => `
                                 <li>
-                                    <h3><a href="/negocio/${biz.slug || biz.id}">${biz.name}</a></h3>
-                                    <p>Descripción: ${redactarDescripcionFactual(biz.name, biz.description, biz.sector, biz.category)}</p>
-                                    <p>Ubicación: Sector ${biz.sector || 'Centro'}, ${officialLocality}</p>
-                                    ${biz.phone ? `<p>Contacto: ${biz.phone}</p>` : ''}
+                                    <h3><a href="/negocio/${encodeURIComponent(biz.slug || biz.id)}">${escapeHtml(biz.name)}</a></h3>
+                                    <p>Descripción: ${escapeHtml(redactarDescripcionFactual(biz.name, biz.description, biz.sector, biz.category))}</p>
+                                    <p>Ubicación: Sector ${escapeHtml(biz.sector || 'Centro')}, ${escapeHtml(officialLocality)}</p>
+                                    ${biz.phone ? `<p>Contacto: ${escapeHtml(biz.phone)}</p>` : ''}
                                 </li>
                             `).join('')}
                         </ol>
@@ -361,8 +611,10 @@ app.get('/localidad/:pueblo/:categoria', async (req, res) => {
             .replace(/<link rel="canonical".*?>/is, '')
             .replace(/<script type="application\/ld\+json">.*?WebSite.*?<\/script>/is, '')
             .replace('<head>', `<head>\n${metaTags}`)
-            .replace('<div id="root"></div>', `<div id="root">${semanticPayload}</div>`);
+            ;
+        baseHtml = injectRootHtml(baseHtml, semanticPayload);
 
+        if (!results.length) res.set('X-Robots-Tag', 'noindex, follow');
         res.status(200).send(baseHtml);
     } catch (error) {
         logger.error('[SEO] Error en hub SEO:', error);
@@ -376,7 +628,9 @@ app.get('/localidad/:pueblo/:categoria', async (req, res) => {
 function determinarSchemaType(category) {
     if (!category) return 'LocalBusiness';
     const cat = category.toLowerCase();
-    if (cat.includes('restaurante') || cat.includes('comida') || cat.includes('bar') || cat.includes('discoteca')) return 'Restaurant';
+    if (cat.includes('discoteca') || cat.includes('club nocturno')) return 'NightClub';
+    if (cat.includes('bar')) return 'BarOrPub';
+    if (cat.includes('restaurante') || cat.includes('comida')) return 'Restaurant';
     if (cat.includes('hotel') || cat.includes('hospedaje') || cat.includes('hostal')) return 'Hotel';
     if (cat.includes('surf') || cat.includes('escuela')) return 'SportsActivityLocation';
     if (cat.includes('tour') || cat.includes('operador')) return 'TravelAgency';
@@ -395,6 +649,19 @@ function mapearAmenidades(features) {
         "name": feature,
         "value": true
     }));
+}
+
+function mapearHorarios(openingHours) {
+    if (!openingHours || typeof openingHours !== 'object') return [];
+    const days = {
+        lunes: 'Monday', martes: 'Tuesday', miercoles: 'Wednesday', miércoles: 'Wednesday', jueves: 'Thursday',
+        viernes: 'Friday', sabado: 'Saturday', sábado: 'Saturday', domingo: 'Sunday',
+        monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday'
+    };
+    return Object.entries(openingHours).flatMap(([day, value]) => {
+        if (!value || value.closed || !value.open || !value.close || !days[day.toLowerCase()]) return [];
+        return [{ '@type': 'OpeningHoursSpecification', dayOfWeek: `https://schema.org/${days[day.toLowerCase()]}`, opens: value.open, closes: value.close }];
+    });
 }
 
 /**
@@ -469,14 +736,12 @@ app.get('/evento/:slug', async (req, res) => {
             if (doc.exists) event = doc.data();
         }
 
-        let baseHtml = '';
-        try {
-            const htmlRes = await axios.get(`${baseUrl}/`);
-            baseHtml = htmlRes.data;
-        } catch (err) {
-            logger.error('[SEO] Error fetching base HTML', err.message);
-            baseHtml = `<!DOCTYPE html><html><head><title>MontaPulse</title></head><body><div id="root"></div></body></html>`;
+        // Las URLs antiguas con ID de Firestore consolidan autoridad en el slug.
+        if (event?.slug && event.slug !== slug) {
+            return res.redirect(301, `/evento/${encodeURIComponent(event.slug)}`);
         }
+
+        let baseHtml = await getBaseHtml(baseUrl);
 
         if (event) {
             const eventLocality = event.locality || 'Montañita';
@@ -551,7 +816,7 @@ app.get('/evento/:slug', async (req, res) => {
 
             // Payload HTML semántico oculto para consumo directo de LLM
             const semanticPayload = `
-                <div id="seo-payload" style="display: none;" aria-hidden="true">
+                <div id="seo-payload">
                     <article>
                         <h1>${event.title || 'Evento'}</h1>
                         <p>Categoría del evento: ${event.category || 'Entretenimiento'}</p>
@@ -577,8 +842,8 @@ app.get('/evento/:slug', async (req, res) => {
                 .replace(/<meta name="twitter:.*?".*?>/is, '')
                 .replace(/<link rel="canonical".*?>/is, '')
                 .replace(/<script type="application\/ld\+json">.*?WebSite.*?<\/script>/is, '')
-                .replace('<head>', `<head>\n${metaTags}`)
-                .replace('<div id="root"></div>', `<div id="root">${semanticPayload}</div>`);
+            .replace('<head>', `<head>\n${metaTags}`);
+        baseHtml = injectRootHtml(baseHtml, semanticPayload);
         }
 
         res.status(200).send(baseHtml);
@@ -608,14 +873,12 @@ app.get('/negocio/:slug', async (req, res) => {
             if (doc.exists) business = doc.data();
         }
 
-        let baseHtml = '';
-        try {
-            const htmlRes = await axios.get(`${baseUrl}/`);
-            baseHtml = htmlRes.data;
-        } catch (err) {
-            logger.error('[SEO] Error fetching base HTML', err.message);
-            baseHtml = `<!DOCTYPE html><html><head><title>MontaPulse</title></head><body><div id="root"></div></body></html>`;
+        // Mantiene una única URL canónica aunque se visite un ID antiguo.
+        if (business?.slug && business.slug !== slug) {
+            return res.redirect(301, `/negocio/${encodeURIComponent(business.slug)}`);
         }
+
+        let baseHtml = await getBaseHtml(baseUrl);
 
         if (business) {
             const name = business.name || 'Negocio en MontaPulse';
@@ -661,8 +924,39 @@ app.get('/negocio/:slug', async (req, res) => {
                 },
                 "geo": geoCoordinates,
                 "priceRange": business.priceRange || "$$",
-                "amenityFeature": mapearAmenidades(business.services || business.emblematicServices)
+                "amenityFeature": mapearAmenidades(business.services || business.emblematicServices),
+                "openingHoursSpecification": mapearHorarios(business.openingHours),
+                "paymentAccepted": Array.isArray(business.paymentMethods) ? business.paymentMethods.join(', ') : undefined,
+                "currenciesAccepted": business.priceCurrency || 'USD',
+                "hasMenu": business.menuUrl || undefined
             };
+            const services = Array.isArray(business.services) ? business.services : (Array.isArray(business.emblematicServices) ? business.emblematicServices : []);
+            const serviceText = services.length ? services.join(', ') : 'Los servicios publicados se muestran en esta ficha cuando el negocio los registra.';
+            const locationReference = `${business.sector || 'el área central'} de ${bizLocality}, cerca de ${landmarkText(bizLocality)}`;
+            const defaultFaqs = [
+                {
+                    question: `¿Dónde está ubicado ${name} en ${bizLocality}?`,
+                    answer: `${name} está en ${locationReference}, Santa Elena, Ecuador.${geoCoordinates ? ' La ficha incluye coordenadas geográficas.' : ''}`
+                },
+                {
+                    question: `¿Qué servicios ofrece ${name}?`,
+                    answer: `${name} publica los siguientes servicios o comodidades: ${serviceText}.`
+                },
+                {
+                    question: `¿Cómo contactar a ${name}?`,
+                    answer: phone ? `Puedes contactar a ${name} por ${phone}.` : `Esta ficha no tiene un teléfono público registrado; consulta sus canales enlazados o vuelve a revisar la información actualizada.`
+                }
+            ];
+            const customFaqs = Array.isArray(business.customFaqs)
+                ? business.customFaqs.filter(faq => faq?.question && faq?.answer).slice(0, 2)
+                : [];
+            const businessFaq = buildFaqPage([...defaultFaqs, ...customFaqs]);
+            const breadcrumb = buildBreadcrumbList([
+                { name: 'Ecuador', url: 'https://www.ubicame.info/' },
+                { name: 'Santa Elena', url: 'https://www.ubicame.info/' },
+                { name: bizLocality, url: `${baseUrl}/explore?locality=${encodeURIComponent(bizLocality)}` },
+                { name, url: canonicalUrl }
+            ]);
 
             const metaTags = `
                 <title>${title}</title>
@@ -677,22 +971,25 @@ app.get('/negocio/:slug', async (req, res) => {
                 <meta name="twitter:title" content="${title}" />
                 <meta name="twitter:description" content="${cleanDescription}" />
                 <meta name="twitter:image" content="${imageUrl}" />
-                <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+                <script type="application/ld+json">${jsonLdScript(jsonLd)}</script>
+                <script type="application/ld+json">${jsonLdScript(businessFaq)}</script>
+                <script type="application/ld+json">${jsonLdScript(breadcrumb)}</script>
             `;
 
             // Payload HTML semántico oculto para consumo directo de LLM
             const semanticPayload = `
-                <div id="seo-payload" style="display: none;" aria-hidden="true">
+                <div id="seo-payload">
                     <article>
-                        <h1>${name}</h1>
-                        <p>Categoría comercial: ${business.category || ''}</p>
-                        <p>Sector geográfico: ${business.sector || ''}, ${bizLocality}, Santa Elena, Ecuador</p>
-                        <p>Descripción factual: ${cleanDescription}</p>
-                        ${phone ? `<p>Número de contacto: ${phone}</p>` : ''}
-                        ${business.email ? `<p>Correo electrónico: ${ofuscarEmailSpam(business.email)}</p>` : ''}
-                        ${business.instagram ? `<p>Instagram oficial: <a href="https://instagram.com/${business.instagram.replace('@', '')}">@${business.instagram.replace('@', '')}</a></p>` : ''}
+                        <h1>${escapeHtml(name)}</h1>
+                        <p>Categoría comercial: ${escapeHtml(business.category || '')}</p>
+                        <p>Sector geográfico: ${escapeHtml(business.sector || '')}, ${escapeHtml(bizLocality)}, Santa Elena, Ecuador</p>
+                        <p>Referencia local: cerca de ${escapeHtml(landmarkText(bizLocality))}.</p>
+                        <p>Descripción factual: ${escapeHtml(cleanDescription)}</p>
+                        ${phone ? `<p>Número de contacto: ${escapeHtml(phone)}</p>` : ''}
+                        ${business.email ? `<p>Correo electrónico: ${escapeHtml(ofuscarEmailSpam(business.email))}</p>` : ''}
+                        ${business.instagram ? `<p>Instagram oficial: <a href="https://instagram.com/${encodeURIComponent(business.instagram.replace('@', ''))}">@${escapeHtml(business.instagram.replace('@', ''))}</a></p>` : ''}
                         <ul>
-                            ${(business.services || []).map(serv => `<li>Servicio/Amenidad: ${serv}</li>`).join('')}
+                            ${services.map(serv => `<li>Servicio/Amenidad: ${escapeHtml(serv)}</li>`).join('')}
                         </ul>
                     </article>
                 </div>
@@ -710,8 +1007,8 @@ app.get('/negocio/:slug', async (req, res) => {
                 .replace(/<meta name="twitter:.*?".*?>/is, '')
                 .replace(/<link rel="canonical".*?>/is, '')
                 .replace(/<script type="application\/ld\+json">.*?WebSite.*?<\/script>/is, '')
-                .replace('<head>', `<head>\n${metaTags}`)
-                .replace('<div id="root"></div>', `<div id="root">${semanticPayload}</div>`);
+            .replace('<head>', `<head>\n${metaTags}`);
+        baseHtml = injectRootHtml(baseHtml, semanticPayload);
         }
 
         res.status(200).send(baseHtml);
@@ -1711,4 +2008,3 @@ export const resizeUploadedImage = functionsV1.region("us-east1").storage.bucket
         logger.error("[Resize] Error resizing image:", error);
     }
 });
-

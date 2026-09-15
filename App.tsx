@@ -38,6 +38,7 @@ const ExploreFeed = lazy(() => import('./pages/ExploreFeed').then(m => ({ defaul
 const InfoPage = lazy(() => import('./pages/InfoPage').then(m => ({ default: m.InfoPage })));
 const CalendarPage = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })));
 const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })));
+const GeoGuide = lazy(() => import('./pages/GeoGuide').then(m => ({ default: m.GeoGuide })));
 const Plans = lazy(() => import('./pages/Plans').then(m => ({ default: m.Plans })));
 const Policies = lazy(() => import('./pages/Policies').then(m => ({ default: m.Policies })));
 
@@ -256,10 +257,11 @@ const Dashboard: React.FC = () => {
     const path = location.pathname;
     if (path === '/' || path === '/explore' || path.startsWith('/evento/')) setActiveView('explore');
     else if (path.startsWith('/negocio/')) setActiveView('services');
-    else if (path === '/calendar') setActiveView('calendar');
+    else if (path === '/calendar' || path.startsWith('/agenda/')) setActiveView('calendar');
     else if (path === '/community' || path === '/chat') setActiveView('community');
     else if (path === '/passport') setActiveView('favorites');
     else if (path === '/history') setActiveView('history');
+    else if (path === '/ruta-del-spondylus' || path.startsWith('/guia/')) setActiveView('guide');
     else if (path === '/plans') setActiveView('plans');
     else if (path === '/saved-events') setActiveView('all-favorites');
     
@@ -587,6 +589,14 @@ const Dashboard: React.FC = () => {
             </Suspense>
           </ErrorBoundary>
         );
+      case 'guide':
+        return (
+          <ErrorBoundary name="GeoGuide">
+            <Suspense fallback={<PageLoader />}>
+              <GeoGuide />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'plans':
         return (
           <ErrorBoundary name="Plans">
@@ -638,7 +648,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className={`fixed inset-0 w-screen bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden flex flex-row font-sans select-none transition-colors duration-500`}>
       <Sidebar />
-      <div className={`flex-1 flex flex-col h-full relative ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history', 'services'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+      <div className={`flex-1 flex flex-col h-full relative ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history', 'guide', 'services'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
         <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--glass)] backdrop-blur-xl border-b border-[var(--glass-border)] h-16 flex items-center justify-between px-6 transition-colors duration-500">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20 rotate-3">
@@ -704,7 +714,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <main className={`flex-1 lg:pt-0 pt-16 ${['favorites', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['favorites', 'policies', 'plans', 'calendar', 'info', 'history'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
+        <main className={`flex-1 lg:pt-0 pt-16 ${['favorites', 'policies', 'plans', 'calendar', 'info', 'history', 'guide'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['favorites', 'policies', 'plans', 'calendar', 'info', 'history', 'guide'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
           {renderView()}
         </main>
       </div>
