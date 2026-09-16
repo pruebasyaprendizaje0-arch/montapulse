@@ -13,12 +13,12 @@ import { getAuth } from 'firebase/auth';
 import { getMessaging } from 'firebase/messaging';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyB9rX2IUTx99cWvdjTZ7YJD3ouDdordjj8",
-    authDomain: "montapulse-app.firebaseapp.com",
-    projectId: "montapulse-app",
-    storageBucket: "montapulse-app.firebasestorage.app",
-    messagingSenderId: "171684408196",
-    appId: "1:171684408196:web:11eb216bd0b67ab58b0bd1"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyB9rX2IUTx99cWvdjTZ7YJD3ouDdordjj8",
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "montapulse-app.firebaseapp.com",
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "montapulse-app",
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "montapulse-app.firebasestorage.app",
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "171684408196",
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:171684408196:web:11eb216bd0b67ab58b0bd1"
 };
 
 const app = initializeApp(firebaseConfig);

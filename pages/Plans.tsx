@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     ChevronLeft, ChevronRight, CheckCircle, Calendar, MapPin, Sparkles, Zap,
     MessageCircle, Navigation, CreditCard, Edit3, Banknote, Mail, Star,
-    Check, Crown, Info, ShieldCheck, Smartphone, TrendingUp, Copy, CopyCheck, Award
+    Check, Crown, Info, ShieldCheck, Smartphone, TrendingUp, Copy, CopyCheck, Award, X, Loader2, ArrowRight, Landmark
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { SubscriptionPlan, PlanFeatureDefinition } from '../types';
@@ -10,6 +10,8 @@ import { PLAN_LIMITS, PLAN_FEATURES } from '../constants';
 import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
+import { db } from '../firebase.config';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 interface PlanFeatureProps {
     icon?: any;
@@ -137,9 +139,20 @@ export const Plans: React.FC = () => {
         setTempFeatures(newFeatures);
     };
 
+    const [selectedPlanForPurchase, setSelectedPlanForPurchase] = useState<SubscriptionPlan | null>(null);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<'dlocal_go' | 'transferencia'>('dlocal_go');
+    const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+
     const onUpdatePlan = async (plan: SubscriptionPlan) => {
+        if (!user) {
+            showToast('Debes iniciar sesión para activar o mejorar un plan.', 'info');
+            navigate('/login');
+            return;
+        }
+
         if (plan === user?.plan) {
-            showToast('Ya tienes este plan activo', 'info');
+            showToast('Ya tienes este plan activo.', 'info');
             return;
         }
 
@@ -149,41 +162,74 @@ export const Plans: React.FC = () => {
             return;
         }
 
-        const confirmed = await showConfirm(
-            `¿Seguro que quieres mejorar al plan ${tempPlanNames[plan]} por $${price.toFixed(2)}?\n\nSerás redirigido a la pasarela de pago segura de dLocal Go para finalizar la transacción.`,
-            'Mejorar suscripción'
-        );
+        // Abrir modal de selección de pago
+        setSelectedPlanForPurchase(plan);
+        setIsPaymentModalOpen(true);
+    };
 
-        if (confirmed) {
-            try {
-                showToast('Conectando con dLocal Go...', 'info');
+    const handleConfirmPurchase = async () => {
+        if (!selectedPlanForPurchase || !user) {
+            showToast('Debes iniciar sesión para activar un plan.', 'error');
+            return;
+        }
 
-                const response = await fetch('/api/create-checkout', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        amount: Number(price),
-                        currency: 'USD', // Ajustar según moneda local si es necesario
-                        description: `Plan ${tempPlanNames[plan]} - ${user?.email || 'Huésped'}`,
-                        userId: user?.id || 'anonymous',
-                        planId: plan
-                    })
-                });
+        const price = planPrices[selectedPlanForPurchase] || 29.99;
+        const planName = tempPlanNames[selectedPlanForPurchase] || selectedPlanForPurchase;
 
-                const data = await response.json();
+        setIsSubmittingPayment(true);
+        try {
+            // 1. Crear documento en Firestore 'payment_requests'
+            await addDoc(collection(db, 'payment_requests'), {
+                userId: user.id || (user as any).uid,
+                userName: `${user.name || ''} ${user.surname || ''}`.trim() || user.email || 'Cliente Pulse',
+                userEmail: user.email || '',
+                plan: planName,
+                planId: selectedPlanForPurchase,
+                fecha: serverTimestamp(),
+                estado: 'pendiente',
+                montoEstimado: Number(price),
+                metodo: paymentMethod
+            });
 
-                if (data.checkout_url) {
-                    // Redirigir a la pasarela de dLocal Go
-                    window.location.href = data.checkout_url;
-                } else {
-                    throw new Error('Error en la respuesta del servidor');
+            if (paymentMethod === 'dlocal_go') {
+                showToast('Solicitud registrada. Conectando con pasarela segura...', 'info');
+                try {
+                    const response = await fetch('/api/create-checkout', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            amount: Number(price),
+                            currency: 'USD',
+                            description: `Plan ${planName} - ${user.email}`,
+                            userId: user.id || (user as any).uid,
+                            planId: selectedPlanForPurchase
+                        })
+                    });
+                    const data = await response.json();
+                    if (data?.checkout_url) {
+                        window.location.href = data.checkout_url;
+                        return;
+                    } else {
+                        window.open('https://dlocal.com', '_blank');
+                    }
+                } catch (e) {
+                    window.open('https://dlocal.com', '_blank');
                 }
-            } catch (error) {
-                console.error('Checkout error:', error);
-                showToast('No pudimos iniciar el pago. Por favor intenta más tarde.', 'error');
+                showToast('Solicitud de pago con dLocal Go enviada para verificación.', 'success');
+            } else {
+                // Transferencia Bancaria: Abrir WhatsApp con mensaje preconfigurado
+                const cleanNumber = (paymentDetails?.whatsappNumber || '593996147857').replace(/\D/g, '');
+                const whatsappMsg = `Hola! Acabo de registrar mi solicitud de pago para el Plan ${planName} ($${Number(price).toFixed(2)}) mediante transferencia bancaria. Adjunto mi comprobante para la activación.`;
+                window.open(`https://wa.me/${cleanNumber}?text=${encodeURIComponent(whatsappMsg)}`, '_blank');
+                showToast('¡Solicitud registrada con éxito! Tu plan será activado en breve tras verificar el comprobante.', 'success');
             }
+
+            setIsPaymentModalOpen(false);
+        } catch (error: any) {
+            console.error('Error al registrar solicitud de pago:', error);
+            showToast('No se pudo registrar la solicitud: ' + (error?.message || 'Error'), 'error');
+        } finally {
+            setIsSubmittingPayment(false);
         }
     };
 
@@ -560,7 +606,7 @@ export const Plans: React.FC = () => {
                 </div>
             </div>
 
-            {/* Botón Flotante de WhatsApp */}
+            {/* Floating WhatsApp Button */}
             <a 
                 href={`https://wa.me/${(paymentDetails?.whatsappNumber || '593996147857').replace(/\D/g, '')}?text=${encodeURIComponent('Hola! Me gustaría realizar una consulta sobre las suscripciones de MontaPulse.')}`}
                 target="_blank"
@@ -572,8 +618,142 @@ export const Plans: React.FC = () => {
                     <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.729-1.452L0 24zm6.59-4.846c1.6.95 3.498 1.45 5.419 1.451 5.524 0 10.018-4.494 10.022-10.02.002-2.678-1.04-5.197-2.937-7.097-1.9-1.9-4.42-2.946-7.1-2.947-5.522 0-10.016 4.494-10.02 10.02-.001 1.93.504 3.818 1.465 5.424l-.993 3.626 3.715-.975zm11.583-7.73c-.322-.16-.1.21-.322-.16-.322-.16-1.9-1.397-2.193-1.503-.292-.107-.505-.16-.716.16-.21.32-.816.98-.998 1.194-.183.214-.366.24-.688.08-.323-.16-1.364-.502-2.596-1.6c-.96-.856-1.607-1.912-1.795-2.23-.188-.32-.02-.493.14-.653.146-.143.32-.373.48-.56.16-.188.213-.32.32-.533.107-.213.054-.4-.027-.56-.08-.16-.716-1.727-.98-2.368-.258-.622-.52-.538-.716-.548-.184-.01-.395-.01-.606-.01-.21 0-.553.08-.843.393-.29.313-1.107 1.082-1.107 2.64 0 1.557 1.134 3.064 1.293 3.277.16.213 2.23 3.402 5.4 4.766.753.325 1.342.52 1.802.666.756.24 1.444.207 1.987.126.607-.09 1.867-.763 2.13-1.5.264-.737.264-1.37.185-1.503-.08-.133-.293-.213-.615-.373z"/>
                 </svg>
             </a>
+
+            {/* Modal de Selección de Método de Pago Híbrido */}
+            {isPaymentModalOpen && selectedPlanForPurchase && (
+                <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="bg-neutral-950 border border-white/10 rounded-[2.5rem] p-6 sm:p-8 max-w-lg w-full shadow-2xl relative text-left overflow-hidden">
+                        {/* Glow effect */}
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/10 blur-3xl pointer-events-none rounded-full" />
+
+                        {/* Close button */}
+                        <button
+                            onClick={() => setIsPaymentModalOpen(false)}
+                            className="absolute top-6 right-6 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-all"
+                        >
+                            <X size={18} />
+                        </button>
+
+                        <div className="mb-6">
+                            <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest bg-orange-500/10 px-3 py-1 rounded-full border border-orange-500/20">
+                                Confirmar Adquisición
+                            </span>
+                            <h3 className="text-2xl font-black text-white uppercase italic tracking-tight mt-3">
+                                Activar Plan <span className="text-orange-500">{tempPlanNames[selectedPlanForPurchase] || selectedPlanForPurchase}</span>
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-1">
+                                Inversión estimada: <span className="text-white font-bold">${(planPrices[selectedPlanForPurchase] || 29.99).toFixed(2)} USD / mes</span>
+                            </p>
+                        </div>
+
+                        {/* Payment Options */}
+                        <div className="space-y-3 mb-6">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">
+                                Selecciona el Método de Pago
+                            </label>
+
+                            {/* Opción A: dLocal Go */}
+                            <div 
+                                onClick={() => setPaymentMethod('dlocal_go')}
+                                className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-4 ${
+                                    paymentMethod === 'dlocal_go' 
+                                        ? 'bg-orange-500/10 border-orange-500 shadow-lg shadow-orange-500/10' 
+                                        : 'bg-white/5 border-white/10 hover:bg-white/[0.08]'
+                                }`}
+                            >
+                                <div className={`p-2.5 rounded-xl ${paymentMethod === 'dlocal_go' ? 'bg-orange-500 text-white' : 'bg-white/10 text-slate-400'}`}>
+                                    <CreditCard size={20} />
+                                </div>
+                                <div className="flex-1">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-xs font-black text-white uppercase tracking-wider">Pago Seguro con dLocal Go</h4>
+                                        <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                                            Instantáneo
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                        Tarjetas de crédito/débito y pasarelas bancarias integradas.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Opción B: Transferencia Bancaria */}
+                            <div 
+                                onClick={() => setPaymentMethod('transferencia')}
+                                className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-4 ${
+                                    paymentMethod === 'transferencia' 
+                                        ? 'bg-orange-500/10 border-orange-500 shadow-lg shadow-orange-500/10' 
+                                        : 'bg-white/5 border-white/10 hover:bg-white/[0.08]'
+                                }`}
+                            >
+                                <div className={`p-2.5 rounded-xl ${paymentMethod === 'transferencia' ? 'bg-orange-500 text-white' : 'bg-white/10 text-slate-400'}`}>
+                                    <Banknote size={20} />
+                                </div>
+                                <div className="flex-1">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-xs font-black text-white uppercase tracking-wider">Transferencia Bancaria</h4>
+                                        <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                            Directo
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                        Deposita a nuestra cuenta y notifica por WhatsApp para activación manual.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bank account summary if Transfer is selected */}
+                        {paymentMethod === 'transferencia' && (
+                            <div className="p-4 rounded-2xl bg-black/50 border border-white/10 mb-6 space-y-2">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-500 font-bold uppercase text-[9px]">Banco:</span>
+                                    <span className="text-white font-bold">{paymentDetails.bankName}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-500 font-bold uppercase text-[9px]">Cuenta:</span>
+                                    <span className="text-orange-400 font-mono font-bold">{paymentDetails.accountNumber} ({paymentDetails.accountType})</span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-500 font-bold uppercase text-[9px]">Titular / RUC:</span>
+                                    <span className="text-white font-bold">{paymentDetails.accountOwner} · {paymentDetails.idNumber}</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setIsPaymentModalOpen(false)}
+                                disabled={isSubmittingPayment}
+                                className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-black text-xs uppercase tracking-widest rounded-2xl transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmPurchase}
+                                disabled={isSubmittingPayment}
+                                className="flex-[2] py-4 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                            >
+                                {isSubmittingPayment ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        <span>Procesando...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>{paymentMethod === 'dlocal_go' ? 'Pagar con dLocal Go' : 'Notificar por WhatsApp'}</span>
+                                        <ArrowRight size={16} />
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 export default Plans;
+

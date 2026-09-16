@@ -52,9 +52,9 @@ export const SuperAdminCenter: React.FC<SuperAdminCenterProps> = ({ onClose }) =
     // --- Statistics ---
     const stats = useMemo(() => {
         const totalRevenue = businesses.reduce((acc, b) => {
-            if (b.plan === SubscriptionPlan.PRO) return acc + 10;
-            if (b.plan === SubscriptionPlan.ELITE) return acc + 25;
-            if (b.plan === SubscriptionPlan.EXPERT) return acc + 50;
+            if (b.plan === SubscriptionPlan.PRO) return acc + 5;
+            if (b.plan === SubscriptionPlan.ELITE) return acc + 10;
+            if (b.plan === SubscriptionPlan.EXPERT) return acc + 25;
             return acc;
         }, 0);
 

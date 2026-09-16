@@ -20,34 +20,23 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.admin == true || 
-        (exists(/databases/$(database)/documents/users_v2/$(request.auth.uid)) && getUserData().role == 'admin') ||
-        (request.auth.token.email.lower() == 'pruebasyaprendizaje0@gmail.com' ||
-         request.auth.token.email.lower() == 'fhernandezcalle@gmail.com' ||
-         request.auth.token.email.lower() == 'ubicameinformacion@gmail.com')
-      );
-    }
-
-    function isSuperAdminEmail() {
-      return isAuthenticated() && (
-        request.auth.token.email.lower() == 'pruebasyaprendizaje0@gmail.com' ||
-        request.auth.token.email.lower() == 'fhernandezcalle@gmail.com' ||
-        request.auth.token.email.lower() == 'ubicameinformacion@gmail.com'
+        (exists(/databases/$(database)/documents/users_v2/$(request.auth.uid)) && get(/databases/$(database)/documents/users_v2/$(request.auth.uid)).data.role == 'admin')
       );
     }
 
     // ========== REGLAS DE COLECCIONES ==========
 
-    // Users V2: Público para perfiles, pero solo dueño/admin escribe
+    // Users V2: Solo el dueño o administradores pueden leer y gestionar
     match /users_v2/{userId} {
-      allow read: if true;
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && (
-        isSuperAdminEmail() ||
+        isAdmin() ||
         (
           (!request.resource.data.keys().hasAny(['role']) || request.resource.data.role == 'visitor' || request.resource.data.role == 'host') &&
           (!request.resource.data.keys().hasAny(['plan']) || request.resource.data.plan == 'Free')
         )
       );
-      allow update: if isAdmin() || isSuperAdminEmail() || (
+      allow update: if isAdmin() || (
         isOwner(userId) && 
         (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'plan']) ||
@@ -57,7 +46,7 @@ service cloud.firestore {
           )
         )
       );
-      allow delete: if isAdmin() || isSuperAdminEmail();
+      allow delete: if isAdmin();
     }
     
     // Negocios: Público read, incrementos de vista permitidos para todos
@@ -227,6 +216,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
+    // Solicitudes de pago (dLocal Go / Transferencia Bancaria):
+    // - Creación: Usuario autenticado con su propio UID y estado 'pendiente'
+    // - Lectura: El propio usuario o administradores
+    // - Actualización: Solo administradores (para dar de alta y confirmar)
+    // - Borrado: Bloqueado para todos (auditoría e historial contable inmutable)
+    match /payment_requests/{reqId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && 
+                    request.resource.data.userId == request.auth.uid && 
+                    request.resource.data.estado == 'pendiente';
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
     // Boosts: Privado read/create
     match /boosts/{boostId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());

@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       }
     },
+    esbuild: {
+      drop: ['console', 'debugger']
+    },
     optimizeDeps: {
       esbuildOptions: {
         supported: {

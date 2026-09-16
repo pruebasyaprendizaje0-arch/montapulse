@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
     Search, Calendar, CreditCard, ArrowUpDown, ChevronDown, 
-    FileText, User, Tag, Sparkles, Check, X, ExternalLink, Image, Lock, ShieldCheck, Banknote
+    FileText, User, Tag, Sparkles, Check, X, ExternalLink, Image, Lock, ShieldCheck, Banknote, Loader2
 } from 'lucide-react';
 import { useData } from '../../../context/DataContext';
 import { SubscriptionPlan } from '../../../types';
 import { db } from '../../../firebase.config';
-import { collection, doc, getDoc, getDocs, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, updateDoc, setDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { useToast } from '../../../context/ToastContext';
 
 type AdminPaymentTab = 'plans' | 'menus';
@@ -19,12 +19,45 @@ export const PaymentsPanel: React.FC = () => {
     const [filterPlan, setFilterPlan] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
     const [selectedTx, setSelectedTx] = useState<any | null>(null);
+    const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
+    const [approvingId, setApprovingId] = useState<string | null>(null);
 
     // Menus Addon approvals
     const [menuSearch, setMenuSearch] = useState('');
     const [menuFilterStatus, setMenuFilterStatus] = useState('all');
 
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+    // Escucha en tiempo real de payment_requests
+    useEffect(() => {
+        const q = query(collection(db, 'payment_requests'), orderBy('fecha', 'desc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const reqs = snapshot.docs.map(docSnap => {
+                const data = docSnap.data();
+                const rawDate = data.fecha?.toDate ? data.fecha.toDate() : (data.fecha ? new Date(data.fecha) : new Date());
+                const isPaid = data.estado === 'confirmado';
+                const isFailed = data.estado === 'rechazado';
+                
+                return {
+                    id: docSnap.id,
+                    ...data,
+                    isPaymentRequest: true,
+                    userId: data.userId,
+                    planId: data.plan || SubscriptionPlan.EXPERT,
+                    status: isPaid ? 'PAID' : isFailed ? 'FAILED' : 'PENDING',
+                    timestamp: rawDate,
+                    amount: data.montoEstimado || 29.99,
+                    gateway: data.metodo === 'dlocal_go' ? 'dLocal Go' : 'Transferencia Bancaria',
+                    methodName: data.metodo === 'dlocal_go' ? 'dLocal Go' : 'Transferencia'
+                };
+            });
+            setPaymentRequests(reqs);
+        }, (error) => {
+            console.warn('Error escuchando payment_requests:', error);
+        });
+
+        return () => unsubscribe();
+    }, []);
 
     // Map user info for easy lookup
     const userMap = useMemo(() => {
@@ -52,7 +85,44 @@ export const PaymentsPanel: React.FC = () => {
         return map;
     }, [businesses]);
 
+    // Aprobar solicitud y dar de alta usuario inmediatamente
+    const handleApprovePayment = async (tx: any) => {
+        const targetUserId = tx.userId;
+        const targetPlan = tx.planId || tx.plan || SubscriptionPlan.EXPERT;
+        const userName = userMap[targetUserId]?.name || tx.userName || 'Cliente';
 
+        if (!targetUserId) {
+            showToast('No se encontró el ID del usuario para dar de alta.', 'error');
+            return;
+        }
+
+        setApprovingId(tx.id);
+        try {
+            // 1. Si es una solicitud de payment_requests, actualizar estado a "confirmado"
+            if (tx.isPaymentRequest || tx.metodo) {
+                const reqRef = doc(db, 'payment_requests', tx.id);
+                await updateDoc(reqRef, {
+                    estado: 'confirmado',
+                    fechaConfirmacion: new Date()
+                });
+            }
+
+            // 2. Buscar documento del usuario en /users_v2/{userId} y actualizar plan y rol
+            const userRef = doc(db, 'users_v2', targetUserId);
+            await updateDoc(userRef, {
+                plan: targetPlan,
+                role: 'host',
+                updatedAt: new Date()
+            });
+
+            showToast(`¡Plan ${targetPlan} activado! ${userName} fue dado de alta con éxito.`, 'success');
+        } catch (error: any) {
+            console.error('Error al dar de alta:', error);
+            showToast('Error al activar el plan: ' + (error?.message || 'Error desconocido'), 'error');
+        } finally {
+            setApprovingId(null);
+        }
+    };
 
     const handleApproveMenu = async (bizId: string) => {
         try {
@@ -104,12 +174,29 @@ export const PaymentsPanel: React.FC = () => {
         });
     };
 
+    // Unificación de payment_requests y transacciones del gateway
+    const allPaymentItems = useMemo(() => {
+        const reqIds = new Set(paymentRequests.map(r => r.id));
+        const normalizedTx = transactions.filter(t => !reqIds.has(t.id)).map(t => ({
+            ...t,
+            isPaymentRequest: false,
+            amount: t.rawBody?.amount || (t.planId === SubscriptionPlan.PRO ? 5 : t.planId === SubscriptionPlan.ELITE ? 10 : t.planId === SubscriptionPlan.EXPERT ? 25 : 5),
+            gateway: (t as any).gateway || 'dLocal Go'
+        }));
+
+        return [...paymentRequests, ...normalizedTx].sort((a, b) => {
+            const timeA = new Date(a.timestamp || 0).getTime();
+            const timeB = new Date(b.timestamp || 0).getTime();
+            return timeB - timeA;
+        });
+    }, [paymentRequests, transactions]);
+
     // Filtered Transactions
     const filteredTransactions = useMemo(() => {
-        return transactions.filter(tx => {
+        return allPaymentItems.filter(tx => {
             const user = userMap[tx.userId];
-            const userName = user?.name || '';
-            const userEmail = user?.email || '';
+            const userName = user?.name || tx.userName || '';
+            const userEmail = user?.email || tx.userEmail || '';
             const searchStr = searchQuery.toLowerCase();
 
             const matchesSearch = !searchQuery || 
@@ -117,12 +204,31 @@ export const PaymentsPanel: React.FC = () => {
                 userEmail.toLowerCase().includes(searchStr) ||
                 tx.id.toLowerCase().includes(searchStr);
 
-            const matchesPlan = filterPlan === 'all' || tx.planId === filterPlan;
+            const matchesPlan = filterPlan === 'all' || tx.planId === filterPlan || (tx.plan && tx.plan.toLowerCase() === filterPlan.toLowerCase());
             const matchesStatus = filterStatus === 'all' || tx.status === filterStatus;
 
             return matchesSearch && matchesPlan && matchesStatus;
         });
-    }, [transactions, searchQuery, filterPlan, filterStatus, userMap]);
+    }, [allPaymentItems, searchQuery, filterPlan, filterStatus, userMap]);
+
+    // Statistics for Plans
+    const paymentStats = useMemo(() => {
+        const totalCount = filteredTransactions.length;
+        const paidCount = filteredTransactions.filter(t => t.status === 'PAID').length;
+        
+        const revenue = filteredTransactions.reduce((acc, t) => {
+            if (t.status !== 'PAID') return acc;
+            if (t.amount && !isNaN(parseFloat(String(t.amount)))) {
+                return acc + parseFloat(String(t.amount));
+            }
+            if (t.planId === SubscriptionPlan.PRO) return acc + 5;
+            if (t.planId === SubscriptionPlan.ELITE) return acc + 10;
+            if (t.planId === SubscriptionPlan.EXPERT) return acc + 25;
+            return acc;
+        }, 0);
+
+        return { totalCount, paidCount, revenue };
+    }, [filteredTransactions]);
 
 
     // Filtered Menus (maps over all businesses so they all show up)
@@ -151,24 +257,6 @@ export const PaymentsPanel: React.FC = () => {
             return matchesSearch && matchesStatus;
         });
     }, [businesses, menuSearch, menuFilterStatus]);
-
-    // Statistics for Plans
-    const paymentStats = useMemo(() => {
-        const totalCount = filteredTransactions.length;
-        const paidCount = filteredTransactions.filter(t => t.status === 'PAID').length;
-        
-        const revenue = filteredTransactions.reduce((acc, t) => {
-            if (t.status !== 'PAID') return acc;
-            if (t.planId === SubscriptionPlan.PRO) return acc + 10;
-            if (t.planId === SubscriptionPlan.ELITE) return acc + 25;
-            if (t.planId === SubscriptionPlan.EXPERT) return acc + 50;
-            const amount = t.rawBody?.amount || t.rawBody?.amount_paid;
-            if (amount && !isNaN(parseFloat(amount))) return acc + parseFloat(amount);
-            return acc;
-        }, 0);
-
-        return { totalCount, paidCount, revenue };
-    }, [filteredTransactions]);
 
     return (
         <div className="space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
@@ -261,19 +349,21 @@ export const PaymentsPanel: React.FC = () => {
                                     {filteredTransactions.length === 0 ? (
                                         <tr>
                                             <td colSpan={6} className="p-8 text-center text-xs text-slate-500 font-medium">
-                                                No se encontraron transacciones registradas.
+                                                No se encontraron transacciones ni solicitudes de pago registradas.
                                             </td>
                                         </tr>
                                     ) : (
                                         filteredTransactions.map(tx => {
                                             const user = userMap[tx.userId];
-                                            const amount = tx.rawBody?.amount || (tx.planId === SubscriptionPlan.PRO ? 10 : tx.planId === SubscriptionPlan.ELITE ? 25 : tx.planId === SubscriptionPlan.EXPERT ? 50 : 0);
+                                            const amount = tx.amount !== undefined ? tx.amount : (tx.rawBody?.amount || (tx.planId === SubscriptionPlan.PRO ? 10 : tx.planId === SubscriptionPlan.ELITE ? 25 : tx.planId === SubscriptionPlan.EXPERT ? 50 : 29.99));
+                                            const isPending = tx.status === 'PENDING' || tx.estado === 'pendiente';
+                                            const isApproving = approvingId === tx.id;
                                             
                                             return (
                                                 <tr key={tx.id} className="hover:bg-white/[0.02] transition-colors text-xs text-slate-300">
                                                     <td className="p-4">
                                                         <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 p-0.5 shadow-lg shrink-0">
+                                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 p-0.5 shadow-lg shrink-0">
                                                                 <div className="w-full h-full rounded-full bg-black overflow-hidden border border-black flex items-center justify-center">
                                                                     {user?.avatarUrl ? (
                                                                         <img src={user.avatarUrl} className="w-full h-full object-cover" />
@@ -283,34 +373,52 @@ export const PaymentsPanel: React.FC = () => {
                                                                 </div>
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <p className="font-bold text-white truncate">{user?.name || 'Usuario Desconocido'}</p>
-                                                                <p className="text-[10px] text-slate-500 truncate">{user?.email || 'Desconocido'}</p>
+                                                                <p className="font-bold text-white truncate">{user?.name || tx.userName || 'Usuario Desconocido'}</p>
+                                                                <p className="text-[10px] text-slate-500 truncate">{user?.email || tx.userEmail || 'Desconocido'}</p>
                                                             </div>
                                                         </div>
                                                     </td>
                                                     <td className="p-4 font-bold uppercase tracking-wider text-[10px]">
-                                                        <span className={`px-2 py-1 rounded-lg ${tx.planId === SubscriptionPlan.ELITE ? 'bg-amber-500/10 text-amber-500' : tx.planId === SubscriptionPlan.PRO ? 'bg-sky-500/10 text-sky-500' : 'bg-purple-500/10 text-purple-400'}`}>
-                                                            {tx.planId}
+                                                        <span className={`px-2 py-1 rounded-lg ${tx.planId === SubscriptionPlan.ELITE ? 'bg-amber-500/10 text-amber-500' : tx.planId === SubscriptionPlan.PRO ? 'bg-sky-500/10 text-sky-500' : 'bg-orange-500/10 text-orange-400'}`}>
+                                                            {tx.planId || tx.plan}
                                                         </span>
                                                     </td>
                                                     <td className="p-4 text-[10px] text-slate-400 whitespace-nowrap">
                                                         {formatTxDate(tx.timestamp)}
                                                     </td>
                                                     <td className="p-4 text-center">
-                                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${tx.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/20' : tx.status === 'FAILED' ? 'bg-rose-500/20 text-rose-500' : 'bg-amber-500/20 text-amber-500'}`}>
-                                                            {tx.status}
+                                                        <span className={`px-2.5 py-1 rounded text-[8px] font-black uppercase tracking-wider ${tx.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20' : tx.status === 'FAILED' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/20' : 'bg-amber-500/20 text-amber-400 border border-amber-500/20'}`}>
+                                                            {tx.status === 'PAID' ? 'Confirmado' : tx.status === 'FAILED' ? 'Fallido' : 'Pendiente'}
                                                         </span>
                                                     </td>
-                                                    <td className="p-4 text-right font-black text-white">
-                                                        ${parseFloat(String(amount)).toFixed(2)}
+                                                    <td className="p-4 text-right">
+                                                        <p className="font-black text-white">${parseFloat(String(amount)).toFixed(2)}</p>
+                                                        <p className="text-[9px] text-slate-500 uppercase tracking-widest">{tx.gateway || (tx.metodo === 'dlocal_go' ? 'dLocal Go' : 'Transferencia')}</p>
                                                     </td>
                                                     <td className="p-4 text-center">
-                                                        <button 
-                                                            onClick={() => setSelectedTx(tx)}
-                                                            className="p-1 px-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-black uppercase text-white tracking-widest transition-all"
-                                                        >
-                                                            Ver
-                                                        </button>
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            {isPending && (
+                                                                <button
+                                                                    onClick={() => handleApprovePayment(tx)}
+                                                                    disabled={isApproving}
+                                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all cursor-pointer disabled:opacity-50"
+                                                                    title="Dar de alta y activar plan inmediatamente"
+                                                                >
+                                                                    {isApproving ? (
+                                                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                                                    ) : (
+                                                                        <Check className="w-3 h-3 stroke-[3]" />
+                                                                    )}
+                                                                    <span>Dar de Alta</span>
+                                                                </button>
+                                                            )}
+                                                            <button 
+                                                                onClick={() => setSelectedTx(tx)}
+                                                                className="p-1.5 px-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase text-white tracking-widest transition-all"
+                                                            >
+                                                                Ver
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );

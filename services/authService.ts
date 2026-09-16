@@ -6,7 +6,8 @@ import {
     signOut,
     onAuthStateChanged,
     User,
-    updateProfile
+    updateProfile,
+    sendEmailVerification
 } from 'firebase/auth';
 import { auth } from '../firebase.config';
 import { createUser } from './firestoreService';
@@ -63,6 +64,13 @@ export const registerWithEmail = async (
     try {
         // Create Firebase Auth account
         const result = await createUserWithEmailAndPassword(auth, email, password);
+
+        // Send email verification immediately
+        try {
+            await sendEmailVerification(result.user);
+        } catch (verificationError) {
+            console.error('Error sending email verification:', verificationError);
+        }
 
         // Upload avatar to Storage if it's base64
         let finalAvatarUrl = avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0ea5e9&color=fff&size=200`;
