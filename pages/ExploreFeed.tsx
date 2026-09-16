@@ -445,18 +445,18 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
             ) : (
                 <div className="h-full relative flex flex-col lg:flex-row bg-[#020617] overflow-hidden">
                 {/* Search Bar & Admin Tools */}
-                <div className="absolute top-6 inset-x-0 lg:left-0 lg:right-0 z-50 flex flex-col items-center gap-4 pointer-events-none px-6 transition-all duration-500">
+                <div className="absolute top-3 sm:top-6 inset-x-0 lg:left-0 lg:right-0 z-50 flex flex-col items-center gap-4 pointer-events-none px-2.5 sm:px-6 transition-all duration-500">
                     <div className="w-full max-w-xl pointer-events-auto relative group">
-                        <div className="relative flex items-center bg-[#020617]/40 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-1.5 shadow-2xl shadow-black/60 ring-1 ring-white/5 transition-all group-focus-within:border-sky-500/30 group-hover:bg-[#020617]/60">
+                        <div className="relative flex items-center bg-[#020617]/50 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-1 sm:p-1.5 shadow-2xl shadow-black/60 ring-1 ring-white/5 transition-all group-focus-within:border-sky-500/30 group-hover:bg-[#020617]/70">
                             {/* Selector de Localidad */}
-                            <div className="relative">
+                            <div className="relative shrink-0">
                                 <button 
                                     onClick={() => setShowLocalityMenu(!showLocalityMenu)}
-                                    className="flex items-center gap-2 pl-4 pr-3 py-2 text-white hover:bg-white/10 rounded-l-[1.8rem] transition-colors border-r border-white/10 mr-2 group/loc"
+                                    className="flex items-center gap-1 sm:gap-2 pl-3 sm:pl-4 pr-2 sm:pr-3 py-1.5 sm:py-2 text-white hover:bg-white/10 rounded-l-[1.8rem] transition-colors border-r border-white/10 mr-1 sm:mr-2 group/loc shrink-0"
                                 >
-                                    <MapPin className="w-4 h-4 text-sky-400 group-hover/loc:scale-110 transition-transform" />
-                                    <span className="text-sm font-bold truncate max-w-[100px]">{currentLocality.name}</span>
-                                    <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showLocalityMenu ? 'rotate-180' : ''}`} />
+                                    <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-400 group-hover/loc:scale-110 transition-transform shrink-0" />
+                                    <span className="text-xs sm:text-sm font-bold truncate max-w-[70px] sm:max-w-[100px]">{currentLocality.name}</span>
+                                    <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 transition-transform shrink-0 ${showLocalityMenu ? 'rotate-180' : ''}`} />
                                 </button>
                                 
                                 {showLocalityMenu && (
@@ -496,32 +496,32 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                                 )}
                             </div>
 
-                            <Search className="w-4 h-4 text-slate-400 group-focus-within:text-sky-400 transition-colors" />
+                            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 group-focus-within:text-sky-400 transition-colors shrink-0 hidden xs:block" />
                             <input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Busca eventos, locales o experiencias..."
-                                className="flex-1 bg-transparent border-none outline-none px-4 text-sm font-bold text-white placeholder:text-slate-500 placeholder:font-black placeholder:uppercase placeholder:text-[10px] placeholder:tracking-widest"
+                                placeholder="Busca eventos, locales..."
+                                className="flex-1 min-w-0 bg-transparent border-none outline-none px-2 sm:px-4 text-xs sm:text-sm font-bold text-white placeholder:text-slate-500 placeholder:font-black placeholder:uppercase placeholder:text-[9px] sm:placeholder:text-[10px] placeholder:tracking-wider sm:placeholder:tracking-widest"
                             />
                             {searchQuery && (
                                 <button 
                                     onClick={() => setSearchQuery('')}
-                                    className="p-2.5 mr-1 hover:bg-white/10 rounded-full text-slate-500 hover:text-white transition-all pointer-events-auto"
+                                    className="p-1.5 sm:p-2.5 mr-0.5 sm:mr-1 hover:bg-white/10 rounded-full text-slate-500 hover:text-white transition-all pointer-events-auto shrink-0"
                                 >
-                                    <X className="w-4 h-4" />
+                                    <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                 </button>
                             )}
-                             <div className="relative">
+                             <div className="relative shrink-0">
                                 {/* Mood Selector Button */}
                                 <button 
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setShowMoodMenu(!showMoodMenu);
                                     }}
-                                    className={`w-11 h-11 rounded-full flex items-center justify-center border mr-1 shadow-lg transition-all hover:bg-slate-700 active:scale-95 ${selectedMood ? 'bg-rose-500 border-rose-400 text-white' : 'border-white/10 bg-gradient-to-br from-slate-800 to-slate-900 text-slate-400'}`}
+                                    className={`w-8 h-8 sm:w-11 sm:h-11 rounded-full flex items-center justify-center border mr-0.5 sm:mr-1 shadow-lg transition-all hover:bg-slate-700 active:scale-95 shrink-0 ${selectedMood ? 'bg-rose-500 border-rose-400 text-white' : 'border-white/10 bg-gradient-to-br from-slate-800 to-slate-900 text-slate-400'}`}
                                 >
-                                    <span className={`text-lg ${selectedMood ? 'text-white' : 'text-slate-400'}`}>🎯</span>
+                                    <span className={`text-sm sm:text-lg ${selectedMood ? 'text-white' : 'text-slate-400'}`}>🎯</span>
                                 </button>
                                 
                                 {showMoodMenu && (
@@ -613,15 +613,15 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="relative">
+                            <div className="relative shrink-0">
                                 <button 
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setShowFilterMenu(!showFilterMenu);
                                     }}
-                                    className={`w-11 h-11 rounded-full flex items-center justify-center border border-white/10 mr-1 shadow-lg transition-all hover:bg-slate-700 active:scale-95 ${showFilterMenu ? 'bg-sky-500 border-sky-400 text-white' : 'bg-gradient-to-br from-slate-800 to-slate-900 text-slate-400'}`}
+                                    className={`w-8 h-8 sm:w-11 sm:h-11 rounded-full flex items-center justify-center border border-white/10 mr-0.5 sm:mr-1 shadow-lg transition-all hover:bg-slate-700 active:scale-95 shrink-0 ${showFilterMenu ? 'bg-sky-500 border-sky-400 text-white' : 'bg-gradient-to-br from-slate-800 to-slate-900 text-slate-400'}`}
                                 >
-                                    <Filter className={`w-4 h-4 ${showFilterMenu ? 'text-white' : 'text-slate-400'}`} />
+                                    <Filter className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${showFilterMenu ? 'text-white' : 'text-slate-400'}`} />
                                 </button>
                                 
                                 {showFilterMenu && (

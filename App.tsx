@@ -611,6 +611,7 @@ const Dashboard: React.FC = () => {
             <Suspense fallback={<PageLoader />}>
               <Plans />
             </Suspense>
+
           </ErrorBoundary>
         );
       case 'community':
@@ -657,66 +658,61 @@ const Dashboard: React.FC = () => {
     <div className={`fixed inset-0 w-screen bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden flex flex-row font-sans select-none transition-colors duration-500`}>
       <Sidebar />
       <div className={`flex-1 flex flex-col h-full relative ${['favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history', 'guide', 'services'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-        <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--glass)] backdrop-blur-xl border-b border-[var(--glass-border)] h-16 flex items-center justify-between px-6 transition-colors duration-500">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20 rotate-3">
-              <div className="w-2.5 h-2.5 bg-white rounded-full animate-ping"></div>
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--glass)] backdrop-blur-xl border-b border-[var(--glass-border)] h-16 flex items-center justify-between px-3 sm:px-6 transition-colors duration-500">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20 rotate-3 shrink-0">
+              <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 bg-white rounded-full animate-ping"></div>
             </div>
             <div className="flex flex-col">
-              <span className="text-base font-black tracking-tighter text-white leading-none uppercase">ubicame.info</span>
-              <span className="text-[10px] font-black tracking-[0.3em] text-orange-500 leading-none mt-0.5">PULSE</span>
+              <span className="text-sm sm:text-base font-black tracking-tighter text-white leading-none uppercase">ubicame.info</span>
+              <span className="text-[9px] sm:text-[10px] font-black tracking-[0.25em] sm:tracking-[0.3em] text-orange-500 leading-none mt-0.5">PULSE</span>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 sm:gap-4 shrink-0">
             <div 
-              className="px-3.5 py-2.5 bg-orange-500/10 text-orange-500 rounded-xl border border-orange-500/20 flex items-center gap-2 font-mono font-bold text-sm shadow-sm"
+              className="px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 bg-orange-500/10 text-orange-500 rounded-xl border border-orange-500/20 flex items-center gap-1.5 sm:gap-2 font-mono font-bold text-xs sm:text-sm shadow-sm shrink-0"
               title="Contador de visitas"
             >
-              <Eye className="w-5 h-5 animate-pulse" />
+              <Eye className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse shrink-0" />
               <span>{visitCount.toLocaleString()}</span>
             </div>
 
             {user && (
-              <div className="flex items-center gap-2.5 pr-2">
+              <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
                 {user.plan !== 'Expert' && (
                   <button 
                     onClick={() => navigate('/plans')}
-                    className="p-3 bg-orange-500 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+                    className="p-2 sm:p-3 bg-orange-500 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-95 transition-all shrink-0"
                     title="Mejorar Plan"
                   >
-                    <Sparkles className="w-5 h-5 animate-pulse" />
+                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
                   </button>
                 )}
                 <div className="flex flex-col items-end">
                   <span className="text-[10px] font-black uppercase tracking-tighter hidden sm:inline">{user.name}</span>
-                  <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border leading-none ${
+                  <span className={`text-[7px] sm:text-[8px] font-black uppercase tracking-wider px-1 sm:px-1.5 py-0.5 rounded border leading-none ${
                     user.role === 'admin' ? 'text-amber-500 bg-amber-500/10 border-amber-500/20' :
                     user.role === 'host' ? 'text-blue-500 bg-blue-500/10 border-blue-500/20' :
                     'text-green-500 bg-green-500/10 border-green-500/20'
                   }`}>
-                    {user.role === 'admin' ? (isSuperAdmin ? 'King Admin' : 'Admin') : 
+                    {user.role === 'admin' ? (isSuperAdmin ? 'King' : 'Admin') : 
                      user.role === 'host' ? 'Host' : 'Visitor'}
                   </span>
                 </div>
-                <div className="w-8 h-8 rounded-xl border border-orange-500/50 overflow-hidden ring-2 ring-orange-500/20 shadow-lg cursor-pointer" onClick={() => navigate('/passport')}>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl border border-orange-500/50 overflow-hidden ring-1 sm:ring-2 ring-orange-500/20 shadow-lg cursor-pointer shrink-0" onClick={() => navigate('/passport')}>
                   <img src={user.avatarUrl} className="w-full h-full object-cover" alt="User avatar" />
                 </div>
                 <button
                   onClick={logout}
-                  className="p-3 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-xl transition-all active:scale-90 border border-orange-500/20"
+                  className="p-2 sm:p-3 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-xl transition-all active:scale-90 border border-orange-500/20 shrink-0"
                   title="Cerrar Sesión"
                 >
-                  <LogOut className="w-5 h-5" />
+                  <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               </div>
             )}
-            
 
-
-
-
-
-            <div className="flex flex-col items-end opacity-20">
+            <div className="hidden sm:flex flex-col items-end opacity-20">
               <span className="text-[7px] font-bold text-slate-500 mt-1 uppercase tracking-widest leading-none">v1.0.4 ME</span>
             </div>
           </div>
