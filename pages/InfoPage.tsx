@@ -122,18 +122,29 @@ export const InfoPage: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 overflow-y-auto" style={{ height: '100%', minHeight: '100vh' }}>
-            <div className="p-6 border-b border-white/5">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h1 className="text-3xl font-black text-amber-400 uppercase tracking-tight">📱 INFO {localityName}</h1>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Puntos de Referencia y Negocios Premium</p>
+            <div className="p-4 sm:p-6 border-b border-white/5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-2xl sm:text-3xl font-black text-amber-400 uppercase tracking-tight">📱 INFO {localityName}</h1>
+                            <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest">Puntos de Referencia y Negocios Premium</p>
+                        </div>
+                        {/* Botón cerrar en móvil */}
+                        <button
+                            onClick={() => navigate('/explore')}
+                            className="sm:hidden p-2.5 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-colors shrink-0"
+                            title="Cerrar"
+                        >
+                            <X className="w-5 h-5 text-slate-400" />
+                        </button>
                     </div>
-                    <div className="flex items-center gap-3">
+
+                    <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                         <button
                             onClick={() => navigate('/history')}
-                            className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 border border-violet-500/20 rounded-xl transition-all group shrink-0 shadow-lg shadow-violet-500/5"
+                            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 border border-violet-500/20 rounded-xl transition-all group shrink-0 shadow-lg shadow-violet-500/5"
                         >
-                            <Users className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                            <Users className="w-4 h-4 group-hover:scale-110 transition-transform shrink-0" />
                             <span className="text-[10px] font-black uppercase tracking-widest">Nosotros</span>
                         </button>
                         <select
@@ -143,7 +154,7 @@ export const InfoPage: React.FC = () => {
                                 const loc = allLocs.find(l => l.name === e.target.value);
                                 if (loc) setCurrentLocality(loc);
                             }}
-                            className="bg-white/5 border border-white/10 text-white text-xs font-black uppercase tracking-widest px-3 py-2 rounded-xl cursor-pointer hover:bg-white/10 transition-all max-w-[150px]"
+                            className="flex-1 sm:flex-initial bg-white/5 border border-white/10 text-white text-xs font-black uppercase tracking-widest px-3 py-2 rounded-xl cursor-pointer hover:bg-white/10 transition-all focus:outline-none focus:ring-1 focus:ring-amber-400"
                         >
                             {(() => {
                                 // Deduplicate: customLocalities may duplicate hardcoded LOCALITIES
@@ -157,9 +168,11 @@ export const InfoPage: React.FC = () => {
                                 ));
                             })()}
                         </select>
+                        {/* Botón cerrar en escritorio */}
                         <button
                             onClick={() => navigate('/explore')}
-                            className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-colors"
+                            className="hidden sm:flex p-2.5 sm:p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-colors shrink-0"
+                            title="Cerrar"
                         >
                             <X className="w-5 h-5 text-slate-400" />
                         </button>
