@@ -1,11 +1,12 @@
 import React from 'react';
-import { X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings, Share2, UserPlus, UserCheck, QrCode, ExternalLink, Utensils, CalendarCheck } from 'lucide-react';
+import { X, Clock, MapPin, Users, MessageCircle, Phone, ChevronLeft, ChevronRight, Edit3, Trash2, Settings, Share2, UserPlus, UserCheck, QrCode, ExternalLink, Utensils, CalendarCheck, Instagram, Facebook, Youtube } from 'lucide-react';
 import { MontanitaEvent, Business, Sector, BusinessCategory } from '../types';
 import { Skeleton } from './Skeleton';
 import { SECTOR_INFO, BASE_URL } from '../constants';
 import { useToast } from '../context/ToastContext';
 import { useSEO } from '../hooks/useSEO';
 import { useData } from '../context/DataContext';
+import { TikTokIcon, getInstagramUrl, getFacebookUrl, getTikTokUrl, getYouTubeUrl, getWhatsAppUrl } from '../utils/social';
 
 interface EventModalProps {
     event: MontanitaEvent;
@@ -526,18 +527,80 @@ export const EventModal: React.FC<EventModalProps> = ({
                                 )}
                             </button>
 
-                            {targetBusiness?.whatsapp && (
+                            {targetBusiness && (targetBusiness.whatsapp || targetBusiness.instagram || targetBusiness.facebook || targetBusiness.tiktok || targetBusiness.youtube || targetBusiness.phone) && (
                                 <div className="mt-4 flex flex-col items-center gap-2">
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Contacto Directo</p>
-                                    <a
-                                        href={`https://wa.me/${targetBusiness.whatsapp}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 px-6 py-3 bg-green-500/10 text-green-400 rounded-full border border-green-500/20"
-                                    >
-                                        <MessageCircle className="w-4 h-4" />
-                                        <span className="font-bold text-sm">WhatsApp</span>
-                                    </a>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Contacto & Redes Oficiales</p>
+                                    <div className="flex flex-wrap items-center justify-center gap-2">
+                                        {targetBusiness.whatsapp && (
+                                            <a
+                                                href={getWhatsAppUrl(targetBusiness.whatsapp)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20 text-xs font-bold hover:bg-emerald-500/20 transition-all active:scale-95"
+                                            >
+                                                <MessageCircle className="w-3.5 h-3.5" />
+                                                <span>WhatsApp</span>
+                                                <ExternalLink className="w-3 h-3 text-emerald-500/50" />
+                                            </a>
+                                        )}
+                                        {targetBusiness.instagram && (
+                                            <a
+                                                href={getInstagramUrl(targetBusiness.instagram)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-pink-500/10 text-pink-400 rounded-full border border-pink-500/20 text-xs font-bold hover:bg-pink-500/20 transition-all active:scale-95"
+                                            >
+                                                <Instagram className="w-3.5 h-3.5" />
+                                                <span>Instagram</span>
+                                                <ExternalLink className="w-3 h-3 text-pink-500/50" />
+                                            </a>
+                                        )}
+                                        {targetBusiness.facebook && (
+                                            <a
+                                                href={getFacebookUrl(targetBusiness.facebook)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-blue-500/10 text-blue-400 rounded-full border border-blue-500/20 text-xs font-bold hover:bg-blue-500/20 transition-all active:scale-95"
+                                            >
+                                                <Facebook className="w-3.5 h-3.5" />
+                                                <span>Facebook</span>
+                                                <ExternalLink className="w-3 h-3 text-blue-500/50" />
+                                            </a>
+                                        )}
+                                        {targetBusiness.tiktok && (
+                                            <a
+                                                href={getTikTokUrl(targetBusiness.tiktok)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-teal-500/10 text-teal-400 rounded-full border border-teal-500/20 text-xs font-bold hover:bg-teal-500/20 transition-all active:scale-95"
+                                            >
+                                                <TikTokIcon className="w-3.5 h-3.5" />
+                                                <span>TikTok</span>
+                                                <ExternalLink className="w-3 h-3 text-teal-500/50" />
+                                            </a>
+                                        )}
+                                        {targetBusiness.youtube && (
+                                            <a
+                                                href={getYouTubeUrl(targetBusiness.youtube)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-red-500/10 text-red-400 rounded-full border border-red-500/20 text-xs font-bold hover:bg-red-500/20 transition-all active:scale-95"
+                                            >
+                                                <Youtube className="w-3.5 h-3.5" />
+                                                <span>YouTube</span>
+                                                <ExternalLink className="w-3 h-3 text-red-500/50" />
+                                            </a>
+                                        )}
+                                        {targetBusiness.phone && (
+                                            <a
+                                                href={`tel:${targetBusiness.phone}`}
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-sky-500/10 text-sky-400 rounded-full border border-sky-500/20 text-xs font-bold hover:bg-sky-500/20 transition-all active:scale-95"
+                                            >
+                                                <Phone className="w-3.5 h-3.5" />
+                                                <span>Llamar</span>
+                                            </a>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>

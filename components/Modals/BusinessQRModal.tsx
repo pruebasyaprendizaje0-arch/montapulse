@@ -138,8 +138,8 @@ export const BusinessQRModal: React.FC<BusinessQRModalProps> = ({ isOpen, onClos
                         size={220}
                         level="H"
                         includeMargin={false}
-                        imageSettings={business.imageUrl ? {
-                            src: business.imageUrl,
+                        imageSettings={(business.logoUrl || business.imageUrl) ? {
+                            src: business.logoUrl || business.imageUrl,
                             x: undefined,
                             y: undefined,
                             height: 48,

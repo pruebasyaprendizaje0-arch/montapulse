@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass, QrCode, ExternalLink, CalendarCheck, ChevronLeft, Wifi, CreditCard, Sparkles, Dog, Car } from 'lucide-react';
+import { X, Camera, Upload, Store, MapPin, Search, Loader2, Plus, XCircle, Users, Clock, Compass, QrCode, ExternalLink, CalendarCheck, ChevronLeft, Wifi, CreditCard, Sparkles, Dog, Car, Instagram, Facebook, Youtube, Phone, Mail, MessageCircle, Star } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { LOCALITIES, LOCALITY_SECTORS, MAP_ICONS, LANDMARKS } from '../../constants';
 import { Sector, BusinessCategory, MapEntryType } from '../../types';
 import { IconMap } from '../../utils/icons';
 import { OptimizedImageUploader } from '../OptimizedImageUploader';
+import { TikTokIcon, getInstagramUrl, getFacebookUrl, getTikTokUrl, getYouTubeUrl, getWhatsAppUrl } from '../../utils/social';
 
 interface BusinessEditModalProps {
     onClose?: () => void;
@@ -415,38 +416,185 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
 
                     {!data.isReference && (
                         <>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">WhatsApp</label>
-                                    <input
-                                        type="tel"
-                                        value={data.whatsapp || ''}
-                                        onChange={(e) => updateField('whatsapp', e.target.value)}
-                                        placeholder="+593 99..."
-                                        className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                    />
+                            <div className="space-y-4">
+                                <div className="border-b border-white/5 pb-2">
+                                    <label className="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-orange-400" />
+                                        Redes Sociales Oficiales
+                                    </label>
+                                    <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                                        Ingresa el usuario (@) o enlace de tus redes para que los turistas visiten tus perfiles.
+                                    </p>
                                 </div>
-                                <div>
-                                    <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Instagram</label>
-                                    <input
-                                        type="text"
-                                        value={data.instagram || ''}
-                                        onChange={(e) => updateField('instagram', e.target.value)}
-                                        placeholder="@usuario"
-                                        className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                    />
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {/* Instagram */}
+                                    <div className="p-4 bg-slate-900/60 border border-pink-500/20 rounded-3xl space-y-2 focus-within:border-pink-500 transition-colors">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[11px] font-black text-pink-400 uppercase tracking-wider flex items-center gap-2">
+                                                <Instagram className="w-4 h-4 text-pink-400" />
+                                                Instagram
+                                            </label>
+                                            {data.instagram && (
+                                                <a
+                                                    href={getInstagramUrl(data.instagram)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] font-bold text-pink-400/80 hover:text-pink-300 flex items-center gap-1 bg-pink-500/10 px-2.5 py-0.5 rounded-full border border-pink-500/20"
+                                                >
+                                                    <span>Probar</span>
+                                                    <ExternalLink className="w-3 h-3" />
+                                                </a>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={data.instagram || ''}
+                                            onChange={(e) => updateField('instagram', e.target.value)}
+                                            placeholder="@tunegocio o link"
+                                            className="w-full bg-slate-950/60 border border-white/5 rounded-2xl px-4 py-3 text-white text-sm font-medium focus:ring-1 focus:ring-pink-500 outline-none transition-all placeholder:text-slate-600"
+                                        />
+                                    </div>
+
+                                    {/* Facebook */}
+                                    <div className="p-4 bg-slate-900/60 border border-blue-500/20 rounded-3xl space-y-2 focus-within:border-blue-500 transition-colors">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[11px] font-black text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                                                <Facebook className="w-4 h-4 text-blue-400" />
+                                                Facebook
+                                            </label>
+                                            {data.facebook && (
+                                                <a
+                                                    href={getFacebookUrl(data.facebook)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] font-bold text-blue-400/80 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20"
+                                                >
+                                                    <span>Probar</span>
+                                                    <ExternalLink className="w-3 h-3" />
+                                                </a>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={data.facebook || ''}
+                                            onChange={(e) => updateField('facebook', e.target.value)}
+                                            placeholder="pagina o link de Facebook"
+                                            className="w-full bg-slate-950/60 border border-white/5 rounded-2xl px-4 py-3 text-white text-sm font-medium focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600"
+                                        />
+                                    </div>
+
+                                    {/* TikTok */}
+                                    <div className="p-4 bg-slate-900/60 border border-teal-500/20 rounded-3xl space-y-2 focus-within:border-teal-400 transition-colors">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[11px] font-black text-teal-400 uppercase tracking-wider flex items-center gap-2">
+                                                <TikTokIcon className="w-4 h-4 text-teal-400" />
+                                                TikTok
+                                            </label>
+                                            {data.tiktok && (
+                                                <a
+                                                    href={getTikTokUrl(data.tiktok)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] font-bold text-teal-400/80 hover:text-teal-300 flex items-center gap-1 bg-teal-500/10 px-2.5 py-0.5 rounded-full border border-teal-500/20"
+                                                >
+                                                    <span>Probar</span>
+                                                    <ExternalLink className="w-3 h-3" />
+                                                </a>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={data.tiktok || ''}
+                                            onChange={(e) => updateField('tiktok', e.target.value)}
+                                            placeholder="@usuario o link de TikTok"
+                                            className="w-full bg-slate-950/60 border border-white/5 rounded-2xl px-4 py-3 text-white text-sm font-medium focus:ring-1 focus:ring-teal-400 outline-none transition-all placeholder:text-slate-600"
+                                        />
+                                    </div>
+
+                                    {/* YouTube */}
+                                    <div className="p-4 bg-slate-900/60 border border-red-500/20 rounded-3xl space-y-2 focus-within:border-red-500 transition-colors">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[11px] font-black text-red-400 uppercase tracking-wider flex items-center gap-2">
+                                                <Youtube className="w-4 h-4 text-red-400" />
+                                                YouTube
+                                            </label>
+                                            {data.youtube && (
+                                                <a
+                                                    href={getYouTubeUrl(data.youtube)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] font-bold text-red-400/80 hover:text-red-300 flex items-center gap-1 bg-red-500/10 px-2.5 py-0.5 rounded-full border border-red-500/20"
+                                                >
+                                                    <span>Probar</span>
+                                                    <ExternalLink className="w-3 h-3" />
+                                                </a>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={data.youtube || ''}
+                                            onChange={(e) => updateField('youtube', e.target.value)}
+                                            placeholder="@canal o link de YouTube"
+                                            className="w-full bg-slate-950/60 border border-white/5 rounded-2xl px-4 py-3 text-white text-sm font-medium focus:ring-1 focus:ring-red-500 outline-none transition-all placeholder:text-slate-600"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Teléfono de contacto</label>
-                                <input
-                                    type="tel"
-                                    value={data.phone || ''}
-                                    onChange={(e) => updateField('phone', e.target.value)}
-                                    className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                    placeholder="Número para llamadas"
-                                />
+                            {/* Contacto Directo */}
+                            <div className="space-y-4">
+                                <div className="border-b border-white/5 pb-2">
+                                    <label className="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                                        <Phone className="w-4 h-4 text-sky-400" />
+                                        Canales de Contacto Directo
+                                    </label>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="p-4 bg-slate-900/60 border border-emerald-500/20 rounded-3xl space-y-2 focus-within:border-emerald-500 transition-colors">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[11px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                                                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                                                WhatsApp
+                                            </label>
+                                            {data.whatsapp && (
+                                                <a
+                                                    href={getWhatsAppUrl(data.whatsapp)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] font-bold text-emerald-400/80 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20"
+                                                >
+                                                    <span>Probar</span>
+                                                    <ExternalLink className="w-3 h-3" />
+                                                </a>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="tel"
+                                            value={data.whatsapp || ''}
+                                            onChange={(e) => updateField('whatsapp', e.target.value)}
+                                            placeholder="+593 99..."
+                                            className="w-full bg-slate-950/60 border border-white/5 rounded-2xl px-4 py-3 text-white text-sm font-medium focus:ring-1 focus:ring-emerald-500 outline-none transition-all placeholder:text-slate-600"
+                                        />
+                                    </div>
+
+                                    <div className="p-4 bg-slate-900/60 border border-sky-500/20 rounded-3xl space-y-2 focus-within:border-sky-500 transition-colors">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[11px] font-black text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                                                <Phone className="w-4 h-4 text-sky-400" />
+                                                Teléfono de llamadas
+                                            </label>
+                                        </div>
+                                        <input
+                                            type="tel"
+                                            value={data.phone || ''}
+                                            onChange={(e) => updateField('phone', e.target.value)}
+                                            placeholder="099... / 04..."
+                                            className="w-full bg-slate-950/60 border border-white/5 rounded-2xl px-4 py-3 text-white text-sm font-medium focus:ring-1 focus:ring-sky-500 outline-none transition-all placeholder:text-slate-600"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Enlace a Menú QR / Carta Digital externa */}
@@ -508,6 +656,37 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                                 </div>
                                 <p className="text-[11px] text-slate-400 leading-relaxed">
                                     Ingresa el enlace de tu sistema de reservas externo (Booking, Airbnb, Calendly, WhatsApp directo o motor propio) para que tus clientes puedan reservar con un solo clic.
+                                </p>
+                            </div>
+
+                            {/* Enlace a Perfil / Reseñas de Google Maps */}
+                            <div className="p-5 bg-gradient-to-br from-amber-500/10 via-yellow-500/5 to-orange-500/10 border border-amber-500/20 rounded-3xl space-y-3">
+                                <label className="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                                    Enlace a Reseñas / Perfil de Google Maps
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type="url"
+                                        value={data.googleBusinessProfileUrl || ''}
+                                        onChange={(e) => updateField('googleBusinessProfileUrl', e.target.value)}
+                                        placeholder="https://maps.app.goo.gl/... o https://g.page/r/.../review"
+                                        className="w-full bg-slate-900/80 border border-white/10 rounded-2xl px-5 py-3.5 text-white font-medium text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all placeholder:text-slate-600"
+                                    />
+                                    {data.googleBusinessProfileUrl && (
+                                        <a
+                                            href={data.googleBusinessProfileUrl.startsWith('http') ? data.googleBusinessProfileUrl : `https://${data.googleBusinessProfileUrl}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-xl transition-colors"
+                                            title="Probar enlace"
+                                        >
+                                            <ExternalLink className="w-4 h-4" />
+                                        </a>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                    Ingresa el enlace directo de tu ficha de Google Maps o link para recibir reseñas, para que tus clientes puedan calificar y ver tus opiniones en Google Maps.
                                 </p>
                             </div>
                         </>
@@ -746,14 +925,39 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                         </div>
                     )}
 
-                    <div>
-                        <label className="text-xs font-black text-slate-500 uppercase mb-4 block tracking-widest">Imagen del Negocio</label>
-                        <OptimizedImageUploader
-                            currentImageUrl={data.imageUrl || undefined}
-                            onImageProcessed={(url) => updateField('imageUrl', url)}
-                            path={`uploads/${user?.id || 'admin'}/businesses`}
-                            className="bg-slate-800/50"
-                        />
+                    {/* Media Assets: Logo & Landing Page Cover Photo */}
+                    <div className="space-y-6 bg-slate-800/30 p-6 rounded-[2.5rem] border border-white/5">
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <Sparkles className="w-4 h-4 text-amber-400" />
+                                <label className="text-xs font-black text-slate-300 uppercase tracking-widest">Logo Oficial del Negocio</label>
+                            </div>
+                            <p className="text-[11px] text-slate-400 font-medium mb-3">
+                                Ícono o logo de tu marca. Se mostrará en la barra superior, insignias y como avatar oficial del perfil (formato 1:1 cuadrado o circular).
+                            </p>
+                            <OptimizedImageUploader
+                                currentImageUrl={(data as any).logoUrl || undefined}
+                                onImageProcessed={(url) => updateField('logoUrl', url)}
+                                path={`uploads/${user?.id || 'admin'}/logos`}
+                                className="bg-slate-800/50"
+                            />
+                        </div>
+
+                        <div className="pt-4 border-t border-white/5">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Camera className="w-4 h-4 text-orange-400" />
+                                <label className="text-xs font-black text-slate-300 uppercase tracking-widest">Imagen Representativa de la Landing Page</label>
+                            </div>
+                            <p className="text-[11px] text-slate-400 font-medium mb-3">
+                                Foto principal y destacada para la cabecera / hero de tu landing page (formato panorámico o portada).
+                            </p>
+                            <OptimizedImageUploader
+                                currentImageUrl={data.imageUrl || undefined}
+                                onImageProcessed={(url) => updateField('imageUrl', url)}
+                                path={`uploads/${user?.id || 'admin'}/businesses`}
+                                className="bg-slate-800/50"
+                            />
+                        </div>
                     </div>
 
                     {/* Admin Only Toggles - Simplified if not referenced above */}

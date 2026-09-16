@@ -150,11 +150,15 @@ export interface Business {
   coordinates: [number, number];
   location?: { lat: number; lng: number }; // For compatibility
   imageUrl: string;
+  logoUrl?: string;
   category: BusinessCategory;
   email?: string;
   whatsapp?: string;
   phone?: string;
   instagram?: string;
+  facebook?: string;
+  tiktok?: string;
+  youtube?: string;
   menuUrl?: string;
   bookingUrl?: string;
   address?: string;
@@ -215,6 +219,7 @@ export interface ProfileReview {
   rating: number;
   comment: string;
   timestamp?: any;
+  createdAt?: any;
 }
 
 export interface MontanitaEvent {

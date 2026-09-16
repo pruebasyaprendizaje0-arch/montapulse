@@ -513,9 +513,13 @@ const Dashboard: React.FC = () => {
       icon: 'store', 
       description: '', 
       imageUrl: '', 
+      logoUrl: '',
       whatsapp: '', 
       phone: '', 
       instagram: '', 
+      facebook: '',
+      tiktok: '',
+      youtube: '',
       category: BusinessCategory.OTRO, 
       email: '' 
     };
@@ -527,9 +531,13 @@ const Dashboard: React.FC = () => {
       icon: businessData.icon || 'store',
       description: businessData.description || '',
       imageUrl: businessData.imageUrl || '',
+      logoUrl: (businessData as any).logoUrl || '',
       whatsapp: businessData.whatsapp || '',
       phone: businessData.phone || '',
       instagram: businessData.instagram || '',
+      facebook: businessData.facebook || '',
+      tiktok: businessData.tiktok || '',
+      youtube: businessData.youtube || '',
       category: businessData.category || BusinessCategory.OTRO,
       coordinates: [lat, lng],
       email: businessData.email || ''

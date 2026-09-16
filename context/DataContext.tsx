@@ -60,9 +60,14 @@ interface DataContextType {
         icon: string;
         description: string;
         imageUrl: string;
+        logoUrl?: string;
         whatsapp: string;
         phone: string;
         instagram: string;
+        facebook?: string;
+        tiktok?: string;
+        youtube?: string;
+        googleBusinessProfileUrl?: string;
         menuUrl?: string;
         bookingUrl?: string;
         address?: string;
@@ -76,31 +81,20 @@ interface DataContextType {
         email: string;
         openingHours?: Record<string, any>;
         ownerId?: string;
+        slug?: string;
+        containedInLandmarkId?: string;
+        paymentMethods?: ('cash' | 'credit_card' | 'deuna' | 'transfer_pichincha' | 'crypto')[];
+        hasWifi?: boolean;
+        wifiSpeedMbps?: number;
+        hasParking?: boolean;
+        petFriendly?: boolean;
+        isBeachfront?: boolean;
+        emblematicServices?: string[];
+        services?: string[];
+        customFaqs?: Array<{ question: string; answer: string }>;
+        moods?: Vibe[];
     };
-    setBizForm: React.Dispatch<React.SetStateAction<{
-        name: string;
-        locality: string;
-        sector: Sector;
-        icon: string;
-        description: string;
-        imageUrl: string;
-        whatsapp: string;
-        phone: string;
-        instagram: string;
-        menuUrl?: string;
-        bookingUrl?: string;
-        address?: string;
-        category: BusinessCategory;
-        coordinates?: [number, number];
-        plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
-        isReference?: boolean;
-        mapType?: MapEntryType;
-        isPublished?: boolean;
-        isVerified?: boolean;
-        email: string;
-        openingHours?: Record<string, any>;
-        ownerId?: string;
-    }>>;
+    setBizForm: React.Dispatch<React.SetStateAction<any>>;
     rsvpStatus: Record<string, boolean>;
     setRsvpStatus: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
     handleRegister: (e: React.FormEvent) => Promise<void>;
@@ -376,9 +370,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         icon: 'palmtree',
         description: '',
         imageUrl: 'https://images.unsplash.com/photo-1574672280600-4accfa5b6f98?auto=format&fit=crop&q=80&w=400',
+        logoUrl: '',
         whatsapp: '',
         phone: '',
         instagram: '',
+        facebook: '',
+        tiktok: '',
+        youtube: '',
+        googleBusinessProfileUrl: '',
         menuUrl: '',
         bookingUrl: '',
         address: '',
@@ -391,7 +390,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isVerified: false,
         email: '',
         openingHours: getDefaultOpeningHours(),
-        ownerId: 'admin'
+        ownerId: 'admin',
+        slug: '',
+        containedInLandmarkId: '',
+        paymentMethods: [] as any,
+        hasWifi: false,
+        wifiSpeedMbps: 0,
+        hasParking: false,
+        petFriendly: false,
+        isBeachfront: false,
+        emblematicServices: [] as string[],
+        services: [] as string[]
     };
 
     const [bizForm, setBizForm] = useState(INITIAL_BIZ_FORM);
@@ -661,11 +670,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     whatsapp: business.whatsapp || '',
                     phone: business.phone || '',
                     instagram: business.instagram || '',
+                    facebook: business.facebook || '',
+                    tiktok: business.tiktok || '',
+                    youtube: business.youtube || '',
+                    googleBusinessProfileUrl: business.googleBusinessProfileUrl || '',
                     menuUrl: business.menuUrl || '',
                     bookingUrl: business.bookingUrl || '',
                     address: business.address || '',
                     category: business.category || BusinessCategory.RESTAURANTE,
                     imageUrl: business.imageUrl || '',
+                    logoUrl: (business as any).logoUrl || '',
                     coordinates: business.coordinates || [-1.8253, -80.7523],
                     email: (business as any).email || '',
                     isPublished: business.isPublished !== undefined ? business.isPublished : true,
@@ -674,7 +688,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     plannerCategory: (business as any).plannerCategory || null,
                     openingHours: business.openingHours || {},
                     ownerId: business.ownerId || 'admin',
-                    mapType: business.mapType || MapEntryType.BUSINESS
+                    mapType: business.mapType || MapEntryType.BUSINESS,
+                    slug: business.slug || '',
+                    containedInLandmarkId: business.containedInLandmarkId || '',
+                    paymentMethods: business.paymentMethods || [],
+                    hasWifi: business.hasWifi || false,
+                    wifiSpeedMbps: business.wifiSpeedMbps || 0,
+                    hasParking: business.hasParking || false,
+                    petFriendly: business.petFriendly || false,
+                    isBeachfront: business.isBeachfront || false,
+                    emblematicServices: business.emblematicServices || [],
+                    services: business.services || []
                 });
             }
         }

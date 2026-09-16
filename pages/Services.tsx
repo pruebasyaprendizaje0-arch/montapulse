@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Search, MapPin, Star, Zap, Phone, MessageCircle, Mail,
-    Instagram, ShieldCheck, Crown, Sparkles, ChevronRight,
+    Instagram, Facebook, Youtube, ShieldCheck, Crown, Sparkles, ChevronRight,
     SlidersHorizontal, X, Building2, ExternalLink,
     ChevronDown, ChevronUp, Navigation, Tag
 } from 'lucide-react';
@@ -10,6 +10,7 @@ import { PublicProfileModal } from '../components/PublicProfileModal';
 import { useData } from '../context/DataContext';
 import { Business, BusinessCategory, SubscriptionPlan } from '../types';
 import { Skeleton } from '../components/Skeleton';
+import { TikTokIcon, getInstagramUrl, getFacebookUrl, getTikTokUrl, getYouTubeUrl, getWhatsAppUrl } from '../utils/social';
 
 // ── Plan badge config ──────────────────────────────────
 const PLAN_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode; gradient: string }> = {
@@ -50,14 +51,32 @@ const CATEGORIES: { label: string; value: BusinessCategory | 'all'; emoji: strin
 // ── Social action helpers ──────────────────────────────
 const openWhatsApp = (number: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const clean = number.replace(/\D/g, '');
-    window.open(`https://wa.me/${clean}`, '_blank', 'noopener');
+    const url = getWhatsAppUrl(number);
+    if (url) window.open(url, '_blank', 'noopener');
 };
 
 const openInstagram = (handle: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const clean = handle.replace('@', '');
-    window.open(`https://instagram.com/${clean}`, '_blank', 'noopener');
+    const url = getInstagramUrl(handle);
+    if (url) window.open(url, '_blank', 'noopener');
+};
+
+const openFacebook = (handleOrUrl: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = getFacebookUrl(handleOrUrl);
+    if (url) window.open(url, '_blank', 'noopener');
+};
+
+const openTikTok = (handleOrUrl: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = getTikTokUrl(handleOrUrl);
+    if (url) window.open(url, '_blank', 'noopener');
+};
+
+const openYouTube = (handleOrUrl: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = getYouTubeUrl(handleOrUrl);
+    if (url) window.open(url, '_blank', 'noopener');
 };
 
 const openPhone = (number: string, e: React.MouseEvent) => {
@@ -82,7 +101,7 @@ const BusinessCard: React.FC<BusinessCardProps> = ({ business, onOpenProfile, on
     const planCfg = PLAN_CONFIG[business.plan];
     const avatarFallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(business.name)}&background=f59e0b&color=fff&size=400`;
 
-    const hasSocials = !!(business.whatsapp || business.instagram || business.phone || business.email);
+    const hasSocials = !!(business.whatsapp || business.instagram || business.facebook || business.tiktok || business.youtube || business.phone || business.email);
 
     return (
         <div className={`w-full bg-gradient-to-br ${planCfg?.gradient ?? 'from-slate-900 to-slate-900'} bg-slate-900/60 backdrop-blur-sm border border-white/8 rounded-[2rem] overflow-hidden hover:border-amber-500/25 hover:shadow-xl hover:shadow-amber-500/5 transition-all duration-300`}>
@@ -186,7 +205,7 @@ const BusinessCard: React.FC<BusinessCardProps> = ({ business, onOpenProfile, on
                 {/* ── Social Action Buttons ── */}
                 {hasSocials && (
                     <div className="mb-4">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-2">Contacto</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-2">Contacto & Redes</p>
                         <div className="flex flex-wrap gap-2">
 
                             {business.whatsapp && (
@@ -208,6 +227,39 @@ const BusinessCard: React.FC<BusinessCardProps> = ({ business, onOpenProfile, on
                                     <Instagram className="w-3.5 h-3.5 text-pink-400" />
                                     <span className="text-[11px] font-black text-pink-400">Instagram</span>
                                     <ExternalLink className="w-3 h-3 text-pink-500/50" />
+                                </button>
+                            )}
+
+                            {business.facebook && (
+                                <button
+                                    onClick={(e) => openFacebook(business.facebook!, e)}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/25 hover:bg-blue-500/20 hover:border-blue-500/50 active:scale-95 transition-all"
+                                >
+                                    <Facebook className="w-3.5 h-3.5 text-blue-400" />
+                                    <span className="text-[11px] font-black text-blue-400">Facebook</span>
+                                    <ExternalLink className="w-3 h-3 text-blue-500/50" />
+                                </button>
+                            )}
+
+                            {business.tiktok && (
+                                <button
+                                    onClick={(e) => openTikTok(business.tiktok!, e)}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-teal-500/10 border border-teal-500/25 hover:bg-teal-500/20 hover:border-teal-500/50 active:scale-95 transition-all text-teal-400"
+                                >
+                                    <TikTokIcon className="w-3.5 h-3.5 text-teal-400" />
+                                    <span className="text-[11px] font-black text-teal-400">TikTok</span>
+                                    <ExternalLink className="w-3 h-3 text-teal-500/50" />
+                                </button>
+                            )}
+
+                            {business.youtube && (
+                                <button
+                                    onClick={(e) => openYouTube(business.youtube!, e)}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/25 hover:bg-red-500/20 hover:border-red-500/50 active:scale-95 transition-all"
+                                >
+                                    <Youtube className="w-3.5 h-3.5 text-red-400" />
+                                    <span className="text-[11px] font-black text-red-400">YouTube</span>
+                                    <ExternalLink className="w-3 h-3 text-red-500/50" />
                                 </button>
                             )}
 
