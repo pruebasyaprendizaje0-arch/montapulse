@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   X, MapPin, MessageCircle, Star, Zap, UserPlus, UserCheck, Send, Mail, Store, 
-  User, Building2, ChevronLeft, ChevronRight, Clock, Circle, Ticket, Edit3, 
+  User, Building2, ChevronLeft, ChevronRight, ChevronDown, Clock, Circle, Ticket, Edit3, 
   Trash2, Navigation2, UserCircle, Share2, Compass, QrCode, ExternalLink, 
   CalendarCheck, Wifi, CreditCard, Dog, Car, Sparkles, Instagram, Facebook, 
   Youtube, Phone, CheckCircle2, Award, Heart, MessageSquare, Menu as MenuIcon
@@ -13,9 +13,29 @@ import { subscribeToProfileReviews, addProfileReview, getUser, incrementBusiness
 import { subscribeToBusinessCoupons, obtainCoupon } from '../services/couponService';
 import { useAuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { isBusinessOpen } from '../utils/timeUtils';
+import { isBusinessOpen, getEcuadorDate, getEcuadorDayKey, normalizeDay } from '../utils/timeUtils';
 import { useSEO } from '../hooks/useSEO';
 import { TikTokIcon, getInstagramUrl, getFacebookUrl, getTikTokUrl, getYouTubeUrl, getWhatsAppUrl } from '../utils/social';
+
+const DAYS_OF_WEEK = [
+  { key: 'lunes', name: 'Lunes' },
+  { key: 'martes', name: 'Martes' },
+  { key: 'miercoles', name: 'Miércoles' },
+  { key: 'jueves', name: 'Jueves' },
+  { key: 'viernes', name: 'Viernes' },
+  { key: 'sabado', name: 'Sábado' },
+  { key: 'domingo', name: 'Domingo' }
+];
+
+const getDaySchedule = (openingHours: any, dayKey: string) => {
+  if (!openingHours || typeof openingHours !== 'object') return null;
+  for (const [k, v] of Object.entries(openingHours)) {
+    if (normalizeDay(k) === dayKey || k.toLowerCase() === dayKey) {
+      return v as { closed?: boolean | string; open?: string; close?: string };
+    }
+  }
+  return null;
+};
 
 interface PublicProfileModalProps {
   isOpen: boolean;
@@ -61,6 +81,8 @@ export const PublicProfileModal = React.memo(({
   const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'services' | 'amenities' | 'pulses' | 'reviews'>('all');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [showWeeklySchedule, setShowWeeklySchedule] = useState(false);
+  const currentDayKey = useMemo(() => getEcuadorDayKey(getEcuadorDate()), []);
   
   const avatarRef = useRef<HTMLImageElement>(null);
   const isMountedRef = useRef(false);
@@ -661,9 +683,9 @@ export const PublicProfileModal = React.memo(({
                 {bio}
               </p>
 
-              {/* Primary Call-to-Actions (Buttons matching reference hero) */}
+              {/* Primary Call-to-Actions (Buttons with uniform size & height) */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
-                {/* Details / Map Button (Orange/Coral like the reference image) */}
+                {/* Details / Map Button */}
                 {business && business.coordinates && (
                   <button
                     onClick={() => {
@@ -673,9 +695,9 @@ export const PublicProfileModal = React.memo(({
                         window.open(`https://www.google.com/maps?q=${business.coordinates[0]},${business.coordinates[1]}`, '_blank');
                       }
                     }}
-                    className="flex items-center gap-2.5 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-orange-500/25 hover:scale-[1.02] active:scale-95 transition-all group"
+                    className="flex-1 min-w-[130px] sm:min-w-[150px] h-12 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-xl shadow-orange-500/25 hover:scale-[1.02] active:scale-95 transition-all group whitespace-nowrap"
                   >
-                    <Navigation2 className="w-4 h-4 text-white group-hover:rotate-12 transition-transform" />
+                    <Navigation2 className="w-4 h-4 text-white group-hover:rotate-12 transition-transform shrink-0" />
                     <span>Ver en el Mapa</span>
                   </button>
                 )}
@@ -683,25 +705,25 @@ export const PublicProfileModal = React.memo(({
                 {/* Follow Button */}
                 <button
                   onClick={() => businessId && handleToggleFollow(businessId)}
-                  className={`flex items-center gap-2 px-5 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all border ${
+                  className={`flex-1 min-w-[130px] sm:min-w-[150px] h-12 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all border whitespace-nowrap ${
                     isFollowing 
                       ? 'bg-orange-500 text-white border-orange-400 shadow-lg shadow-orange-500/20' 
                       : 'bg-slate-900/80 text-white border-white/10 hover:bg-white/10'
                   }`}
                 >
-                  {isFollowing ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                  {isFollowing ? <UserCheck className="w-4 h-4 shrink-0" /> : <UserPlus className="w-4 h-4 shrink-0" />}
                   <span>{isFollowing ? 'Siguiendo' : 'Seguir'}</span>
                 </button>
 
-                {/* Share Button (Orange Square Icon style from reference) */}
+                {/* Share Button */}
                 {business && (
                   <button
                     onClick={handleShareWhatsApp}
-                    className="flex items-center gap-2 px-4 py-3.5 bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white rounded-2xl border border-white/10 transition-all shadow-sm"
+                    className="flex-1 min-w-[130px] sm:min-w-[150px] h-12 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white rounded-2xl border border-white/10 transition-all shadow-sm whitespace-nowrap"
                     title="Compartir por WhatsApp"
                   >
-                    <Share2 className="w-4 h-4 text-orange-400" />
-                    <span className="text-xs font-black uppercase tracking-wider hidden sm:inline">Compartir</span>
+                    <Share2 className="w-4 h-4 text-orange-400 shrink-0" />
+                    <span className="text-xs font-black uppercase tracking-wider">Compartir</span>
                   </button>
                 )}
 
@@ -711,9 +733,9 @@ export const PublicProfileModal = React.memo(({
                     href={business.menuUrl.startsWith('http') ? business.menuUrl : `https://${business.menuUrl}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-3.5 bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 rounded-2xl border border-pink-500/20 transition-all text-xs font-black uppercase tracking-wider"
+                    className="flex-1 min-w-[130px] sm:min-w-[150px] h-12 flex items-center justify-center gap-2 px-4 py-3 bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 rounded-2xl border border-pink-500/20 transition-all text-xs font-black uppercase tracking-wider whitespace-nowrap"
                   >
-                    <QrCode className="w-4 h-4 text-pink-400" />
+                    <QrCode className="w-4 h-4 text-pink-400 shrink-0" />
                     <span>Carta QR</span>
                   </a>
                 )}
@@ -724,9 +746,9 @@ export const PublicProfileModal = React.memo(({
                     href={business.bookingUrl.startsWith('http') ? business.bookingUrl : `https://${business.bookingUrl}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-3.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 rounded-2xl border border-yellow-500/20 transition-all text-xs font-black uppercase tracking-wider"
+                    className="flex-1 min-w-[130px] sm:min-w-[150px] h-12 flex items-center justify-center gap-2 px-4 py-3 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 rounded-2xl border border-yellow-500/20 transition-all text-xs font-black uppercase tracking-wider whitespace-nowrap"
                   >
-                    <CalendarCheck className="w-4 h-4 text-yellow-400" />
+                    <CalendarCheck className="w-4 h-4 text-yellow-400 shrink-0" />
                     <span>Reservar</span>
                   </a>
                 )}
@@ -736,7 +758,7 @@ export const PublicProfileModal = React.memo(({
               {business && (business.instagram || business.facebook || business.tiktok || business.youtube || business.whatsapp || business.phone) && (
                 <div className="pt-2">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
-                    <Sparkles className="w-3 h-3 text-orange-400" /> Canales Oficiales:
+                    <Sparkles className="w-3 h-3 text-orange-400 shrink-0" /> Canales Oficiales:
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     {business.whatsapp && (
@@ -744,9 +766,9 @@ export const PublicProfileModal = React.memo(({
                         href={getWhatsAppUrl(business.whatsapp)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold transition-all hover:scale-105"
+                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold transition-all hover:scale-105"
                       >
-                        <MessageCircle className="w-3.5 h-3.5" />
+                        <MessageCircle className="w-3.5 h-3.5 shrink-0" />
                         <span>WhatsApp</span>
                       </a>
                     )}
@@ -755,9 +777,9 @@ export const PublicProfileModal = React.memo(({
                         href={getInstagramUrl(business.instagram)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-3 py-2 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 rounded-xl text-pink-400 text-xs font-bold transition-all hover:scale-105"
+                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 rounded-xl text-pink-400 text-xs font-bold transition-all hover:scale-105"
                       >
-                        <Instagram className="w-3.5 h-3.5" />
+                        <Instagram className="w-3.5 h-3.5 shrink-0" />
                         <span>Instagram</span>
                       </a>
                     )}
@@ -766,9 +788,9 @@ export const PublicProfileModal = React.memo(({
                         href={getFacebookUrl(business.facebook)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-bold transition-all hover:scale-105"
+                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-bold transition-all hover:scale-105"
                       >
-                        <Facebook className="w-3.5 h-3.5" />
+                        <Facebook className="w-3.5 h-3.5 shrink-0" />
                         <span>Facebook</span>
                       </a>
                     )}
@@ -777,9 +799,9 @@ export const PublicProfileModal = React.memo(({
                         href={getTikTokUrl(business.tiktok)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-3 py-2 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 rounded-xl text-teal-400 text-xs font-bold transition-all hover:scale-105"
+                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 rounded-xl text-teal-400 text-xs font-bold transition-all hover:scale-105"
                       >
-                        <TikTokIcon className="w-3.5 h-3.5" />
+                        <TikTokIcon className="w-3.5 h-3.5 shrink-0" />
                         <span>TikTok</span>
                       </a>
                     )}
@@ -788,18 +810,18 @@ export const PublicProfileModal = React.memo(({
                         href={getYouTubeUrl(business.youtube)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold transition-all hover:scale-105"
+                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold transition-all hover:scale-105"
                       >
-                        <Youtube className="w-3.5 h-3.5" />
+                        <Youtube className="w-3.5 h-3.5 shrink-0" />
                         <span>YouTube</span>
                       </a>
                     )}
                     {business.phone && (
                       <a
                         href={`tel:${business.phone}`}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl text-sky-400 text-xs font-bold transition-all hover:scale-105"
+                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl text-sky-400 text-xs font-bold transition-all hover:scale-105"
                       >
-                        <Phone className="w-3.5 h-3.5" />
+                        <Phone className="w-3.5 h-3.5 shrink-0" />
                         <span>Llamar</span>
                       </a>
                     )}
@@ -866,7 +888,7 @@ export const PublicProfileModal = React.memo(({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Horario de Atención Card */}
               {business && (
-                <div className="p-6 bg-slate-900/60 rounded-3xl border border-white/10 space-y-4 flex flex-col justify-between">
+                <div className="p-6 bg-slate-900/60 rounded-3xl border border-white/10 space-y-4 flex flex-col justify-between transition-all">
                   <div className="space-y-2">
                     <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
                       <Clock className="w-5 h-5" />
@@ -876,11 +898,67 @@ export const PublicProfileModal = React.memo(({
                       {business.openingHours ? businessStatus.message : 'Horario no especificado'}
                     </p>
                   </div>
-                  <div className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 ${
-                    businessStatus.isOpen ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                  }`}>
-                    <Circle className={`w-2 h-2 ${businessStatus.isOpen ? 'fill-emerald-400 text-emerald-400' : 'fill-rose-400 text-rose-400'}`} />
-                    <span>{businessStatus.isOpen ? 'Atendiendo Ahora' : 'Cerrado Temporalmente'}</span>
+
+                  <div className="space-y-3 pt-1">
+                    {/* Botón desplegable */}
+                    <button
+                      type="button"
+                      onClick={() => setShowWeeklySchedule(!showWeeklySchedule)}
+                      className={`w-full px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-between gap-2 transition-all cursor-pointer border ${
+                        businessStatus.isOpen 
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' 
+                          : 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
+                      }`}
+                      title="Ver horario semanal completo"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Circle className={`w-2 h-2 ${businessStatus.isOpen ? 'fill-emerald-400 text-emerald-400' : 'fill-rose-400 text-rose-400'}`} />
+                        <span>{businessStatus.isOpen ? 'Atendiendo Ahora' : 'Cerrado Temporalmente'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] opacity-90">
+                        <span className="text-[10px] font-bold capitalize hidden sm:inline">
+                          {showWeeklySchedule ? 'Cerrar' : 'Ver Semana'}
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${showWeeklySchedule ? 'rotate-180' : ''}`} />
+                      </div>
+                    </button>
+
+                    {/* Desplegable con Horario Semanal */}
+                    {showWeeklySchedule && (
+                      <div className="p-3 bg-slate-950/80 rounded-2xl border border-white/10 space-y-1.5 text-xs animate-in fade-in slide-in-from-top-2 duration-200">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 pb-1 border-b border-white/5">
+                          Horario Semanal Completo
+                        </p>
+                        {DAYS_OF_WEEK.map(({ key, name }) => {
+                          const sched = getDaySchedule(business.openingHours, key);
+                          const isToday = currentDayKey === key;
+                          const isClosed = !sched || sched.closed === true || sched.closed === 'true' || (!sched.open && !sched.close);
+
+                          return (
+                            <div 
+                              key={key} 
+                              className={`flex items-center justify-between py-1.5 px-2.5 rounded-lg text-xs transition-colors ${
+                                isToday 
+                                  ? 'bg-orange-500/15 border border-orange-500/30 font-bold text-orange-200' 
+                                  : 'text-slate-300 hover:bg-white/5'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className={isToday ? 'text-orange-300 font-bold' : 'text-slate-300'}>{name}</span>
+                                {isToday && (
+                                  <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-500 text-white leading-none">
+                                    Hoy
+                                  </span>
+                                )}
+                              </div>
+                              <span className={isClosed ? 'text-slate-500 font-medium text-[11px]' : 'text-slate-200 font-semibold text-[11px]'}>
+                                {isClosed ? 'Cerrado' : `${sched.open} - ${sched.close}`}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
