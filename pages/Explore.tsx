@@ -420,6 +420,45 @@ export const Explore: React.FC<ExploreProps> = ({
     }, [eventsWithLiveCounts, businesses, activeFilter, searchQuery, currentMoodCriteria, currentLocality.name]);
 
 
+        const searchMatchingBusinesses = useMemo(() => {
+        if (!searchQuery || !searchQuery.trim()) return [];
+        const q = searchQuery.toLowerCase().trim();
+        const normLoc = (currentLocality?.name || 'Montañita').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+        return businesses.filter((b: any) => {
+            if (currentLocality?.name && selectedComuna !== 'Todas') {
+                const bLoc = (b.locality || 'Montañita').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                const isLocMatch = bLoc === normLoc || bLoc.includes(normLoc) || normLoc.includes(bLoc) || b.name?.toLowerCase().includes('ubicame.info');
+                if (!isLocMatch) return false;
+            }
+
+            const nameMatch = b.name && b.name.toLowerCase().includes(q);
+            const categoryMatch = b.category && b.category.toLowerCase().includes(q);
+            const sectorMatch = b.sector && b.sector.toLowerCase().includes(q);
+            const localityMatch = b.locality && b.locality.toLowerCase().includes(q);
+            const descMatch = b.description && b.description.toLowerCase().includes(q);
+            const addressMatch = b.address && b.address.toLowerCase().includes(q);
+            const tagsMatch = b.tags && Array.isArray(b.tags) && b.tags.some((t: string) => t.toLowerCase().includes(q));
+
+            return nameMatch || categoryMatch || sectorMatch || localityMatch || descMatch || addressMatch || tagsMatch;
+        }).sort((a: any, b: any) => {
+            const planWeight = (plan: string) => {
+                if (plan === 'EXPERT') return 4;
+                if (plan === 'ELITE') return 3;
+                if (plan === 'PRO') return 2;
+                return 1;
+            };
+            const weightA = planWeight(a.plan);
+            const weightB = planWeight(b.plan);
+            if (weightA !== weightB) return weightB - weightA;
+            const refCoords = userLocation || currentLocality.coords;
+            if (refCoords && a.coordinates && b.coordinates) {
+                return getDistance(refCoords, a.coordinates) - getDistance(refCoords, b.coordinates);
+            }
+            return 0;
+        });
+    }, [businesses, searchQuery, currentLocality?.name, selectedComuna, userLocation]);
+
     const filteredBusinesses = useMemo(() => {
         let result = [...businesses];
 
@@ -1506,7 +1545,120 @@ export const Explore: React.FC<ExploreProps> = ({
                         )}
 
                         <div className="space-y-6">
-                            {activeTab === 'events' ? (
+                            {searchQuery.trim().length > 0 ? (
+                                /* VISTA DE BÚSQUEDA COMBINADA (EVENTOS + NEGOCIOS/SERVICIOS) */
+                                <div className="space-y-6">
+                                    {/* Eventos coincidentes con la búsqueda */}
+                                    {filteredEvents.length > 0 && (
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <Flame className="w-4 h-4 text-orange-400" />
+                                                <h3 className="text-xs font-black text-white uppercase tracking-widest">
+                                                    Eventos y Pulsos ({filteredEvents.length})
+                                                </h3>
+                                            </div>
+                                            <div className="space-y-4">
+                                                {filteredEvents.map(event => (
+                                                    <div key={event.id} className="relative">
+                                                        <EventCard event={event} onClick={setSelectedEvent} />
+                                                        <button
+                                                            onClick={(e) => toggleFavorite(event.id, e)}
+                                                            className="absolute top-6 right-6 z-10 p-3 bg-black/30 backdrop-blur-xl rounded-full border border-white/10 hover:scale-110 active:scale-95 transition-all group"
+                                                        >
+                                                            <Heart className={`w-5 h-5 transition-colors ${favorites.includes(event.id) ? 'fill-rose-500 text-rose-500' : 'text-white'}`} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Negocios, Servicios y Puntos de Referencia coincidentes */}
+                                    {searchMatchingBusinesses.length > 0 && (
+                                        <div>
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Store className="w-4 h-4 text-amber-400" />
+                                                    <h3 className="text-xs font-black text-white uppercase tracking-widest">
+                                                        Negocios, Servicios y Lugares ({searchMatchingBusinesses.length})
+                                                    </h3>
+                                                </div>
+                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                                    En {currentLocality.name}
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {searchMatchingBusinesses.map((biz: any) => {
+                                                    const refCoords = userLocation || currentLocality.coords;
+                                                    const distance = getDistance(refCoords, biz.coordinates);
+                                                    const isExpert = biz.plan === SubscriptionPlan.EXPERT;
+                                                    const isElite = biz.plan === SubscriptionPlan.ELITE;
+                                                    return (
+                                                        <div
+                                                            key={biz.id}
+                                                            onClick={() => {
+                                                                setPublicProfileId(biz.id);
+                                                                setPublicProfileType('business');
+                                                                setShowPublicProfile(true);
+                                                            }}
+                                                            className={`relative p-4 rounded-[2rem] border transition-all cursor-pointer hover:-translate-y-1 ${
+                                                                isExpert ? 'glass-expert expert-glow' :
+                                                                isElite ? 'glass-premium premium-glow' :
+                                                                'bg-slate-900/80 border-white/10 hover:border-amber-500/40'
+                                                            }`}
+                                                        >
+                                                            <div className="flex gap-3.5">
+                                                                <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 relative bg-slate-800">
+                                                                    <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
+                                                                    {biz.plan && biz.plan !== SubscriptionPlan.FREE && (
+                                                                        <span className="absolute top-1 left-1 px-1.5 py-0.5 text-[7px] font-black uppercase rounded-full bg-black/70 backdrop-blur-md text-amber-400">
+                                                                            ⭐ {biz.plan}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                                                        <span className="text-[9px] font-black text-amber-400 uppercase tracking-wider truncate">{biz.category}</span>
+                                                                        <span className="text-[9px] font-bold text-slate-400 shrink-0">📍 {distance.toFixed(1)} km</span>
+                                                                    </div>
+                                                                    <h5 className="text-sm font-black text-white uppercase truncate">{biz.name}</h5>
+                                                                    <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{biz.description || biz.address || 'Servicio verificado en ' + currentLocality.name}</p>
+                                                                    {biz.phone && (
+                                                                        <p className="text-[10px] font-bold text-emerald-400 mt-1">📞 {biz.phone}</p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Si no hay eventos ni negocios para esta búsqueda */}
+                                    {filteredEvents.length === 0 && searchMatchingBusinesses.length === 0 && (
+                                        <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-900/60 rounded-[2.5rem] border border-white/5 my-4">
+                                            <div className="p-4 bg-orange-500/10 rounded-full mb-3">
+                                                <Search className="w-8 h-8 text-orange-400" />
+                                            </div>
+                                            <h4 className="text-base font-black text-white mb-2">No se encontraron resultados</h4>
+                                            <p className="text-xs text-slate-400 max-w-xs mb-5 leading-relaxed">
+                                                No hay eventos, negocios ni servicios que coincidan con "{searchQuery}" en {currentLocality.name}.
+                                            </p>
+                                            <button
+                                                onClick={() => {
+                                                    setSearchQuery('');
+                                                    setSelectedMood(null);
+                                                    setActiveFilter('All');
+                                                }}
+                                                className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-widest rounded-2xl transition-all shadow-lg active:scale-95"
+                                            >
+                                                Limpiar búsqueda
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : activeTab === 'events' ? (
                                 loading ? (
                                     [1, 2, 3, 4].map(i => (
                                         <Skeleton key={`event-skeleton-${i}`} className="w-full h-48 rounded-[2.5rem]" />
@@ -1523,6 +1675,78 @@ export const Explore: React.FC<ExploreProps> = ({
                                             </button>
                                         </div>
                                     ))
+                                ) : selectedMood && recommendedBusinesses.length > 0 ? (
+                                    <div className="space-y-4 my-2">
+                                        <div className="p-5 rounded-[2rem] bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-slate-900/60 border border-amber-500/30">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2.5 bg-amber-500/20 rounded-2xl border border-amber-500/30 text-amber-400 shrink-0">
+                                                    <Sparkles className="w-5 h-5 animate-pulse" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-sm font-black text-white uppercase italic tracking-tight">
+                                                        Lugares y Negocios en {currentLocality.name}
+                                                    </h4>
+                                                    <p className="text-[11px] text-slate-300 mt-0.5">
+                                                        No hay eventos temporales activos hoy para "{selectedMood}", pero aquí tienes los mejores locales abiertos recomendados:
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {recommendedBusinesses.map(biz => {
+                                                const refCoords = userLocation || currentLocality.coords;
+                                                const distance = getDistance(refCoords, biz.coordinates);
+                                                const isExpert = biz.plan === SubscriptionPlan.EXPERT;
+                                                const isElite = biz.plan === SubscriptionPlan.ELITE;
+                                                return (
+                                                    <div
+                                                        key={biz.id}
+                                                        onClick={() => {
+                                                            setPublicProfileId(biz.id);
+                                                            setPublicProfileType('business');
+                                                            setShowPublicProfile(true);
+                                                        }}
+                                                        className={`relative p-4 rounded-[2rem] border transition-all cursor-pointer hover:-translate-y-1 ${
+                                                            isExpert ? 'glass-expert expert-glow' :
+                                                            isElite ? 'glass-premium premium-glow' :
+                                                            'bg-slate-900/60 border-white/5 hover:border-white/20'
+                                                        }`}
+                                                    >
+                                                        <div className="flex gap-3">
+                                                            <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 relative bg-slate-800">
+                                                                <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
+                                                                {biz.plan !== SubscriptionPlan.FREE && (
+                                                                    <span className="absolute top-1 left-1 px-1.5 py-0.5 text-[7px] font-black uppercase rounded-full bg-black/70 backdrop-blur-md text-amber-400">
+                                                                        ⭐ {biz.plan}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center justify-between gap-1 mb-1">
+                                                                    <span className="text-[9px] font-black text-amber-400 uppercase truncate">{biz.category}</span>
+                                                                    <span className="text-[9px] font-bold text-slate-400 shrink-0">📍 {distance.toFixed(1)} km</span>
+                                                                </div>
+                                                                <h5 className="text-sm font-black text-white uppercase truncate">{biz.name}</h5>
+                                                                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">{biz.description}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="text-center pt-2">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedMood(null);
+                                                    setActiveFilter('All');
+                                                    setSearchQuery('');
+                                                }}
+                                                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all"
+                                            >
+                                                Ver todos los eventos
+                                            </button>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-900/60 rounded-[2.5rem] border border-white/5 my-4">
                                         <div className="p-4 bg-orange-500/10 rounded-full mb-3">
