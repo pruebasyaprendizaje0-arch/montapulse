@@ -19,6 +19,7 @@ import { isBusinessOpen } from '../utils/timeUtils';
 import { LocalityManagerModal } from '../components/Modals/LocalityManagerModal';
 import { useSEO } from '../hooks/useSEO';
 import { Skeleton } from '../components/Skeleton';
+import { getCriteriaForMoodOrActivity, filterBusinessesByCriteria, filterEventsByCriteria } from '../utils/activityVibeMatcher';
 
 const ACTIVITY_TO_CATEGORIES: Record<string, BusinessCategory[]> = {
   "Bailar": [BusinessCategory.BAR, BusinessCategory.DISCOTECA, BusinessCategory.BAR_DISCOTECA],
@@ -285,60 +286,22 @@ export const Explore: React.FC<ExploreProps> = ({
         setSectorPolygons(prev => ({ ...prev, [sector]: coords }));
     };
 
+    const currentMoodCriteria = useMemo(() => {
+        if (!selectedMood) return null;
+        return getCriteriaForMoodOrActivity(selectedMood, masterActivities, masterVibes);
+    }, [selectedMood, masterActivities, masterVibes]);
+
     const recommendedBusinesses = useMemo(() => {
-        if (!selectedMood) return [];
-        const categories = ACTIVITY_TO_CATEGORIES[selectedMood] || [];
-        
-        let plannerCat: string | null = null;
-        let vibeEnum: Vibe | null = null;
-        const moodStr = selectedMood as string;
-        if (moodStr === "Plan Relax" || moodStr === "Descansar" || moodStr === "Trabajar") {
-            plannerCat = "hospedaje";
-            vibeEnum = Vibe.RELAX;
-        } else if (moodStr === "Comer") {
-            plannerCat = "comida";
-            vibeEnum = Vibe.GASTRONOMIA;
-        } else if (moodStr === "Bailar" || moodStr === "Farrear") {
-            plannerCat = "baile";
-            vibeEnum = Vibe.FIESTA;
-        } else if (moodStr === "Surf") {
-            plannerCat = "surf";
-            vibeEnum = Vibe.SURF;
-        } else if (moodStr === "Deporte") {
-            plannerCat = "surf";
-            vibeEnum = Vibe.ADRENALINA;
-        }
-
-        let result = businesses.filter(b => {
-            const matchesCategory = categories.includes(b.category) || b.category?.toLowerCase() === selectedMood.toLowerCase();
-            const matchesPlanner = plannerCat && b.plannerCategory === plannerCat;
-            const matchesVibe = (vibeEnum && b.moods?.includes(vibeEnum)) || b.moods?.includes(selectedMood as Vibe);
-
-            return (matchesCategory || matchesPlanner || matchesVibe) &&
-                b.locality === currentLocality.name &&
-                b.mapType !== MapEntryType.SECTOR;
-        });
-
+        if (!currentMoodCriteria) return [];
         const refCoords = userLocation || currentLocality.coords;
-
-        const planWeight = (plan: SubscriptionPlan) => {
-            if (plan === SubscriptionPlan.EXPERT) return 4;
-            if (plan === SubscriptionPlan.ELITE) return 3;
-            if (plan === SubscriptionPlan.PRO) return 2;
-            return 1;
-        };
-
-        return result.sort((a, b) => {
-            const weightA = planWeight(a.plan);
-            const weightB = planWeight(b.plan);
-            if (weightA !== weightB) {
-                return weightB - weightA;
-            }
-            const distA = getDistance(refCoords, a.coordinates);
-            const distB = getDistance(refCoords, b.coordinates);
-            return distA - distB;
-        });
-    }, [selectedMood, businesses, currentLocality, userLocation]);
+        return filterBusinessesByCriteria(
+            businesses,
+            currentMoodCriteria,
+            currentLocality.name,
+            refCoords,
+            getDistance
+        );
+    }, [currentMoodCriteria, businesses, currentLocality, userLocation]);
 
     const filteredEvents = useMemo(() => {
         let result = [...eventsWithLiveCounts];
@@ -367,11 +330,11 @@ export const Explore: React.FC<ExploreProps> = ({
                        vibe.toLowerCase().includes(q);
             });
         }
-        if (selectedMood) {
-            result = result.filter(e => (e.vibe || '') === selectedMood);
+        if (currentMoodCriteria) {
+            result = filterEventsByCriteria(result, businesses, currentMoodCriteria, currentLocality.name);
         }
         return result;
-    }, [eventsWithLiveCounts, businesses, activeFilter, searchQuery, selectedMood, currentLocality.name]);
+    }, [eventsWithLiveCounts, businesses, activeFilter, searchQuery, currentMoodCriteria, currentLocality.name]);
 
 
     const filteredBusinesses = useMemo(() => {
@@ -1078,13 +1041,13 @@ export const Explore: React.FC<ExploreProps> = ({
                         </div>
 
                         {/* Recommended Businesses for selected Activity */}
-                        {selectedMood && ACTIVITY_TO_CATEGORIES[selectedMood] && recommendedBusinesses.length > 0 && (
+                        {selectedMood && recommendedBusinesses.length > 0 && (
                             <div className="mb-8">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-2">
                                         <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
                                         <h3 className="text-sm font-black text-amber-500 uppercase tracking-widest italic">
-                                            Locales de {selectedMood} recomendados
+                                            Locales recomendados para {selectedMood}
                                         </h3>
                                     </div>
                                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">

@@ -124,6 +124,9 @@ export const InfoPage: React.FC = () => {
         setSelectedParroquia('Manglaralto');
         setSelectedComuna('Montañita');
         setSearchQuery('');
+        if (LOCALITIES && LOCALITIES.length > 0) {
+            setCurrentLocality(LOCALITIES[0]);
+        }
     };
 
     const localityName = selectedComuna !== 'Todas'
@@ -422,7 +425,17 @@ export const InfoPage: React.FC = () => {
                                         if (val !== 'Todas') {
                                             const allLocs = [...LOCALITIES, ...(customLocalities || [])];
                                             const foundLoc = allLocs.find(l => l.name.toLowerCase() === val.toLowerCase());
-                                            if (foundLoc) setCurrentLocality(foundLoc);
+                                            if (foundLoc) {
+                                                setCurrentLocality(foundLoc);
+                                            } else {
+                                                setCurrentLocality({
+                                                    id: val.toLowerCase().replace(/\s+/g, '-'),
+                                                    name: val,
+                                                    coords: [-1.825, -80.753],
+                                                    center: [-80.753, -1.825],
+                                                    zoom: 15
+                                                });
+                                            }
                                         }
                                     }}
                                     className="w-full bg-slate-950/80 hover:bg-slate-900 border border-white/10 hover:border-amber-500/40 focus:border-amber-500 text-slate-200 text-xs font-bold rounded-2xl px-3.5 py-3 outline-none transition-all cursor-pointer appearance-none pr-8 shadow-inner"
