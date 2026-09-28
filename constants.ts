@@ -30,6 +30,21 @@ export const DEFAULT_MASTER_VIBES = [
   { name: 'Nómada & Cowork', label: 'Nómada & Cowork', icon: 'Laptop', color: '#64748b', desc: 'Cafés con buen Wi-Fi, enchufes y ambiente tranquilo para trabajar' }
 ];
 
+export const DEFAULT_MASTER_ACTIVITIES = [
+  { name: 'Tomar Cócteles & Salir de Fiesta', vibe: 'De Fiesta & Farra', icon: 'PartyPopper', color: '#ec4899' },
+  { name: 'Clases de Surf & Alquiler de Tablas', vibe: 'Aventurero & Activo', icon: 'Waves', color: '#0284c7' },
+  { name: 'Comer Mariscos, Pizza o Comida Típica', vibe: 'Foodie & Antojos', icon: 'Utensils', color: '#f97316' },
+  { name: 'Desayunar & Café de Especialidad', vibe: 'Foodie & Antojos', icon: 'Coffee', color: '#d97706' },
+  { name: 'Ver el Atardecer & Sunset Acústico', vibe: 'Sunset & Golden Hour', icon: 'Sun', color: '#f59e0b' },
+  { name: 'Yoga, Masajes & Spa Relajante', vibe: 'Zen & Bienestar', icon: 'Sparkles', color: '#a855f7' },
+  { name: 'Tours, Cascadas & Avistamiento de Ballenas', vibe: 'Curioso & Explorador', icon: 'Compass', color: '#10b981' },
+  { name: 'Comprar Artesanías & Ropa Playera', vibe: 'Curioso & Explorador', icon: 'ShoppingBag', color: '#8b5cf6' },
+  { name: 'Trabajar con Buen Wi-Fi & Coworking', vibe: 'Nómada & Cowork', icon: 'Laptop', color: '#64748b' },
+  { name: 'Cena Romántica Frente al Mar', vibe: 'Romántico & Parejas', icon: 'Heart', color: '#e11d48' },
+  { name: 'Hamacas, Sol & Relax en la Playa', vibe: 'Chill & Relax Playero', icon: 'Palmtree', color: '#14b8a6' },
+  { name: 'Conocer Viajeros & Vida Social', vibe: 'Social & Conectar', icon: 'Users', color: '#8b5cf6' }
+];
+
 export const BASE_URL = 'https://www.ubicame.info';
 
 export const LANDMARKS: Landmark[] = [

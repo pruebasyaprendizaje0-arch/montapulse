@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef, useCallback } from 'react';
 import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings, Announcement, MapEntryType, Transaction } from '../types';
-import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition, DEFAULT_MASTER_CATEGORIES, DEFAULT_MASTER_VIBES } from '../constants';
+import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition, DEFAULT_MASTER_CATEGORIES, DEFAULT_MASTER_VIBES, DEFAULT_MASTER_ACTIVITIES } from '../constants';
 import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAllSettings,
     incrementViewCount, updateAppSettings, subscribeToUsers, subscribeToTransactions,
@@ -1649,24 +1649,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
             return;
         }
-        if (!showConfirm("¿Cargar las actividades predeterminadas? (Bailar, Comer, Surf, etc.)", "Cargar Actividades")) return;
+        if (!await showConfirm("¿Cargar las 12 Actividades Maestras Recomendadas (Opción 1: Experiencias de Costa)?", "Cargar Actividades")) return;
         
-        const defaults = [
-            { name: 'Bailar', vibe: 'Feliz' },
-            { name: 'Comer', vibe: 'Hambriento' },
-            { name: 'Cuidado Personal', vibe: 'Enfermo' },
-            { name: 'Deporte', vibe: 'Inspirado' },
-            { name: 'Descansar', vibe: 'Cansado' },
-            { name: 'Farrear', vibe: 'Feliz' },
-            { name: 'Plan Relax', vibe: 'Relajado' },
-            { name: 'Surf', vibe: 'Aventura' },
-            { name: 'Trabajar', vibe: 'Curioso' },
-            { name: 'Turismo', vibe: 'Curioso' }
-        ];
-
         setLoading(true);
         try {
-            for (const item of defaults) {
+            for (const item of DEFAULT_MASTER_ACTIVITIES) {
                 if (!masterActivities.some((a: any) => a.name.toLowerCase() === item.name.toLowerCase())) {
                     await createMasterDataItem('activities', item);
                 }
@@ -1674,7 +1661,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             showToast("Actividades cargadas correctamente", "success");
         } catch (error) {
             console.error("Error seeding activities:", error);
-            showToast("Error al cargar predeterminados", "error");
+            showToast("Error al cargar actividades", "error");
         } finally {
             setLoading(false);
         }

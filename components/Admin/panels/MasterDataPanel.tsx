@@ -185,13 +185,13 @@ export const MasterDataPanel: React.FC = () => {
                                 {masterVibes.length === 0 ? 'Cargar Vibras (Opción 1)' : 'Sincronizar Opción 1'}
                             </button>
                         )}
-                        {activeTab === 'activities' && masterActivities.length === 0 && (
+                        {activeTab === 'activities' && (
                             <button 
                                 onClick={handleSeedActivities}
                                 className="flex items-center gap-2 px-6 py-3.5 bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest text-indigo-400 transition-all shadow-lg"
                             >
                                 <Zap className="w-3.5 h-3.5" />
-                                Cargar Predeterminados
+                                {masterActivities.length === 0 ? 'Cargar Actividades (Opción 1)' : 'Sincronizar Opción 1'}
                             </button>
                         )}
                         {!showCreator && (
