@@ -1,6 +1,35 @@
 import { Sector, Vibe, Business, MontanitaEvent, SubscriptionPlan, BusinessCategory, PolicyData, PlanFeatureDefinition, Landmark } from './types';
 export type { PlanFeatureDefinition };
 
+export const DEFAULT_MASTER_CATEGORIES = [
+  { name: 'Gastronomía & Restaurantes', icon: 'Utensils', color: '#f97316', label: 'Gastronomía & Restaurantes', desc: 'Comida típica, internacional, mariscos, pizzerías y comida al paso' },
+  { name: 'Bares & Vida Nocturna', icon: 'PartyPopper', color: '#ec4899', label: 'Bares & Vida Nocturna', desc: 'Bares de playa, coctelerías, discotecas, pubs y música en vivo' },
+  { name: 'Hospedaje & Alojamientos', icon: 'Hotel', color: '#eab308', label: 'Hospedaje & Alojamientos', desc: 'Hoteles, hostales, cabañas, glamping y suites' },
+  { name: 'Surf & Deportes Acuáticos', icon: 'Waves', color: '#0284c7', label: 'Surf & Deportes Acuáticos', desc: 'Escuelas de surf, alquiler de tablas, buceo y pesca deportiva' },
+  { name: 'Cafeterías & Panaderías', icon: 'Coffee', color: '#d97706', label: 'Cafeterías & Panaderías', desc: 'Cafés de especialidad, desayunos, juguerías y repostería artesanal' },
+  { name: 'Tours, Aventura & Ecoturismo', icon: 'Compass', color: '#10b981', label: 'Tours, Aventura & Ecoturismo', desc: 'Avistamiento de ballenas, senderismo, cabalgatas, parapente y reservas' },
+  { name: 'Bienestar, Yoga & Spa', icon: 'Sparkles', color: '#a855f7', label: 'Bienestar, Yoga & Spa', desc: 'Centros holísticos, masajes, yoga, terapias y cuidado personal' },
+  { name: 'Artesanías & Tiendas de Playa', icon: 'ShoppingBag', color: '#8b5cf6', label: 'Artesanías & Tiendas de Playa', desc: 'Ropa playera, surf shops, souvenirs, accesorios y artesanías' },
+  { name: 'Minimarkets, Víveres & Licorerías', icon: 'Store', color: '#06b6d4', label: 'Minimarkets, Víveres & Licorerías', desc: 'Minimarkets, abarrotes, bodegas, licores y artículos esenciales' },
+  { name: 'Salud, Farmacias & Emergencias', icon: 'Activity', color: '#ef4444', label: 'Salud, Farmacias & Emergencias', desc: 'Farmacias, centros de salud, primeros auxilios y veterinarias' },
+  { name: 'Transporte & Movilidad', icon: 'Bus', color: '#3b82f6', label: 'Transporte & Movilidad', desc: 'Taxis, cooperativas de buses, alquiler de motos y bicicletas' },
+  { name: 'Servicios Diarios & Técnicos', icon: 'Wrench', color: '#64748b', label: 'Servicios Diarios & Técnicos', desc: 'Cajeros automáticos, lavanderías, cerrajerías y soporte técnico' },
+  { name: 'Información, Cultura & Puntos Clave', icon: 'MapPin', color: '#f59e0b', label: 'Información, Cultura & Puntos Clave', desc: 'Miradores, iglesias, letras de Montañita, cultura y auxilio' }
+];
+
+export const DEFAULT_MASTER_VIBES = [
+  { name: 'De Fiesta & Farra', label: 'De Fiesta & Farra', icon: 'Flame', color: '#ec4899', desc: 'Discotecas, bares de cócteles, DJs y música en vivo' },
+  { name: 'Chill & Relax Playero', label: 'Chill & Relax Playero', icon: 'Palmtree', color: '#14b8a6', desc: 'Hamacas, brisa marina, lectura y desconexión total' },
+  { name: 'Foodie & Antojos', label: 'Foodie & Antojos', icon: 'Utensils', color: '#f97316', desc: 'Mariscos frescos, pizzas artesanales, comida típica y postres' },
+  { name: 'Aventurero & Activo', label: 'Aventurero & Activo', icon: 'Waves', color: '#0284c7', desc: 'Surf, caminatas a cascadas, parapente y deportes acuáticos' },
+  { name: 'Sunset & Golden Hour', label: 'Sunset & Golden Hour', icon: 'Sun', color: '#f59e0b', desc: 'Miradores, música acústica y tragos al caer el sol' },
+  { name: 'Romántico & Parejas', label: 'Romántico & Parejas', icon: 'Heart', color: '#e11d48', desc: 'Cenas a la luz de las velas, cabañas íntimas y paseos al atardecer' },
+  { name: 'Social & Conectar', label: 'Social & Conectar', icon: 'Users', color: '#8b5cf6', desc: 'Hostales animados, conocer gente nueva, charlas y juegos' },
+  { name: 'Zen & Bienestar', label: 'Zen & Bienestar', icon: 'Sparkles', color: '#a855f7', desc: 'Yoga matutino, masajes, meditación y terapias naturales' },
+  { name: 'Curioso & Explorador', label: 'Curioso & Explorador', icon: 'Compass', color: '#06b6d4', desc: 'Senderos escondidos, artesanías, letras de Montañita y cultura local' },
+  { name: 'Nómada & Cowork', label: 'Nómada & Cowork', icon: 'Laptop', color: '#64748b', desc: 'Cafés con buen Wi-Fi, enchufes y ambiente tranquilo para trabajar' }
+];
+
 export const BASE_URL = 'https://www.ubicame.info';
 
 export const LANDMARKS: Landmark[] = [

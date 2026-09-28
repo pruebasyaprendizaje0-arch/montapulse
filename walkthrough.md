@@ -67,3 +67,144 @@ We implemented a real-time geolocation feature in the map view:
 - **Visual Feedback**: When activated, the map centers on the user's coordinates and displays a blue pulsing marker (`user-location-pulse`).
 - **Permission Handling**: Uses the browser's Geolocation API with appropriate `locationfound` and `locationerror` handlers.
 - **Logic Consolidation**: The feature was integrated into the primary `components/Map/MapView.tsx` component, and legacy duplicate files were removed from the codebase.
+
+---
+
+# Walkthrough: Corrección de Scroll Móvil y Despliegue de Experiencias
+
+Se solucionó el problema donde en dispositivos móviles la página de perfil se cortaba en "Ubicación y Sector" y no permitía hacer scroll vertical hacia las secciones inferiores.
+
+## 🛠️ Cambios Realizados
+
+### 1. Desbloqueo del Scroll Móvil & Touch Actions
+- **Contenedor Raíz del Modal** ([`PublicProfileModal.tsx`](file:///c:/Users/Frank/Documents/montapulse/components/PublicProfileModal.tsx)):
+  - Se configuró con `w-full h-full overflow-y-auto overflow-x-hidden`.
+  - Se añadieron propiedades CSS nativas para soporte táctil fluido en smartphones:
+    ```css
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+    ```
+- **Eliminación de Scroll Traps (`overflow-hidden`)**:
+  - Se removieron los `overflow-hidden` innecesarios en contenedores verticales intermedios que atrapaban los gestos táctiles e impedían que el swipe vertical se propagara al contenedor con scroll.
+# Walkthrough: Premium Toast & Dialog System Integration
+
+This walkthrough details the transition from native browser dialogs to a custom, promise-based premium toast and modal system.
+
+## 1. The Core: ToastContext.tsx
+
+The `ToastContext` was enhanced to handle more than just simple notifications. We added two powerful asynchronous tools:
+
+- **`showConfirm(message, title)`**: Returns `Promise<boolean>`. This allows us to use `if (await showConfirm(...))` directly in our logic, making the code clean and readable.
+- **`showPrompt(message, placeholder, title)`**: Returns `Promise<string | null>`. This captures user input without breaking the UI flow, returning `null` if the user cancels.
+
+### Glassmorphism UI
+The modals are designed with a premium glassmorphic look:
+- `backdrop-blur-xl` for deep background blurs.
+- Subtle `border-white/10` and `shadow-2xl` for depth.
+- High-contrast typography and polished buttons.
+
+## 2. Component Refactoring
+
+### Map Interactions (`MapView.tsx`)
+In the map view, superadmin actions previously used native prompts and confirms. These were replaced with the new system:
+```tsx
+const action = await showPrompt(
+  "1. Editar Detalles\n2. Eliminar Punto",
+  "Introduce 1 o 2",
+  `SUPER USER - ${business.name}`
+);
+```
+
+### Business Management (`Explore.tsx`, `DataContext.tsx`)
+Deletion of businesses now uses a premium confirmation:
+```tsx
+const confirmed = await showConfirm('¿Eliminar este negocio permanentemente?');
+if (confirmed) {
+  // Logic here
+}
+```
+
+### Event Management (`EventModal.tsx`)
+The delete button in the event modal now triggers the custom confirmation system, ensuring users don't accidentally delete their pulses.
+
+### Admin Controls (`SuperAdminCenter.tsx`)
+Role and plan changes for users are now gated by professional confirmation dialogs in the Users Panel, preventing accidental clicks that would modify production data.
+
+### Subscriptions (`Plans.tsx`)
+Switching plans triggers a confirmation before redirecting to WhatsApp support, providing a smoother transition for the user.
+
+## 3. Global Verification
+
+We performed a deep scan of the codebase to ensure zero native dialogs remain. The following patterns were checked and eliminated:
+- `window.alert`, `window.confirm`, `window.prompt`
+- `alert()`, `confirm()`, `prompt()` (unqualified calls)
+
+## 4. User Experience Improvements
+
+- **Non-blocking**: The UI remains responsive and beautiful during interactions.
+- **Consistent Branding**: Every modal and toast follows the "ubicame.info Pulse" design language (Glassmorphism + Slate/Sky color palette).
+- **Safe Operations**: Critical actions (delete, role change, plan change) are now always confirmed with a clear, readable dialog.
+
+---
+**Deployment Note**: The new system is fully integrated and ready for production hosting on Firebase.
+
+## 5. Geolocation Feature ("Locate Me")
+
+We implemented a real-time geolocation feature in the map view:
+- **Responsive Control**: A new "Locate Me" button using the `Crosshair` icon was added to the map's floating action controls.
+- **Visual Feedback**: When activated, the map centers on the user's coordinates and displays a blue pulsing marker (`user-location-pulse`).
+- **Permission Handling**: Uses the browser's Geolocation API with appropriate `locationfound` and `locationerror` handlers.
+- **Logic Consolidation**: The feature was integrated into the primary `components/Map/MapView.tsx` component, and legacy duplicate files were removed from the codebase.
+
+---
+
+# Walkthrough: Corrección de Scroll Móvil y Despliegue de Experiencias
+
+Se solucionó el problema donde en dispositivos móviles la página de perfil se cortaba en "Ubicación y Sector" y no permitía hacer scroll vertical hacia las secciones inferiores.
+
+## 🛠️ Cambios Realizados
+
+### 1. Desbloqueo del Scroll Móvil & Touch Actions
+- **Contenedor Raíz del Modal** ([`PublicProfileModal.tsx`](file:///c:/Users/Frank/Documents/montapulse/components/PublicProfileModal.tsx)):
+  - Se configuró con `w-full h-full overflow-y-auto overflow-x-hidden`.
+  - Se añadieron propiedades CSS nativas para soporte táctil fluido en smartphones:
+    ```css
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+    ```
+- **Eliminación de Scroll Traps (`overflow-hidden`)**:
+  - Se removieron los `overflow-hidden` innecesarios en contenedores verticales intermedios que atrapaban los gestos táctiles e impedían que el swipe vertical se propagara al contenedor con scroll.
+
+### 2. Robustez de Datos y Recomendaciones
+- **Distancias y Coordenadas** ([`ExperienceRecommendationCarousels.tsx`](file:///c:/Users/Frank/Documents/montapulse/components/ExperienceRecommendationCarousels.tsx)):
+  - Se aseguró que `calculateDistanceInMeters` valide tipos de datos y arreglos de coordenadas para evitar cualquier interrupción en el renderizado.
+  - Se blindó el filtrado de `allBusinesses` con fallback seguro `(allBusinesses || [])`.
+
+### 3. Verificación de la Secuencia Completa de Secciones
+Toda la página se despliega y permite scroll vertical continuo:
+1. **Cabecera Oficial & Navegación móvil** (con menú desplegable).
+2. **Hero de Marca** (Foto, logo, insignias de verificación y estado en tiempo real).
+3. **Barra de Métricas** (Visitas, seguidores, interacciones y botón a Google Maps).
+4. **Información Oficial**:
+   - Horario de Atención (con desglose semanal interactivo).
+   - Ubicación y Sector (con botón "Cómo Llegar en el Mapa").
+   - Métodos de Pago (Efectivo, Pichincha, Deuna, Tarjetas).
+   - Servicios y Comodidades (Wi-Fi, Estacionamiento, Pet Friendly, Frente al Mar).
+5. **Oferta Destacada** (Servicios y carta si aplica).
+6. **Cupones & Promociones Activas**.
+7. **Agenda Pulse** (Eventos y actividades).
+8. **Anfitrión / Propietario Verificado**.
+9. **Completa tu experiencia**:
+   - 🍽️ *¿Dónde vas a comer?* (Restaurantes locales, Cafés y postres, Bares o Lounges).
+   - 🎭 *¿Qué vas a hacer?* (Rutas y tours, Puntos de interés, Talleres o eventos).
+   - 🧘 *¿Cómo te vas a cuidar?* (Spas y bienestar, Gimnasios, Farmacias y salud).
+   - 🚗 *¿Dónde sigue tu viaje?* (Alojamientos, Transporte y taxis, Próximos destinos).
+10. **Opiniones y Calificaciones**:
+    - Tarjeta oficial de Google Maps Reviews (enlace directo a ficha y reseñas oficiales).
+    - Se eliminó la variable remanente `reviews` para evitar excepciones en tiempo de ejecución.
+11. **Pie de Página & Botón Flotante de WhatsApp**.
+
+## 🚀 Verificación
+- `npm run build` ejecutado exitosamente con 0 errores TypeScript/JSX.

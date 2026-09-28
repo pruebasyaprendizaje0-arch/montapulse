@@ -6,6 +6,7 @@ import { Sector, BusinessCategory, MapEntryType } from '../../types';
 import { IconMap } from '../../utils/icons';
 import { OptimizedImageUploader } from '../OptimizedImageUploader';
 import { TikTokIcon, getInstagramUrl, getFacebookUrl, getTikTokUrl, getYouTubeUrl, getWhatsAppUrl } from '../../utils/social';
+import { LocationPickerMiniMap } from '../Map/LocationPickerMiniMap';
 
 interface BusinessEditModalProps {
     onClose?: () => void;
@@ -32,6 +33,16 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
     const targetBusinessId = editingBusinessId || user?.businessId;
     const business = isRegistration ? null : businesses.find(b => b.id === targetBusinessId);
 
+    // Use bizForm as the canonical state for the modal fields
+    const data = bizForm;
+
+    const availableLocalities = [...LOCALITIES, ...(customLocalities || [])];
+    const availableSectors = (data.locality && LOCALITY_SECTORS[data.locality]) 
+        ? LOCALITY_SECTORS[data.locality] 
+        : [Sector.CENTRO, Sector.PLAYA, Sector.MONTANA, Sector.NORTE, Sector.SUR];
+    const availableLandmarks = LANDMARKS.filter(l => !data.locality || l.locality === data.locality);
+    const localityCoords = LOCALITIES.find(l => l.name === (data.locality || 'Montañita'))?.coords || [-1.8253, -80.7523];
+
     const userBusiness = businesses.find(b => b.ownerId === user?.id && !b.isReference);
     const userReference = businesses.find(b => b.ownerId === user?.id && b.isReference);
     const canAddBusiness = isSuperAdmin || isAdmin || isSuperUser || !userBusiness;
@@ -49,8 +60,6 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
 
     if (!business && !isRegistration) return null;
 
-    // Use bizForm as the canonical state for the modal fields
-    const data = bizForm;
     const updateField = (field: string, value: any) => {
         const safeValue = value === undefined ? null : value;
         setBizForm(prev => ({ ...prev, [field]: safeValue }));
@@ -279,6 +288,152 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                             className="w-full bg-slate-800/50 border border-white/5 rounded-3xl px-6 py-4 text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all resize-none"
                             placeholder="Describe tu negocio..."
                         />
+                    </div>
+
+                    {/* SECCIÓN COMPLETA DE UBICACIÓN EN EL MAPA & DIRECCIÓN */}
+                    <div className="p-5 sm:p-7 bg-slate-900/90 rounded-[2.5rem] border border-orange-500/20 space-y-6 shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/5 rounded-full blur-3xl pointer-events-none" />
+
+                        <div className="flex items-center gap-3 pb-3 border-b border-white/10 relative z-10">
+                            <div className="w-10 h-10 rounded-2xl bg-orange-500/20 border border-orange-500/30 text-orange-400 flex items-center justify-center shrink-0">
+                                <Compass className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-black text-white uppercase tracking-wide flex items-center gap-2">
+                                    <span>Ubicación en el Mapa & Dirección</span>
+                                </h3>
+                                <p className="text-[11px] text-slate-400 font-medium">
+                                    Configura la localidad, sector, dirección física y el pin GPS exacto en el mapa.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Localidad y Sector */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                                    Localidad / Pueblo
+                                </label>
+                                <select
+                                    value={data.locality || 'Montañita'}
+                                    onChange={(e) => {
+                                        const locName = e.target.value;
+                                        updateField('locality', locName);
+                                        const locObj = availableLocalities.find(l => l.name === locName);
+                                        if (locObj && (!data.coordinates || data.coordinates.length !== 2)) {
+                                            updateField('coordinates', locObj.coords);
+                                        }
+                                    }}
+                                    className="w-full bg-slate-800/90 border border-white/10 rounded-2xl px-4 py-3.5 text-xs text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                >
+                                    {availableLocalities.map(loc => (
+                                        <option key={loc.name} value={loc.name}>{loc.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                                    Sector / Zona
+                                </label>
+                                <select
+                                    value={data.sector || Sector.CENTRO}
+                                    onChange={(e) => updateField('sector', e.target.value as Sector)}
+                                    className="w-full bg-slate-800/90 border border-white/10 rounded-2xl px-4 py-3.5 text-xs text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                >
+                                    {availableSectors.map(sec => (
+                                        <option key={sec} value={sec}>{sec}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Dirección Física */}
+                        <div className="relative z-10">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                                Dirección Física o Referencia Escrita
+                            </label>
+                            <input
+                                type="text"
+                                value={data.address || ''}
+                                onChange={(e) => updateField('address', e.target.value)}
+                                placeholder="Ej: Calle de los Cócteles frente al mar, a 50 metros de la playa"
+                                className="w-full bg-slate-800/90 border border-white/10 rounded-2xl px-4 py-3.5 text-xs text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        {/* Punto de Referencia Cercano */}
+                        <div className="relative z-10">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                                Cerca de Punto de Referencia (Opcional)
+                            </label>
+                            <select
+                                value={data.containedInLandmarkId || ''}
+                                onChange={(e) => updateField('containedInLandmarkId', e.target.value)}
+                                className="w-full bg-slate-800/90 border border-white/10 rounded-2xl px-4 py-3.5 text-xs text-white font-medium focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                            >
+                                <option value="">Ninguno / Ubicación independiente</option>
+                                {availableLandmarks.map(lm => (
+                                    <option key={lm.id} value={lm.id}>{lm.name} ({lm.sector})</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Mapa Interactivo con Pin Arrastrable */}
+                        <div className="space-y-2.5 pt-2 relative z-10">
+                            <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                    <MapPin className="w-3.5 h-3.5" />
+                                    Fijar Punto en el Mapa (Coordenadas GPS)
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-normal">Toca o arrastra el pin</span>
+                            </label>
+
+                            <LocationPickerMiniMap
+                                coordinates={data.coordinates}
+                                onChangeCoordinates={(coords) => updateField('coordinates', coords)}
+                                localityName={data.locality || 'Montañita'}
+                                height="280px"
+                            />
+                        </div>
+
+                        {/* Inputs Manuales de Coordenadas Lat/Lng */}
+                        <div className="grid grid-cols-2 gap-3 pt-1 relative z-10">
+                            <div>
+                                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                                    Latitud GPS
+                                </label>
+                                <input
+                                    type="number"
+                                    step="any"
+                                    value={data.coordinates?.[0] ?? ''}
+                                    onChange={(e) => {
+                                        const lat = parseFloat(e.target.value);
+                                        const lng = data.coordinates?.[1] ?? localityCoords[1];
+                                        updateField('coordinates', [lat, lng]);
+                                    }}
+                                    placeholder="-1.8253"
+                                    className="w-full bg-slate-950/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-orange-500 transition-all"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                                    Longitud GPS
+                                </label>
+                                <input
+                                    type="number"
+                                    step="any"
+                                    value={data.coordinates?.[1] ?? ''}
+                                    onChange={(e) => {
+                                        const lng = parseFloat(e.target.value);
+                                        const lat = data.coordinates?.[0] ?? localityCoords[0];
+                                        updateField('coordinates', [lat, lng]);
+                                    }}
+                                    placeholder="-80.7523"
+                                    className="w-full bg-slate-950/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-orange-500 transition-all"
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     {!data.isReference && (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, User, Bell, Home, Info } from 'lucide-react';
+import { Calendar, User, Bell, Home, Compass, Search } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useData } from '../../context/DataContext';
@@ -12,16 +12,18 @@ export const BottomNav: React.FC = () => {
     const currentPath = location.pathname;
 
     const navItems = [
-        { id: 'home', icon: Home, label: 'HOME', path: '/', action: null },
-        { id: 'info', icon: Info, label: 'INFO', path: '/info', action: null },
-        { id: 'events', icon: Calendar, label: 'PULSOS', path: '/calendar', action: null },
-        { id: 'notifications', icon: Bell, label: 'NOTIFICACIONES', path: '/community', action: null },
+        { id: 'home', icon: Home, label: 'NOSOTROS', path: '/', action: null },
+        { id: 'explore', icon: Compass, label: 'EXPLORAR', path: '/explore', action: null },
+        { id: 'info', icon: Search, label: 'INFO / BUSCAR', path: '/info', action: null },
+        { id: 'events', icon: Calendar, label: 'EVENTOS', path: '/calendar', action: null },
+        { id: 'notifications', icon: Bell, label: 'AVISOS', path: '/community', action: null },
         { id: 'profile', icon: User, label: 'PASSPORT', path: '/passport', action: 'favorites' }
     ] as const;
 
     const isActive = (path: string | null) => {
         if (!path) return false;
-        if (path === '/' && (currentPath === '/' || currentPath === '/explore')) return true;
+        if (path === '/' && (currentPath === '/' || currentPath === '/history')) return true;
+        if (path === '/explore' && currentPath.startsWith('/explore')) return true;
         if (path === '/info' && currentPath === '/info') return true;
         if (path !== '/' && currentPath.startsWith(path)) return true;
         return false;

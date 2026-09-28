@@ -1,10 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { X, MapPin, Star, Search, ArrowRight, Waves, TreePine, Store, Hotel, Droplets, Activity, Users, Settings } from 'lucide-react';
+import { X, MapPin, Star, Search, ArrowRight, Waves, TreePine, Store, Hotel, Droplets, Activity, Users, Settings, ChevronDown, RotateCcw } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useNavigate } from 'react-router-dom';
 import { SubscriptionPlan, BusinessCategory } from '../types';
 import { LOCALITIES } from '../constants';
 import { PageLoader } from '../components/common/PageLoader';
+import { ECUADOR_GEO_DATA, LocationStructure } from '../utils/ecuadorGeoData';
+
+const ECUADOR_LOCATIONS: LocationStructure = ECUADOR_GEO_DATA;
 
 const REFERENCE_CATEGORIES = [
     BusinessCategory.REFERENCIA,
@@ -35,16 +38,151 @@ export const InfoPage: React.FC = () => {
     } = useData();
 
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedProvince, setSelectedProvince] = useState<string>('Santa Elena');
+    const [selectedCanton, setSelectedCanton] = useState<string>('Santa Elena');
+    const [selectedParroquia, setSelectedParroquia] = useState<string>('Manglaralto');
+    const [selectedComuna, setSelectedComuna] = useState<string>('Montañita');
 
-    const localityName = currentLocality?.name || 'Montañita';
+    // Lista dinámica de provincias
+    const provincesList = useMemo(() => {
+        return Object.keys(ECUADOR_LOCATIONS);
+    }, []);
+
+    // Lista dinámica de cantones
+    const cantonsList = useMemo(() => {
+        if (selectedProvince !== 'Todas') {
+            return Object.keys(ECUADOR_LOCATIONS[selectedProvince] || {});
+        }
+        const set = new Set<string>();
+        Object.values(ECUADOR_LOCATIONS).forEach(provObj => {
+            Object.keys(provObj).forEach(c => set.add(c));
+        });
+        return Array.from(set);
+    }, [selectedProvince]);
+
+    // Lista dinámica de parroquias
+    const parroquiasList = useMemo(() => {
+        if (selectedProvince !== 'Todas' && selectedCanton !== 'Todos') {
+            return Object.keys(ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton] || {});
+        }
+        if (selectedProvince !== 'Todas') {
+            const set = new Set<string>();
+            const provObj = ECUADOR_LOCATIONS[selectedProvince] || {};
+            Object.values(provObj).forEach(cantonObj => {
+                Object.keys(cantonObj).forEach(p => set.add(p));
+            });
+            return Array.from(set);
+        }
+        const set = new Set<string>();
+        Object.values(ECUADOR_LOCATIONS).forEach(provObj => {
+            Object.values(provObj).forEach(cantonObj => {
+                Object.keys(cantonObj).forEach(p => set.add(p));
+            });
+        });
+        return Array.from(set);
+    }, [selectedProvince, selectedCanton]);
+
+    // Lista dinámica de comunas o localidades
+    const comunasList = useMemo(() => {
+        if (selectedProvince !== 'Todas' && selectedCanton !== 'Todos' && selectedParroquia !== 'Todas') {
+            const list = ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton]?.[selectedParroquia];
+            return list ? list.filter(c => c !== 'Todas') : [];
+        }
+        
+        const set = new Set<string>();
+        if (selectedProvince !== 'Todas' && selectedCanton !== 'Todos') {
+            const cantonObj = ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton] || {};
+            Object.values(cantonObj).forEach(arr => {
+                arr.forEach(c => { if (c !== 'Todas') set.add(c); });
+            });
+        } else if (selectedProvince !== 'Todas') {
+            const provObj = ECUADOR_LOCATIONS[selectedProvince] || {};
+            Object.values(provObj).forEach(cantonObj => {
+                Object.values(cantonObj).forEach(arr => {
+                    arr.forEach(c => { if (c !== 'Todas') set.add(c); });
+                });
+            });
+        } else {
+            Object.values(ECUADOR_LOCATIONS).forEach(provObj => {
+                Object.values(provObj).forEach(cantonObj => {
+                    Object.values(cantonObj).forEach(arr => {
+                        arr.forEach(c => { if (c !== 'Todas') set.add(c); });
+                    });
+                });
+            });
+            // Agregar localidades custom
+            (customLocalities || []).forEach(cl => {
+                if (cl.name) set.add(cl.name);
+            });
+        }
+        return Array.from(set);
+    }, [selectedProvince, selectedCanton, selectedParroquia, customLocalities]);
+
+    const handleResetFilters = () => {
+        setSelectedProvince('Santa Elena');
+        setSelectedCanton('Santa Elena');
+        setSelectedParroquia('Manglaralto');
+        setSelectedComuna('Montañita');
+        setSearchQuery('');
+    };
+
+    const localityName = selectedComuna !== 'Todas'
+        ? selectedComuna
+        : (selectedParroquia !== 'Todas' 
+            ? selectedParroquia 
+            : (currentLocality?.name || 'Montañita'));
 
     const allBusinesses = useMemo(() => {
         let all = businesses || [];
 
-        // Filter by current locality (keep 'ubicame.info' always visible for contact/buying services)
-        const currentLocName = currentLocality?.name || 'Montañita';
-        all = all.filter((b: any) => (b.locality || 'Montañita') === currentLocName || b.name?.toLowerCase().includes('ubicame.info'));
+        // 1. Filtro por Comuna / Localidad
+        if (selectedComuna !== 'Todas') {
+            const comLow = selectedComuna.toLowerCase();
+            const isMontanita = comLow.includes('montañ') || comLow.includes('montan');
+            all = all.filter((b: any) => 
+                (b.locality && b.locality.toLowerCase().includes(comLow)) ||
+                (isMontanita && (!b.locality || b.locality.toLowerCase().includes('montan') || b.locality.toLowerCase().includes('montañ'))) ||
+                (b.sector && b.sector.toLowerCase().includes(comLow)) ||
+                (b.neighborhood && b.neighborhood.toLowerCase().includes(comLow)) ||
+                (b.address && b.address.toLowerCase().includes(comLow)) ||
+                (b.name && b.name.toLowerCase().includes(comLow)) ||
+                (b.description && b.description.toLowerCase().includes(comLow)) ||
+                b.name?.toLowerCase().includes('ubicame.info')
+            );
+        } else if (selectedParroquia !== 'Todas') {
+            const parLow = selectedParroquia.toLowerCase();
+            // Obtener todas las comunas de esta parroquia
+            const parroquiaComunas = (selectedProvince !== 'Todas' && selectedCanton !== 'Todos' && ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton]?.[selectedParroquia])
+                ? ECUADOR_LOCATIONS[selectedProvince][selectedCanton][selectedParroquia].map(c => c.toLowerCase())
+                : [];
 
+            all = all.filter((b: any) => 
+                (b.parish && b.parish.toLowerCase() === parLow) ||
+                (b.locality && b.locality.toLowerCase() === parLow) ||
+                (b.locality && parroquiaComunas.includes(b.locality.toLowerCase())) ||
+                b.name?.toLowerCase().includes('ubicame.info')
+            );
+        } else if (selectedCanton !== 'Todos') {
+            const cantonParroquias = (selectedProvince !== 'Todas' && ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton])
+                ? Object.keys(ECUADOR_LOCATIONS[selectedProvince][selectedCanton]).map(p => p.toLowerCase())
+                : [];
+            all = all.filter((b: any) => 
+                (b.canton && b.canton.toLowerCase() === selectedCanton.toLowerCase()) || 
+                cantonParroquias.includes((b.locality || 'montañita').toLowerCase()) ||
+                cantonParroquias.includes((b.parish || '').toLowerCase()) ||
+                b.name?.toLowerCase().includes('ubicame.info')
+            );
+        } else if (selectedProvince !== 'Todas') {
+            const provCantons = ECUADOR_LOCATIONS[selectedProvince] || {};
+            const provParroquias = Object.values(provCantons).flatMap(c => Object.keys(c)).map(p => p.toLowerCase());
+            all = all.filter((b: any) => 
+                (b.province && b.province.toLowerCase() === selectedProvince.toLowerCase()) || 
+                provParroquias.includes((b.locality || 'montañita').toLowerCase()) ||
+                b.name?.toLowerCase().includes('ubicame.info')
+            );
+        }
+
+        // 2. Filtro por Búsqueda de Texto
         const sq = searchQuery || '';
         if (sq.trim()) {
             const q = sq.toLowerCase();
@@ -53,15 +191,17 @@ export const InfoPage: React.FC = () => {
                     const nameMatch = b.name && b.name.toLowerCase().includes(q);
                     const categoryMatch = b.category && b.category.toLowerCase().includes(q);
                     const sectorMatch = b.sector && b.sector.toLowerCase().includes(q);
+                    const localityMatch = b.locality && b.locality.toLowerCase().includes(q);
                     const descMatch = b.description && b.description.toLowerCase().includes(q);
-                    return nameMatch || categoryMatch || sectorMatch || descMatch;
+                    const addressMatch = b.address && b.address.toLowerCase().includes(q);
+                    return nameMatch || categoryMatch || sectorMatch || localityMatch || descMatch || addressMatch;
                 } catch (e) {
                     return false;
                 }
             });
         }
         return all;
-    }, [businesses, searchQuery, currentLocality]);
+    }, [businesses, searchQuery, selectedProvince, selectedCanton, selectedParroquia, selectedComuna]);
 
     const referencePoints = useMemo(() => {
         return allBusinesses.filter((b: any) => REFERENCE_CATEGORIES.includes(b.category) && !b.name?.toLowerCase().includes('ubicame.info'));
@@ -120,9 +260,11 @@ export const InfoPage: React.FC = () => {
         return <MapPin className="w-5 h-5 text-slate-400" />;
     };
 
+    const hasActiveFilters = selectedProvince !== 'Santa Elena' || selectedCanton !== 'Santa Elena' || selectedParroquia !== 'Manglaralto' || selectedComuna !== 'Montañita' || searchQuery !== '';
+
     return (
-        <div className="h-full flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 overflow-y-auto" style={{ height: '100%', minHeight: '100vh' }}>
-            <div className="p-4 sm:p-6 border-b border-white/5">
+        <div className="h-full min-h-screen flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 overflow-y-auto overscroll-y-contain touch-pan-y">
+            <div className="p-4 sm:p-6 border-b border-white/5 shrink-0 touch-pan-y">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                     <div className="flex items-center justify-between">
                         <div>
@@ -140,58 +282,166 @@ export const InfoPage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-                        <button
-                            onClick={() => navigate('/history')}
-                            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 border border-violet-500/20 rounded-xl transition-all group shrink-0 shadow-lg shadow-violet-500/5"
-                        >
-                            <Users className="w-4 h-4 group-hover:scale-110 transition-transform shrink-0" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Nosotros</span>
-                        </button>
-                        <select
-                            value={currentLocality?.name || 'Montañita'}
-                            onChange={(e) => {
-                                const allLocs = [...LOCALITIES, ...customLocalities];
-                                const loc = allLocs.find(l => l.name === e.target.value);
-                                if (loc) setCurrentLocality(loc);
-                            }}
-                            className="flex-1 sm:flex-initial bg-white/5 border border-white/10 text-white text-xs font-black uppercase tracking-widest px-3 py-2 rounded-xl cursor-pointer hover:bg-white/10 transition-all focus:outline-none focus:ring-1 focus:ring-amber-400"
-                        >
-                            {(() => {
-                                // Deduplicate: customLocalities may duplicate hardcoded LOCALITIES
-                                const seen = new Set<string>();
-                                return [...LOCALITIES, ...customLocalities].filter(l => {
-                                    if (seen.has(l.name)) return false;
-                                    seen.add(l.name);
-                                    return true;
-                                }).map(l => (
-                                    <option key={(l as any).id || l.name} value={l.name} className="bg-slate-900">{l.name}</option>
-                                ));
-                            })()}
-                        </select>
                         {/* Botón cerrar en escritorio */}
                         <button
                             onClick={() => navigate('/explore')}
-                            className="hidden sm:flex p-2.5 sm:p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-colors shrink-0"
+                            className="hidden sm:flex p-2.5 sm:p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-colors shrink-0 items-center gap-2 text-slate-300 hover:text-white"
                             title="Cerrar"
                         >
                             <X className="w-5 h-5 text-slate-400" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Cerrar</span>
                         </button>
                     </div>
                 </div>
 
-                <div className="relative">
+                {/* Buscador de Texto Principal */}
+                <div className="relative mb-4">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input
                         type="text"
-                        placeholder="Buscar negocios, referencias..."
+                        placeholder="Buscar negocios, servicios, referencias por nombre..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 transition-all"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 transition-all shadow-inner"
                     />
+                </div>
+
+                {/* FILTRAR POR UBICACIÓN GEOGRÁFICA (ECUADOR) */}
+                <div className="p-4 sm:p-5 rounded-[2rem] bg-slate-900/60 backdrop-blur-xl border border-white/10 shadow-2xl space-y-3.5 touch-pan-y">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                                <MapPin className="w-3.5 h-3.5 text-red-500" />
+                            </div>
+                            <span className="text-[11px] sm:text-xs font-black text-slate-200 uppercase tracking-widest">
+                                Filtrar por Ubicación Geográfica (Ecuador)
+                            </span>
+                        </div>
+                        {hasActiveFilters && (
+                            <button
+                                onClick={handleResetFilters}
+                                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1.5 rounded-xl border border-amber-500/20 transition-all self-start sm:self-auto cursor-pointer"
+                            >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Restablecer</span>
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {/* PROVINCIA */}
+                        <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 pl-1">
+                                Provincia
+                            </label>
+                            <div className="relative">
+                                <select
+                                    value={selectedProvince}
+                                    onChange={(e) => {
+                                        setSelectedProvince(e.target.value);
+                                        setSelectedCanton('Todos');
+                                        setSelectedParroquia('Todas');
+                                        setSelectedComuna('Todas');
+                                    }}
+                                    className="w-full bg-slate-950/80 hover:bg-slate-900 border border-white/10 hover:border-amber-500/40 focus:border-amber-500 text-slate-200 text-xs font-bold rounded-2xl px-3.5 py-3 outline-none transition-all cursor-pointer appearance-none pr-8 shadow-inner"
+                                >
+                                    <option value="Todas" className="bg-slate-900">Provincia: Todas</option>
+                                    {provincesList.map(prov => (
+                                        <option key={prov} value={prov} className="bg-slate-900">
+                                            {prov}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
+                        </div>
+
+                        {/* CANTÓN */}
+                        <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 pl-1">
+                                Cantón
+                            </label>
+                            <div className="relative">
+                                <select
+                                    value={selectedCanton}
+                                    onChange={(e) => {
+                                        setSelectedCanton(e.target.value);
+                                        setSelectedParroquia('Todas');
+                                        setSelectedComuna('Todas');
+                                    }}
+                                    className="w-full bg-slate-950/80 hover:bg-slate-900 border border-white/10 hover:border-amber-500/40 focus:border-amber-500 text-slate-200 text-xs font-bold rounded-2xl px-3.5 py-3 outline-none transition-all cursor-pointer appearance-none pr-8 shadow-inner"
+                                >
+                                    <option value="Todos" className="bg-slate-900">Cantón: Todos</option>
+                                    {cantonsList.map(canton => (
+                                        <option key={canton} value={canton} className="bg-slate-900">
+                                            {canton}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
+                        </div>
+
+                        {/* PARROQUIA */}
+                        <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 pl-1">
+                                Parroquia
+                            </label>
+                            <div className="relative">
+                                <select
+                                    value={selectedParroquia}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setSelectedParroquia(val);
+                                        setSelectedComuna('Todas');
+                                    }}
+                                    className="w-full bg-slate-950/80 hover:bg-slate-900 border border-white/10 hover:border-amber-500/40 focus:border-amber-500 text-slate-200 text-xs font-bold rounded-2xl px-3.5 py-3 outline-none transition-all cursor-pointer appearance-none pr-8 shadow-inner"
+                                >
+                                    <option value="Todas" className="bg-slate-900">Parroquia: Todas</option>
+                                    {parroquiasList.map(parr => (
+                                        <option key={parr} value={parr} className="bg-slate-900">
+                                            {parr}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
+                        </div>
+
+                        {/* COMUNA / LOCALIDAD */}
+                        <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 pl-1">
+                                Comuna / Localidad
+                            </label>
+                            <div className="relative">
+                                <select
+                                    value={selectedComuna}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setSelectedComuna(val);
+                                        if (val !== 'Todas') {
+                                            const allLocs = [...LOCALITIES, ...(customLocalities || [])];
+                                            const foundLoc = allLocs.find(l => l.name.toLowerCase() === val.toLowerCase());
+                                            if (foundLoc) setCurrentLocality(foundLoc);
+                                        }
+                                    }}
+                                    className="w-full bg-slate-950/80 hover:bg-slate-900 border border-white/10 hover:border-amber-500/40 focus:border-amber-500 text-slate-200 text-xs font-bold rounded-2xl px-3.5 py-3 outline-none transition-all cursor-pointer appearance-none pr-8 shadow-inner"
+                                >
+                                    <option value="Todas" className="bg-slate-900">Comuna/Localidad: Todas</option>
+                                    {comunasList.map(com => (
+                                        <option key={com} value={com} className="bg-slate-900">
+                                            {com}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-8">
+            <div className="p-4 sm:p-6 space-y-8 pb-36 touch-pan-y">
                 {/* SALUD / HOSPITAL */}
                 {healthPoints.length > 0 && (
                     <div className="animate-in fade-in slide-in-from-top-4 duration-500">

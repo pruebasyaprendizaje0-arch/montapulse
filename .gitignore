@@ -23,17 +23,12 @@ dist-ssr
 *.sln
 *.sw?
 
-# Security
+# Security & Environment
 montapulse-app-firebase-adminsdk-*.json
 *-adminsdk-*.json
+*.env*
 .env
-.env.local
-.env.*.local
-n u l  
- n u l  
- 
+.env.*
 .agent/
 scratch/
 .firebase/
-n u l  
- n u l  

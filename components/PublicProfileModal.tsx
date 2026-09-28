@@ -6,16 +6,18 @@ import {
   CalendarCheck, Wifi, CreditCard, Dog, Car, Sparkles, Instagram, Facebook, 
   Youtube, Phone, CheckCircle2, Award, Heart, MessageSquare, Menu as MenuIcon
 } from 'lucide-react';
-import { Business, UserProfile, MontanitaEvent, ProfileReview, Coupon, Sector, MapEntryType } from '../types';
+import { Business, UserProfile, MontanitaEvent, Coupon, Sector, MapEntryType } from '../types';
 import { useData } from '../context/DataContext';
 import { BASE_URL, SECTOR_INFO, LANDMARKS } from '../constants';
-import { subscribeToProfileReviews, addProfileReview, getUser, incrementBusinessViewCount } from '../services/firestoreService';
+import { getUser, incrementBusinessViewCount } from '../services/firestoreService';
 import { subscribeToBusinessCoupons, obtainCoupon } from '../services/couponService';
 import { useAuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { isBusinessOpen, getEcuadorDate, getEcuadorDayKey, normalizeDay } from '../utils/timeUtils';
 import { useSEO } from '../hooks/useSEO';
 import { TikTokIcon, getInstagramUrl, getFacebookUrl, getTikTokUrl, getYouTubeUrl, getWhatsAppUrl } from '../utils/social';
+import { ExperienceRecommendationCarousels } from './ExperienceRecommendationCarousels';
+import { BusinessMiniMap } from './Map/BusinessMiniMap';
 
 const DAYS_OF_WEEK = [
   { key: 'lunes', name: 'Lunes' },
@@ -75,9 +77,6 @@ export const PublicProfileModal = React.memo(({
   const { user: currentUser } = useAuthContext();
   const { showToast } = useToast();
   
-  const [reviews, setReviews] = useState<ProfileReview[]>([]);
-  const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'services' | 'amenities' | 'pulses' | 'reviews'>('all');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -85,8 +84,16 @@ export const PublicProfileModal = React.memo(({
   const currentDayKey = useMemo(() => getEcuadorDayKey(getEcuadorDate()), []);
   
   const avatarRef = useRef<HTMLImageElement>(null);
+  const modalContainerRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(false);
   const lastOpenTimeRef = useRef(0);
+
+  // Scroll to top when businessId changes
+  useEffect(() => {
+    if (modalContainerRef.current) {
+      modalContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [businessId]);
 
   // Track page view
   useEffect(() => {
@@ -147,7 +154,7 @@ export const PublicProfileModal = React.memo(({
       .finally(() => { if (isOpenRef.current) setIsLoadingUser(false); });
   }, [business?.ownerId, allUsers]);
 
-  // Subscribe to coupons & reviews
+  // Subscribe to coupons
   useEffect(() => {
     if (!(businessIdRef.current || userIdRef.current) || !isOpenRef.current) return;
     
@@ -169,40 +176,10 @@ export const PublicProfileModal = React.memo(({
       });
     }
     
-    const targetIdForReviews = userIdRef.current || business?.ownerId || businessIdRef.current;
-    const unsubReviews = targetIdForReviews ? subscribeToProfileReviews(targetIdForReviews, setReviews) : () => {};
-    
     return () => {
       unsubCoupons();
-      unsubReviews();
     };
   }, [userProfile?.businessId, business?.ownerId]);
-
-  const handleSubmitReview = async () => {
-    const targetId = businessId || userId;
-    if (!currentUser || !targetId) return;
-    if (!newReview.comment.trim()) return;
-
-    setIsSubmitting(true);
-    try {
-      await addProfileReview({
-        targetId,
-        targetType: businessId ? 'business' : 'user',
-        userId: currentUser.id,
-        userName: `${currentUser.name} ${currentUser.surname}`,
-        userAvatar: currentUser.avatarUrl,
-        rating: newReview.rating,
-        comment: newReview.comment
-      });
-      setNewReview({ rating: 5, comment: '' });
-      showToast("¡Gracias por tu reseña!", "success");
-    } catch (error) {
-      console.error("Error submitting review:", error);
-      showToast("No se pudo enviar la reseña.", "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleShareWhatsApp = () => {
     if (!business) return;
@@ -323,10 +300,6 @@ export const PublicProfileModal = React.memo(({
   const isShowingActive = activePulses.length > 0;
   const totalEventClicks = allBusinessPulses.reduce((sum, e) => sum + (e.clickCount || 0), 0);
 
-  const averageRating = reviews.length > 0 
-    ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) 
-    : '5.0';
-
   const scrollToSection = (sectionId: string) => {
     const el = document.getElementById(sectionId);
     if (el) {
@@ -335,23 +308,32 @@ export const PublicProfileModal = React.memo(({
   };
 
   return (
-    <div className="fixed inset-0 z-[4000] bg-[#070a13] overflow-y-auto overflow-x-hidden min-h-screen text-slate-100 flex flex-col animate-in fade-in duration-300 font-sans selection:bg-orange-500 selection:text-white">
+    <div 
+      ref={modalContainerRef}
+      id="public-profile-modal-container"
+      className="fixed inset-0 z-[4000] bg-[#070a13] overflow-y-auto overflow-x-hidden w-full h-full text-slate-100 font-sans selection:bg-orange-500 selection:text-white"
+      style={{
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y',
+        overscrollBehaviorY: 'contain'
+      }}
+    >
       {/* Background Ambience & Gradient Orbs */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent rounded-full blur-3xl" />
-        <div className="absolute bottom-1/3 left-10 w-[450px] h-[450px] bg-gradient-to-tr from-indigo-500/10 via-purple-500/5 to-transparent rounded-full blur-3xl" />
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent rounded-full blur-3xl" />
+        <div className="absolute bottom-1/3 left-10 w-80 h-80 bg-gradient-to-tr from-indigo-500/10 via-purple-500/5 to-transparent rounded-full blur-3xl" />
         <div className="absolute inset-0 bg-[radial-gradient(#ffffff08_1px,transparent_1px)] [background-size:24px_24px] opacity-40" />
       </div>
 
-      <div className="relative z-10 w-full flex-1 flex flex-col">
+      <div className="relative z-10 w-full max-w-full flex flex-col">
         {/* ─────────────────────────────────────────────────────────────────────────────
             TOP NAVBAR / BRAND HEADER (Inspired by reference landing page header)
         ───────────────────────────────────────────────────────────────────────────── */}
-        <header className="sticky top-0 z-50 bg-[#070a13]/85 backdrop-blur-xl border-b border-white/10 transition-all">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+        <header className="sticky top-0 z-50 bg-[#070a13]/85 backdrop-blur-xl border-b border-white/10 transition-all w-full">
+          <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-3">
             {/* Logo / Brand Anchor */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center p-0.5 shadow-lg shadow-orange-500/20 flex-shrink-0">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center p-0.5 shadow-lg shadow-orange-500/20 flex-shrink-0">
                 <div className="w-full h-full bg-[#0a0f1d] rounded-[10px] flex items-center justify-center overflow-hidden">
                   {logoImage ? (
                     <img src={logoImage} alt={displayName} className="w-full h-full object-cover" />
@@ -364,11 +346,11 @@ export const PublicProfileModal = React.memo(({
                   )}
                 </div>
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-black tracking-[0.25em] text-white uppercase truncate max-w-[180px] sm:max-w-[260px]">
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-black tracking-[0.15em] sm:tracking-[0.25em] text-white uppercase truncate max-w-[140px] sm:max-w-[260px]">
                   {business?.name || 'MONTAPULSE'}
                 </span>
-                <span className="text-[9px] font-bold tracking-widest text-orange-400 uppercase">
+                <span className="text-[9px] font-bold tracking-widest text-orange-400 uppercase truncate">
                   {business?.category || 'Perfil Oficial'}
                 </span>
               </div>
@@ -388,6 +370,14 @@ export const PublicProfileModal = React.memo(({
               >
                 Sobre Nosotros
               </button>
+              {business ? (
+                <button 
+                  onClick={() => scrollToSection('landing-map')} 
+                  className="hover:text-orange-400 transition-colors cursor-pointer py-1 border-b-2 border-transparent hover:border-orange-500 text-sky-400"
+                >
+                  Ubicación
+                </button>
+              ) : null}
               {business?.emblematicServices?.length ? (
                 <button 
                   onClick={() => scrollToSection('landing-services')} 
@@ -412,34 +402,40 @@ export const PublicProfileModal = React.memo(({
                   Eventos
                 </button>
               )}
+              <button 
+                onClick={() => scrollToSection('landing-experience')} 
+                className="hover:text-orange-400 transition-colors cursor-pointer py-1 border-b-2 border-transparent hover:border-orange-500 text-amber-300"
+              >
+                Experiencias
+              </button>
             </nav>
 
             {/* Quick Action Controls */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {/* Back button */}
               <button
                 onClick={onClose}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-200 hover:text-white transition-all border border-white/10 text-xs font-bold shadow-sm"
+                className="flex items-center gap-1 px-3 py-1.5 sm:px-4 sm:py-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-200 hover:text-white transition-all border border-white/10 text-xs font-bold shadow-sm"
               >
-                <ChevronLeft className="w-4 h-4 text-orange-400" />
-                <span>Volver</span>
+                <ChevronLeft className="w-4 h-4 text-orange-400 shrink-0" />
+                <span className="hidden sm:inline">Volver</span>
               </button>
 
-              {/* Edit Button if permitted */}
+              {/* Edit Button if permitted (Desktop) */}
               {business && (canEditAll || (currentUser && (business.ownerId === currentUser.id || currentUser.businessId === business.id))) && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onEditBusiness?.(business);
                   }}
-                  className="p-2 bg-sky-500/20 hover:bg-sky-500 text-sky-400 hover:text-white rounded-full transition-all border border-sky-500/30"
+                  className="hidden sm:flex p-2 bg-sky-500/20 hover:bg-sky-500 text-sky-400 hover:text-white rounded-full transition-all border border-sky-500/30"
                   title="Editar Negocio"
                 >
                   <Edit3 className="w-4 h-4" />
                 </button>
               )}
 
-              {/* Delete Button for admin */}
+              {/* Delete Button for admin (Desktop) */}
               {canEditAll && business && (
                 <button
                   onClick={(e) => {
@@ -449,7 +445,7 @@ export const PublicProfileModal = React.memo(({
                       onClose();
                     }
                   }}
-                  className="p-2 bg-rose-500/20 hover:bg-rose-500 text-rose-400 hover:text-white rounded-full transition-all border border-rose-500/30"
+                  className="hidden sm:flex p-2 bg-rose-500/20 hover:bg-rose-500 text-rose-400 hover:text-white rounded-full transition-all border border-rose-500/30"
                   title="Eliminar Negocio"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -481,9 +477,35 @@ export const PublicProfileModal = React.memo(({
             <div className="md:hidden bg-[#0a0f1d] border-b border-white/10 px-6 py-4 flex flex-col gap-3 text-xs font-black tracking-widest uppercase animate-in slide-in-from-top-2">
               <button onClick={() => { scrollToSection('landing-hero'); setIsMobileNavOpen(false); }} className="text-left py-1 text-slate-300 hover:text-orange-400">Inicio</button>
               <button onClick={() => { scrollToSection('landing-about'); setIsMobileNavOpen(false); }} className="text-left py-1 text-slate-300 hover:text-orange-400">Sobre Nosotros</button>
+              {business ? <button onClick={() => { scrollToSection('landing-map'); setIsMobileNavOpen(false); }} className="text-left py-1 text-sky-400">Ubicación & Mapa</button> : null}
               {business?.emblematicServices?.length ? <button onClick={() => { scrollToSection('landing-services'); setIsMobileNavOpen(false); }} className="text-left py-1 text-slate-300 hover:text-orange-400">Servicios</button> : null}
               {coupons.length > 0 && <button onClick={() => { scrollToSection('landing-coupons'); setIsMobileNavOpen(false); }} className="text-left py-1 text-pink-400">Cupones</button>}
               {publicPulses.length > 0 && <button onClick={() => { scrollToSection('landing-pulses'); setIsMobileNavOpen(false); }} className="text-left py-1 text-sky-400">Eventos</button>}
+              <button onClick={() => { scrollToSection('landing-experience'); setIsMobileNavOpen(false); }} className="text-left py-1 text-amber-300">Experiencias</button>
+              
+              {/* Mobile Admin/Owner shortcuts */}
+              {business && (canEditAll || (currentUser && (business.ownerId === currentUser.id || currentUser.businessId === business.id))) && (
+                <button 
+                  onClick={() => { onEditBusiness?.(business); setIsMobileNavOpen(false); }}
+                  className="text-left py-1 text-sky-400 flex items-center gap-2 pt-2 border-t border-white/10 font-bold"
+                >
+                  <Edit3 className="w-3.5 h-3.5" /> Editar Negocio
+                </button>
+              )}
+              {canEditAll && business && (
+                <button 
+                  onClick={() => {
+                    setIsMobileNavOpen(false);
+                    if (window.confirm('¿Estás seguro de eliminar este negocio?')) {
+                      onDeleteBusiness?.(business.id);
+                      onClose();
+                    }
+                  }}
+                  className="text-left py-1 text-rose-400 flex items-center gap-2 font-bold"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar Negocio
+                </button>
+              )}
             </div>
           )}
         </header>
@@ -491,26 +513,20 @@ export const PublicProfileModal = React.memo(({
         {/* ─────────────────────────────────────────────────────────────────────────────
             HERO SECTION (Split-Screen Layout matching the user's reference image)
         ───────────────────────────────────────────────────────────────────────────── */}
-        <section id="landing-hero" className="relative min-h-[calc(88vh-80px)] flex items-center justify-center py-8 lg:py-16 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        <section id="landing-hero" className="relative w-full max-w-full overflow-hidden flex items-center justify-center py-6 sm:py-8 lg:py-16 px-3.5 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center">
             
             {/* LEFT COLUMN: Large Hero Image with Geometric Diagonal Neon Accent Lines */}
-            <div className="lg:col-span-5 flex justify-center relative">
-              <div className="relative w-full max-w-md aspect-[4/5] rounded-[2.5rem] p-3 bg-gradient-to-br from-slate-800/80 via-slate-900/90 to-[#070a13] border border-white/10 shadow-[0_25px_60px_rgba(0,0,0,0.8)] overflow-hidden group">
+            <div className="lg:col-span-5 flex justify-center relative w-full max-w-md mx-auto">
+              <div className="relative w-full aspect-[4/5] rounded-[2.5rem] p-3 bg-gradient-to-br from-slate-800/80 via-slate-900/90 to-[#070a13] border border-white/10 shadow-[0_25px_60px_rgba(0,0,0,0.8)] overflow-hidden group">
                 
-                {/* Diagonal Geometric Graphic Stripes (Inspired by reference design) */}
-                <div className="absolute -inset-10 pointer-events-none z-20 overflow-hidden">
-                  {/* Diagonal Line 1 (Coral / Orange) */}
-                  <div className="absolute top-0 right-16 w-1 h-[140%] bg-gradient-to-b from-orange-400 via-amber-500 to-transparent -rotate-[28deg] shadow-[0_0_15px_rgba(249,115,22,0.8)]" />
-                  {/* Diagonal Line 2 (White / Silver Accent) */}
-                  <div className="absolute top-0 right-10 w-0.5 h-[140%] bg-white/40 -rotate-[28deg]" />
-                  {/* Diagonal Line 3 (Thin Gold Accent) */}
-                  <div className="absolute top-0 right-6 w-1 h-[140%] bg-gradient-to-b from-amber-300 via-yellow-400 to-transparent -rotate-[28deg]" />
-                  {/* Diagonal Line 4 (Purple/Cyan Neon subtle bottom) */}
-                  <div className="absolute -bottom-10 left-10 w-1.5 h-[80%] bg-gradient-to-t from-purple-500 via-indigo-400 to-transparent -rotate-[28deg] opacity-70" />
-                  
-                  {/* Geometric Angular Accent Box Outline (Reference bottom right) */}
-                  <div className="absolute bottom-6 right-6 w-28 h-28 border-r-2 border-b-2 border-orange-500/40 pointer-events-none" />
+                {/* Diagonal Geometric Graphic Stripes */}
+                <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+                  <div className="absolute top-0 right-12 w-1 h-[140%] bg-gradient-to-b from-orange-400 via-amber-500 to-transparent -rotate-[28deg] shadow-[0_0_15px_rgba(249,115,22,0.8)]" />
+                  <div className="absolute top-0 right-8 w-0.5 h-[140%] bg-white/40 -rotate-[28deg]" />
+                  <div className="absolute top-0 right-4 w-1 h-[140%] bg-gradient-to-b from-amber-300 via-yellow-400 to-transparent -rotate-[28deg]" />
+                  <div className="absolute bottom-0 left-6 w-1.5 h-[80%] bg-gradient-to-t from-purple-500 via-indigo-400 to-transparent -rotate-[28deg] opacity-70" />
+                  <div className="absolute bottom-4 right-4 w-20 h-20 border-r-2 border-b-2 border-orange-500/40 pointer-events-none" />
                 </div>
 
                 {/* Hero Photo Container */}
@@ -536,8 +552,8 @@ export const PublicProfileModal = React.memo(({
                   <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-black/20" />
 
                   {/* Floating Status Badge inside image */}
-                  <div className="absolute top-4 left-4 z-30 flex flex-col gap-2">
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-lg">
+                  <div className="absolute top-3.5 left-3.5 z-30 flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-lg">
                       {business ? (
                         business.mapType === MapEntryType.SECTOR ? (
                           <>
@@ -564,7 +580,7 @@ export const PublicProfileModal = React.memo(({
                     </div>
 
                     {business && (
-                      <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full backdrop-blur-md border shadow-lg ${
+                      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md border shadow-lg ${
                         businessStatus.isOpen 
                           ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' 
                           : 'bg-rose-500/20 border-rose-500/40 text-rose-300'
@@ -579,43 +595,43 @@ export const PublicProfileModal = React.memo(({
 
                   {/* Floating Logo Emblem overlay if logoUrl exists */}
                   {business?.logoUrl && (
-                    <div className="absolute bottom-4 left-4 z-30 flex items-center gap-2 p-1.5 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 shadow-2xl">
+                    <div className="absolute bottom-3.5 left-3.5 z-30 flex items-center gap-2 p-1.5 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 shadow-2xl">
                       <img 
                         src={business.logoUrl} 
                         alt={`Logo de ${displayName}`} 
-                        className="w-10 h-10 rounded-xl object-cover" 
+                        className="w-9 h-9 rounded-xl object-cover" 
                       />
-                      <div className="pr-2">
+                      <div className="pr-1.5">
                         <span className="block text-[8px] font-black uppercase text-amber-400 tracking-wider">Logo Oficial</span>
-                        <span className="block text-[10px] font-bold text-white max-w-[110px] truncate">{displayName}</span>
+                        <span className="block text-[10px] font-bold text-white max-w-[100px] truncate">{displayName}</span>
                       </div>
                     </div>
                   )}
 
-                  {/* Aesthetic Pagination Dots / Indicator at bottom (Like reference image) */}
-                  <div className={`absolute ${business?.logoUrl ? 'bottom-4 right-4' : 'bottom-4 left-1/2 -translate-x-1/2'} z-30 flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10`}>
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
-                    <span className="w-2 h-2 rounded-full bg-white/40" />
-                    <span className="w-2 h-2 rounded-full bg-white/40" />
-                    <span className="w-2 h-2 rounded-full bg-white/40" />
+                  {/* Aesthetic Pagination Dots / Indicator at bottom */}
+                  <div className={`absolute ${business?.logoUrl ? 'bottom-3.5 right-3.5' : 'bottom-3.5 left-1/2 -translate-x-1/2'} z-30 flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10`}>
+                    <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* RIGHT COLUMN: Hero Headline, Color Swatches, Bio, Actions (Reference styling) */}
-            <div className="lg:col-span-7 flex flex-col justify-center space-y-6 text-left">
+            {/* RIGHT COLUMN: Hero Headline, Color Swatches, Bio, Actions */}
+            <div className="lg:col-span-7 flex flex-col justify-center space-y-5 sm:space-y-6 text-left min-w-0">
               
               {/* Eyebrow & Swatch Bar */}
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs sm:text-sm font-black tracking-[0.3em] uppercase text-orange-400 flex items-center gap-2">
+                  <span className="text-xs sm:text-sm font-black tracking-[0.2em] sm:tracking-[0.3em] uppercase text-orange-400 flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-orange-400" />
                     LANDING PAGE BUSINESS
                   </span>
                 </div>
 
-                {/* Color Swatches Palette (Coral, Gold, Rosé, Purple) matching the image */}
+                {/* Color Swatches Palette */}
                 <div className="flex items-center gap-1.5 pt-1">
                   <div className="w-5 h-2 rounded-sm bg-[#fde047]" title="Gold" />
                   <div className="w-5 h-2 rounded-sm bg-[#f97316]" title="Orange" />
@@ -626,11 +642,11 @@ export const PublicProfileModal = React.memo(({
               </div>
 
               {/* Massive Business Title with Brand Logo */}
-              <div className="space-y-4">
-                <div className="flex items-start sm:items-center gap-4">
+              <div className="space-y-3 sm:space-y-4 min-w-0">
+                <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 min-w-0">
                   {business?.logoUrl && (
                     <div className="relative group/logo flex-shrink-0">
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl p-1 bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-400 shadow-xl shadow-orange-500/20">
+                      <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl p-1 bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-400 shadow-xl shadow-orange-500/20">
                         <div className="w-full h-full bg-[#0a0f1d] rounded-xl overflow-hidden flex items-center justify-center">
                           <img 
                             src={business.logoUrl} 
@@ -641,26 +657,26 @@ export const PublicProfileModal = React.memo(({
                       </div>
                     </div>
                   )}
-                  <div className="flex-1">
-                    <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.1] uppercase">
+                  <div className="flex-1 min-w-0">
+                    <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.15] uppercase break-words">
                       {displayName}
                     </h1>
                   </div>
                 </div>
                 
                 {/* Meta tags (Locality, Sector, Category, Google Reviews) */}
-                <div className="flex flex-wrap items-center gap-2.5 pt-1 text-xs font-bold text-slate-300">
-                  <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10">
+                <div className="flex flex-wrap items-center gap-2 pt-1 text-xs font-bold text-slate-300">
+                  <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/10">
                     <MapPin className="w-3.5 h-3.5 text-sky-400" />
                     <span>{business?.locality || 'Montañita'}</span>
                   </div>
                   {business?.sector && (
-                    <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/10">
                       <span>{SECTOR_INFO[business.sector as Sector]?.symbol || '🧭'}</span>
                       <span>{business.sector}</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-300 px-3 py-1.5 rounded-xl border border-amber-500/20">
+                  <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-300 px-2.5 py-1.5 rounded-xl border border-amber-500/20">
                     <Store className="w-3.5 h-3.5" />
                     <span>{business?.category || 'Negocio'}</span>
                   </div>
@@ -668,7 +684,7 @@ export const PublicProfileModal = React.memo(({
                     href={googleReviewsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 px-3 py-1.5 rounded-xl border border-yellow-500/20 transition-all hover:scale-105"
+                    className="flex items-center gap-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 px-2.5 py-1.5 rounded-xl border border-yellow-500/20 transition-all hover:scale-105"
                     title="Ver Reseñas en Google Maps"
                   >
                     <Star className="w-3.5 h-3.5 fill-current text-yellow-400" />
@@ -679,51 +695,47 @@ export const PublicProfileModal = React.memo(({
               </div>
 
               {/* Description / Story paragraph */}
-              <p className="text-slate-300 text-sm sm:text-base leading-relaxed max-w-2xl font-normal">
+              <p className="text-slate-300 text-xs sm:text-sm sm:text-base leading-relaxed max-w-2xl font-normal">
                 {bio}
               </p>
 
-              {/* Primary Call-to-Actions (Buttons with uniform size & height) */}
-              <div className="flex flex-wrap items-center gap-3 pt-2">
+              {/* Primary Call-to-Actions (Buttons with responsive grid layout) */}
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3 pt-1 w-full">
                 {/* Details / Map Button */}
-                {business && business.coordinates && (
+                {business && (
                   <button
                     onClick={() => {
-                      if (onViewOnMap) {
-                        onViewOnMap(business.coordinates);
-                      } else {
-                        window.open(`https://www.google.com/maps?q=${business.coordinates[0]},${business.coordinates[1]}`, '_blank');
-                      }
+                      scrollToSection('landing-map');
                     }}
-                    className="flex-1 min-w-[130px] sm:min-w-[150px] h-12 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-xl shadow-orange-500/25 hover:scale-[1.02] active:scale-95 transition-all group whitespace-nowrap"
+                    className="w-full sm:w-auto sm:flex-1 h-11 sm:h-12 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black text-xs uppercase tracking-wider rounded-xl sm:rounded-2xl shadow-xl shadow-orange-500/25 hover:scale-[1.02] active:scale-95 transition-all group cursor-pointer"
                   >
                     <Navigation2 className="w-4 h-4 text-white group-hover:rotate-12 transition-transform shrink-0" />
-                    <span>Ver en el Mapa</span>
+                    <span className="truncate">Ver Mapa</span>
                   </button>
                 )}
 
                 {/* Follow Button */}
                 <button
                   onClick={() => businessId && handleToggleFollow(businessId)}
-                  className={`flex-1 min-w-[130px] sm:min-w-[150px] h-12 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all border whitespace-nowrap ${
+                  className={`w-full sm:w-auto sm:flex-1 h-11 sm:h-12 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-wider transition-all border ${
                     isFollowing 
                       ? 'bg-orange-500 text-white border-orange-400 shadow-lg shadow-orange-500/20' 
                       : 'bg-slate-900/80 text-white border-white/10 hover:bg-white/10'
                   }`}
                 >
                   {isFollowing ? <UserCheck className="w-4 h-4 shrink-0" /> : <UserPlus className="w-4 h-4 shrink-0" />}
-                  <span>{isFollowing ? 'Siguiendo' : 'Seguir'}</span>
+                  <span className="truncate">{isFollowing ? 'Siguiendo' : 'Seguir'}</span>
                 </button>
 
                 {/* Share Button */}
                 {business && (
                   <button
                     onClick={handleShareWhatsApp}
-                    className="flex-1 min-w-[130px] sm:min-w-[150px] h-12 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white rounded-2xl border border-white/10 transition-all shadow-sm whitespace-nowrap"
+                    className="w-full sm:w-auto sm:flex-1 h-11 sm:h-12 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white rounded-xl sm:rounded-2xl border border-white/10 transition-all shadow-sm"
                     title="Compartir por WhatsApp"
                   >
                     <Share2 className="w-4 h-4 text-orange-400 shrink-0" />
-                    <span className="text-xs font-black uppercase tracking-wider">Compartir</span>
+                    <span className="text-xs font-black uppercase tracking-wider truncate">Compartir</span>
                   </button>
                 )}
 
@@ -733,10 +745,10 @@ export const PublicProfileModal = React.memo(({
                     href={business.menuUrl.startsWith('http') ? business.menuUrl : `https://${business.menuUrl}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 min-w-[130px] sm:min-w-[150px] h-12 flex items-center justify-center gap-2 px-4 py-3 bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 rounded-2xl border border-pink-500/20 transition-all text-xs font-black uppercase tracking-wider whitespace-nowrap"
+                    className="w-full sm:w-auto sm:flex-1 h-11 sm:h-12 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 rounded-xl sm:rounded-2xl border border-pink-500/20 transition-all text-xs font-black uppercase tracking-wider"
                   >
                     <QrCode className="w-4 h-4 text-pink-400 shrink-0" />
-                    <span>Carta QR</span>
+                    <span className="truncate">Carta QR</span>
                   </a>
                 )}
 
@@ -746,27 +758,27 @@ export const PublicProfileModal = React.memo(({
                     href={business.bookingUrl.startsWith('http') ? business.bookingUrl : `https://${business.bookingUrl}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 min-w-[130px] sm:min-w-[150px] h-12 flex items-center justify-center gap-2 px-4 py-3 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 rounded-2xl border border-yellow-500/20 transition-all text-xs font-black uppercase tracking-wider whitespace-nowrap"
+                    className="w-full sm:w-auto sm:flex-1 h-11 sm:h-12 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 rounded-xl sm:rounded-2xl border border-yellow-500/20 transition-all text-xs font-black uppercase tracking-wider"
                   >
                     <CalendarCheck className="w-4 h-4 text-yellow-400 shrink-0" />
-                    <span>Reservar</span>
+                    <span className="truncate">Reservar</span>
                   </a>
                 )}
               </div>
 
               {/* Social Channels Ribbon */}
               {business && (business.instagram || business.facebook || business.tiktok || business.youtube || business.whatsapp || business.phone) && (
-                <div className="pt-2">
+                <div className="pt-2 w-full">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
                     <Sparkles className="w-3 h-3 text-orange-400 shrink-0" /> Canales Oficiales:
                   </p>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full">
                     {business.whatsapp && (
                       <a
                         href={getWhatsAppUrl(business.whatsapp)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold transition-all hover:scale-105"
+                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold transition-all hover:scale-105"
                       >
                         <MessageCircle className="w-3.5 h-3.5 shrink-0" />
                         <span>WhatsApp</span>
@@ -777,7 +789,7 @@ export const PublicProfileModal = React.memo(({
                         href={getInstagramUrl(business.instagram)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 rounded-xl text-pink-400 text-xs font-bold transition-all hover:scale-105"
+                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 rounded-xl text-pink-400 text-xs font-bold transition-all hover:scale-105"
                       >
                         <Instagram className="w-3.5 h-3.5 shrink-0" />
                         <span>Instagram</span>
@@ -788,7 +800,7 @@ export const PublicProfileModal = React.memo(({
                         href={getFacebookUrl(business.facebook)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-bold transition-all hover:scale-105"
+                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-bold transition-all hover:scale-105"
                       >
                         <Facebook className="w-3.5 h-3.5 shrink-0" />
                         <span>Facebook</span>
@@ -799,7 +811,7 @@ export const PublicProfileModal = React.memo(({
                         href={getTikTokUrl(business.tiktok)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 rounded-xl text-teal-400 text-xs font-bold transition-all hover:scale-105"
+                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 rounded-xl text-teal-400 text-xs font-bold transition-all hover:scale-105"
                       >
                         <TikTokIcon className="w-3.5 h-3.5 shrink-0" />
                         <span>TikTok</span>
@@ -810,7 +822,7 @@ export const PublicProfileModal = React.memo(({
                         href={getYouTubeUrl(business.youtube)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold transition-all hover:scale-105"
+                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold transition-all hover:scale-105"
                       >
                         <Youtube className="w-3.5 h-3.5 shrink-0" />
                         <span>YouTube</span>
@@ -819,7 +831,7 @@ export const PublicProfileModal = React.memo(({
                     {business.phone && (
                       <a
                         href={`tel:${business.phone}`}
-                        className="flex-1 sm:flex-initial min-w-[110px] h-9 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl text-sky-400 text-xs font-bold transition-all hover:scale-105"
+                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl text-sky-400 text-xs font-bold transition-all hover:scale-105"
                       >
                         <Phone className="w-3.5 h-3.5 shrink-0" />
                         <span>Llamar</span>
@@ -836,19 +848,19 @@ export const PublicProfileModal = React.memo(({
         {/* ─────────────────────────────────────────────────────────────────────────────
             STATS / HIGHLIGHTS BAR
         ───────────────────────────────────────────────────────────────────────────── */}
-        <section className="border-y border-white/10 bg-slate-900/40 backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        <section className="border-y border-white/10 bg-slate-900/40 backdrop-blur-md w-full">
+          <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 text-center">
               <div className="space-y-1">
-                <p className="text-2xl sm:text-3xl font-black text-white">{business?.viewCount || 0}</p>
+                <p className="text-xl sm:text-3xl font-black text-white">{business?.viewCount || 0}</p>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Visitas al Perfil</p>
               </div>
               <div className="space-y-1">
-                <p className="text-2xl sm:text-3xl font-black text-orange-400">{business?.followerCount || 0}</p>
+                <p className="text-xl sm:text-3xl font-black text-orange-400">{business?.followerCount || 0}</p>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Seguidores Activos</p>
               </div>
               <div className="space-y-1">
-                <p className="text-2xl sm:text-3xl font-black text-amber-400">{totalEventClicks}</p>
+                <p className="text-xl sm:text-3xl font-black text-amber-400">{totalEventClicks}</p>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Interacciones Pulsos</p>
               </div>
               <a 
@@ -858,9 +870,9 @@ export const PublicProfileModal = React.memo(({
                 className="space-y-1 block hover:scale-105 transition-transform cursor-pointer group"
                 title="Ver Ficha y Reseñas en Google Maps"
               >
-                <p className="text-2xl sm:text-3xl font-black text-yellow-400 flex items-center justify-center gap-1">
+                <p className="text-xl sm:text-3xl font-black text-yellow-400 flex items-center justify-center gap-1">
                   <span>Google</span>
-                  <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                  <Star className="w-4 h-4 sm:w-5 sm:h-5 fill-yellow-400 text-yellow-400" />
                 </p>
                 <p className="text-[10px] text-slate-400 group-hover:text-yellow-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1 transition-colors">
                   <span>Ver Reseñas</span>
@@ -874,58 +886,56 @@ export const PublicProfileModal = React.memo(({
         {/* ─────────────────────────────────────────────────────────────────────────────
             MAIN LANDING PAGE CONTENT BODY
         ───────────────────────────────────────────────────────────────────────────── */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
+        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-8 sm:space-y-12 w-full max-w-full box-border">
           
           {/* SECTION 1: ABOUT & VERIFIED AMENITIES */}
-          <section id="landing-about" className="space-y-8">
-            <div className="flex flex-col items-start gap-2">
+          <section id="landing-about" className="space-y-6 w-full max-w-full">
+            <div className="flex flex-col items-start gap-1">
               <span className="text-xs font-black text-orange-400 tracking-[0.25em] uppercase">Información Oficial</span>
-              <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wide">
+              <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-wide break-words">
                 Detalles & Comodidades Verificadas
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 w-full max-w-full">
               {/* Horario de Atención Card */}
               {business && (
-                <div className="p-6 bg-slate-900/60 rounded-3xl border border-white/10 space-y-4 flex flex-col justify-between transition-all">
+                <div className="p-4 sm:p-6 bg-slate-900/70 rounded-2xl sm:rounded-3xl border border-white/10 space-y-4 flex flex-col justify-between transition-all w-full min-w-0 shadow-lg box-border">
                   <div className="space-y-2">
                     <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
                       <Clock className="w-5 h-5" />
                     </div>
                     <h3 className="text-base font-black text-white uppercase">Horario de Atención</h3>
-                    <p className="text-xs text-slate-300">
+                    <p className="text-xs text-slate-300 font-medium">
                       {business.openingHours ? businessStatus.message : 'Horario no especificado'}
                     </p>
                   </div>
 
-                  <div className="space-y-3 pt-1">
+                  <div className="space-y-2.5 pt-1 w-full min-w-0">
                     {/* Botón desplegable */}
                     <button
                       type="button"
                       onClick={() => setShowWeeklySchedule(!showWeeklySchedule)}
-                      className={`w-full px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-between gap-2 transition-all cursor-pointer border ${
+                      className={`w-full px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-between gap-1.5 transition-all cursor-pointer border ${
                         businessStatus.isOpen 
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' 
-                          : 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
+                           ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25' 
+                           : 'bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25'
                       }`}
                       title="Ver horario semanal completo"
                     >
-                      <div className="flex items-center gap-2">
-                        <Circle className={`w-2 h-2 ${businessStatus.isOpen ? 'fill-emerald-400 text-emerald-400' : 'fill-rose-400 text-rose-400'}`} />
-                        <span>{businessStatus.isOpen ? 'Atendiendo Ahora' : 'Cerrado Temporalmente'}</span>
+                      <div className="flex items-center gap-1.5 min-w-0 truncate">
+                        <Circle className={`w-2 h-2 shrink-0 ${businessStatus.isOpen ? 'fill-emerald-400 text-emerald-400' : 'fill-rose-400 text-rose-400'}`} />
+                        <span className="truncate">{businessStatus.isOpen ? 'Atendiendo Ahora' : 'Cerrado Ahora'}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-[11px] opacity-90">
-                        <span className="text-[10px] font-bold capitalize hidden sm:inline">
-                          {showWeeklySchedule ? 'Cerrar' : 'Ver Semana'}
-                        </span>
-                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${showWeeklySchedule ? 'rotate-180' : ''}`} />
+                      <div className="flex items-center gap-1 text-[11px] font-bold text-amber-300 shrink-0">
+                        <span>{showWeeklySchedule ? 'Ocultar' : 'Ver Semana'}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-300 ${showWeeklySchedule ? 'rotate-180' : ''}`} />
                       </div>
                     </button>
 
                     {/* Desplegable con Horario Semanal */}
                     {showWeeklySchedule && (
-                      <div className="p-3 bg-slate-950/80 rounded-2xl border border-white/10 space-y-1.5 text-xs animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="p-3 bg-slate-950/90 rounded-xl border border-white/10 space-y-1.5 text-xs animate-in fade-in slide-in-from-top-2 duration-200 w-full min-w-0">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 pb-1 border-b border-white/5">
                           Horario Semanal Completo
                         </p>
@@ -937,21 +947,21 @@ export const PublicProfileModal = React.memo(({
                           return (
                             <div 
                               key={key} 
-                              className={`flex items-center justify-between py-1.5 px-2.5 rounded-lg text-xs transition-colors ${
+                              className={`flex items-center justify-between py-1.5 px-2.5 rounded-lg text-xs gap-2 min-w-0 transition-colors ${
                                 isToday 
-                                  ? 'bg-orange-500/15 border border-orange-500/30 font-bold text-orange-200' 
+                                  ? 'bg-orange-500/20 border border-orange-500/40 font-bold text-orange-200' 
                                   : 'text-slate-300 hover:bg-white/5'
                               }`}
                             >
-                              <div className="flex items-center gap-1.5">
-                                <span className={isToday ? 'text-orange-300 font-bold' : 'text-slate-300'}>{name}</span>
+                              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                <span className={`truncate ${isToday ? 'text-orange-300 font-bold' : 'text-slate-300'}`}>{name}</span>
                                 {isToday && (
-                                  <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-500 text-white leading-none">
+                                  <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-500 text-white leading-none shrink-0">
                                     Hoy
                                   </span>
                                 )}
                               </div>
-                              <span className={isClosed ? 'text-slate-500 font-medium text-[11px]' : 'text-slate-200 font-semibold text-[11px]'}>
+                              <span className={`shrink-0 font-semibold text-[11px] ${isClosed ? 'text-slate-500' : 'text-slate-200'}`}>
                                 {isClosed ? 'Cerrado' : `${sched.open} - ${sched.close}`}
                               </span>
                             </div>
@@ -964,45 +974,42 @@ export const PublicProfileModal = React.memo(({
               )}
 
               {/* Ubicación & Referencia Card */}
-              <div className="p-6 bg-slate-900/60 rounded-3xl border border-white/10 space-y-4 flex flex-col justify-between">
-                <div className="space-y-2">
+              <div className="p-4 sm:p-6 bg-slate-900/70 rounded-2xl sm:rounded-3xl border border-white/10 space-y-4 flex flex-col justify-between w-full min-w-0 shadow-lg box-border">
+                <div className="space-y-2 min-w-0">
                   <div className="w-10 h-10 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
                     <MapPin className="w-5 h-5" />
                   </div>
                   <h3 className="text-base font-black text-white uppercase">Ubicación y Sector</h3>
-                  <p className="text-xs text-slate-300">
+                  <p className="text-xs text-slate-300 break-words">
                     {business?.address || `${business?.locality || 'Montañita'}, Santa Elena, Ecuador`}
                   </p>
                   {business?.containedInLandmarkId && (
-                    <p className="text-[11px] text-sky-400 font-bold">
+                    <p className="text-[11px] text-sky-400 font-bold truncate">
                       Cerca de: {LANDMARKS.find(l => l.id === business.containedInLandmarkId)?.name}
                     </p>
                   )}
                 </div>
-                {business?.coordinates && (
+                {business && (
                   <button
                     onClick={() => {
-                      if (onViewOnMap) {
-                        onViewOnMap(business.coordinates);
-                      } else {
-                        window.open(`https://www.google.com/maps?q=${business.coordinates[0]},${business.coordinates[1]}`, '_blank');
-                      }
+                      scrollToSection('landing-map');
                     }}
-                    className="w-full py-2 bg-sky-500/20 hover:bg-sky-500 text-sky-300 hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors"
+                    className="w-full py-3 px-3.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-sky-500/25 active:scale-95 cursor-pointer"
                   >
-                    Cómo Llegar →
+                    <Navigation2 className="w-4 h-4 shrink-0 fill-current" />
+                    <span className="truncate">Ver Mapa Interactivo</span>
                   </button>
                 )}
               </div>
 
               {/* Pagos y Contacto Card */}
-              <div className="p-6 bg-slate-900/60 rounded-3xl border border-white/10 space-y-4 flex flex-col justify-between">
-                <div className="space-y-2">
+              <div className="p-4 sm:p-6 bg-slate-900/70 rounded-2xl sm:rounded-3xl border border-white/10 space-y-4 flex flex-col justify-between w-full min-w-0 shadow-lg box-border">
+                <div className="space-y-2 min-w-0">
                   <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
                     <CreditCard className="w-5 h-5" />
                   </div>
                   <h3 className="text-base font-black text-white uppercase">Métodos de Pago</h3>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
+                  <div className="flex flex-wrap gap-1.5 pt-1 w-full min-w-0">
                     {business?.paymentMethods && business.paymentMethods.length > 0 ? (
                       business.paymentMethods.map((m, i) => (
                         <span key={i} className="text-xs text-slate-200 font-bold bg-white/5 px-2.5 py-1 rounded-lg border border-white/10">
@@ -1010,83 +1017,108 @@ export const PublicProfileModal = React.memo(({
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-slate-400">Efectivo / Transferencias</span>
+                      <span className="text-xs text-slate-400">💵 Efectivo / Transferencias</span>
                     )}
                   </div>
                 </div>
                 {contactEmail && (
-                  <div className="text-[11px] text-slate-400 truncate flex items-center gap-1.5 pt-2 border-t border-white/5">
-                    <Mail className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{contactEmail}</span>
-                  </div>
+                  <a 
+                    href={`mailto:${contactEmail}`}
+                    className="text-xs text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1.5 pt-2 border-t border-white/5 min-w-0 overflow-hidden"
+                  >
+                    <Mail className="w-4 h-4 text-sky-400 shrink-0" />
+                    <span className="truncate">{contactEmail}</span>
+                  </a>
                 )}
               </div>
             </div>
 
             {/* Verified Amenities Pill Badges */}
             {business && (business.hasWifi || business.hasParking || business.petFriendly || business.isBeachfront) && (
-              <div className="p-6 bg-slate-900/40 rounded-3xl border border-white/5 space-y-3">
+              <div className="p-4 sm:p-6 bg-slate-900/40 rounded-2xl sm:rounded-3xl border border-white/5 space-y-3">
                 <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                   <Award className="w-4 h-4 text-orange-400" />
                   Servicios y Comodidades del Establecimiento
                 </h4>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2.5 sm:gap-3">
                   {business.hasWifi && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-sky-500/10 border border-sky-500/25 text-sky-400 rounded-2xl text-xs font-bold">
-                      <Wifi className="w-4 h-4" />
-                      <span>Wi-Fi de Alta Velocidad {business.wifiSpeedMbps ? `(${business.wifiSpeedMbps} Mbps)` : ''}</span>
+                    <div className="flex items-center gap-2 px-3.5 py-2 bg-sky-500/10 border border-sky-500/25 text-sky-300 rounded-xl text-xs font-bold">
+                      <Wifi className="w-4 h-4 text-sky-400 shrink-0" />
+                      <span>Wi-Fi {business.wifiSpeedMbps ? `(${business.wifiSpeedMbps} Mbps)` : 'Rápido'}</span>
                     </div>
                   )}
                   {business.hasParking && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded-2xl text-xs font-bold">
-                      <Car className="w-4 h-4" />
-                      <span>Estacionamiento Privado</span>
+                    <div className="flex items-center gap-2 px-3.5 py-2 bg-amber-500/10 border border-amber-500/25 text-amber-300 rounded-xl text-xs font-bold">
+                      <Car className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Estacionamiento</span>
                     </div>
                   )}
                   {business.petFriendly && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/25 text-purple-400 rounded-2xl text-xs font-bold">
-                      <Dog className="w-4 h-4" />
-                      <span>100% Pet Friendly</span>
+                    <div className="flex items-center gap-2 px-3.5 py-2 bg-purple-500/10 border border-purple-500/25 text-purple-300 rounded-xl text-xs font-bold">
+                      <Dog className="w-4 h-4 text-purple-400 shrink-0" />
+                      <span>Pet Friendly</span>
                     </div>
                   )}
                   {business.isBeachfront && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 border border-orange-500/25 text-orange-400 rounded-2xl text-xs font-bold">
-                      <Store className="w-4 h-4" />
-                      <span>Frente al Mar / Vista Panorámica</span>
+                    <div className="flex items-center gap-2 px-3.5 py-2 bg-orange-500/10 border border-orange-500/25 text-orange-300 rounded-xl text-xs font-bold">
+                      <Store className="w-4 h-4 text-orange-400 shrink-0" />
+                      <span>Frente al Mar</span>
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* SECTION: MAPA & UBICACIÓN EN PEQUEÑO */}
+            {business && (
+              <div id="landing-map" className="space-y-4 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-xs font-black text-sky-400 tracking-[0.25em] uppercase flex items-center gap-1.5">
+                      <Compass className="w-4 h-4 text-sky-400" />
+                      Geolocalización Oficial
+                    </span>
+                    <h3 className="text-lg sm:text-2xl font-black text-white uppercase tracking-wide break-words">
+                      Mapa & Ubicación del Local
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-400 font-medium">
+                    {business.locality || 'Montañita'} · {business.sector ? `Sector ${business.sector}` : 'Ecuador'}
+                  </p>
+                </div>
+
+                <BusinessMiniMap business={business} height="320px" />
               </div>
             )}
           </section>
 
           {/* SECTION 2: PRODUCTS & SERVICES */}
           {business && business.emblematicServices && business.emblematicServices.length > 0 && (
-            <section id="landing-services" className="space-y-8">
-              <div className="flex flex-col items-start gap-2">
+            <section id="landing-services" className="space-y-6">
+              <div className="flex flex-col items-start gap-1">
                 <span className="text-xs font-black text-amber-400 tracking-[0.25em] uppercase">Oferta Destacada</span>
-                <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wide">
+                <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-wide break-words">
                   Nuestra Carta & Servicios
                 </h2>
               </div>
 
               {/* Emblematic Products Grid */}
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <h3 className="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
                   <Star className="w-4 h-4 fill-amber-400" />
-                  Platos o Servicios Emblemáticos de la Casa
+                  Especialidades de la Casa
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {business.emblematicServices.map((service, idx) => (
                     <div 
                       key={idx}
-                      className="p-5 bg-gradient-to-br from-slate-900/90 to-slate-900/50 rounded-3xl border border-amber-500/20 hover:border-amber-500/50 transition-all flex items-center gap-4 group shadow-lg hover:scale-[1.02]"
+                      className="p-4 bg-gradient-to-br from-slate-900/90 to-slate-900/50 rounded-2xl border border-amber-500/20 hover:border-amber-500/50 transition-all flex items-center gap-3.5 group shadow-lg"
                     >
-                      <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/20 transition-colors shrink-0">
-                        <Zap className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/25 transition-colors shrink-0">
+                        <Zap className="w-5 h-5" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <span className="text-xs text-amber-400 font-black uppercase tracking-wider block">Especialidad #{idx + 1}</span>
+                        <span className="text-[10px] text-amber-400 font-black uppercase tracking-wider block">Especialidad #{idx + 1}</span>
                         <span className="text-sm font-black text-white uppercase tracking-wide block truncate">{service}</span>
                       </div>
                     </div>
@@ -1098,11 +1130,11 @@ export const PublicProfileModal = React.memo(({
 
           {/* SECTION 3: PROMOTIONS & COUPONS */}
           {coupons.length > 0 && (
-            <section id="landing-coupons" className="space-y-8">
-              <div className="flex flex-col items-start gap-2">
+            <section id="landing-coupons" className="space-y-6">
+              <div className="flex flex-col items-start gap-1">
                 <span className="text-xs font-black text-pink-400 tracking-[0.25em] uppercase">Beneficios Exclusivos</span>
-                <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wide flex items-center gap-3">
-                  <Ticket className="w-7 h-7 text-pink-500" />
+                <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-wide flex items-center gap-2.5 break-words">
+                  <Ticket className="w-6 h-6 text-pink-500 shrink-0" />
                   Cupones & Promociones Activas
                 </h2>
               </div>
@@ -1111,32 +1143,33 @@ export const PublicProfileModal = React.memo(({
                 {coupons.map(coupon => (
                   <div 
                     key={coupon.id}
-                    className="p-6 bg-gradient-to-br from-pink-950/40 via-slate-900/80 to-slate-900/90 border border-pink-500/30 rounded-3xl relative overflow-hidden flex flex-col justify-between gap-4 group hover:border-pink-500 transition-all shadow-xl"
+                    className="p-4 sm:p-6 bg-gradient-to-br from-pink-950/40 via-slate-900/80 to-slate-900/90 border border-pink-500/30 rounded-2xl sm:rounded-3xl relative overflow-hidden flex flex-col justify-between gap-4 group hover:border-pink-500 transition-all shadow-xl"
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1">
-                        <span className="text-xs font-black text-pink-400 uppercase tracking-widest">Descuento Especial</span>
-                        <h3 className="text-2xl font-black text-white">
+                        <span className="text-[10px] font-black text-pink-400 uppercase tracking-widest">Descuento Especial</span>
+                        <h3 className="text-xl sm:text-2xl font-black text-white">
                           {coupon.value}{coupon.type === 'percentage' ? '%' : '$'} OFF
                         </h3>
-                        <p className="text-xs text-slate-300">
+                        <p className="text-xs text-slate-300 font-normal">
                           {coupon.description || 'Válido para consumo o servicios en el local.'}
                         </p>
                       </div>
-                      <span className="px-3 py-1 bg-pink-500 text-white text-xs font-black rounded-lg tracking-wider">
+                      <span className="px-3 py-1 bg-pink-500 text-white text-xs font-black rounded-lg tracking-wider shrink-0">
                         {coupon.code}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-white/10">
                       <span className="text-[10px] font-bold text-pink-400">
                         Válido hasta: {coupon.expiresAt ? (coupon.expiresAt.toDate ? coupon.expiresAt.toDate().toLocaleDateString() : new Date(coupon.expiresAt).toLocaleDateString()) : 'Sin límite'}
                       </span>
                       <button
                         onClick={() => handleObtainCoupon(coupon)}
-                        className="px-4 py-2 bg-pink-500 hover:bg-pink-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-pink-500/20 active:scale-95"
+                        className="w-full sm:w-auto px-4 py-2.5 bg-pink-500 hover:bg-pink-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-pink-500/20 active:scale-95 flex items-center justify-center gap-1"
                       >
-                        Reservar Cupón →
+                        <span>Reservar Cupón</span>
+                        <span>→</span>
                       </button>
                     </div>
                   </div>
@@ -1147,16 +1180,16 @@ export const PublicProfileModal = React.memo(({
 
           {/* SECTION 4: EVENTS & PULSES */}
           {publicPulses.length > 0 && (
-            <section id="landing-pulses" className="space-y-8">
-              <div className="flex flex-col items-start gap-2">
+            <section id="landing-pulses" className="space-y-6">
+              <div className="flex flex-col items-start gap-1">
                 <span className="text-xs font-black text-sky-400 tracking-[0.25em] uppercase">Agenda Pulse</span>
-                <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wide flex items-center gap-3">
-                  <Zap className="w-7 h-7 text-sky-400" />
-                  {isShowingActive ? 'Próximos Eventos Oficiales' : 'Pulsos & Actividades Recientes'}
+                <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-wide flex items-center gap-2.5 break-words">
+                  <Zap className="w-6 h-6 text-sky-400 shrink-0" />
+                  {isShowingActive ? 'Próximos Eventos Oficiales' : 'Pulsos & Actividades'}
                 </h2>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {publicPulses.map(pulse => (
                   <div 
                     key={pulse.id} 
@@ -1164,9 +1197,9 @@ export const PublicProfileModal = React.memo(({
                       setSelectedEvent(pulse);
                       onClose();
                     }}
-                    className="group bg-slate-900/60 rounded-3xl border border-white/10 overflow-hidden cursor-pointer hover:border-sky-500/40 transition-all hover:scale-[1.02] flex flex-col"
+                    className="group bg-slate-900/70 rounded-2xl sm:rounded-3xl border border-white/10 overflow-hidden cursor-pointer hover:border-sky-500/40 transition-all hover:scale-[1.02] flex flex-col shadow-lg"
                   >
-                    <div className="h-40 relative bg-slate-800 overflow-hidden">
+                    <div className="h-36 sm:h-40 relative bg-slate-800 overflow-hidden">
                       <img
                         src={pulse.imageUrl}
                         alt={pulse.title}
@@ -1174,11 +1207,11 @@ export const PublicProfileModal = React.memo(({
                         loading="lazy"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
-                      <div className="absolute top-3 right-3 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[10px] font-bold text-white">
+                      <div className="absolute top-2.5 right-2.5 px-2.5 py-1 bg-black/70 backdrop-blur-md rounded-lg text-[10px] font-bold text-white">
                         {new Date(pulse.startAt).toLocaleDateString()}
                       </div>
                     </div>
-                    <div className="p-4 flex-1 flex flex-col justify-between gap-2">
+                    <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between gap-2">
                       <h4 className="text-sm font-black text-white group-hover:text-sky-400 transition-colors line-clamp-1">
                         {pulse.title}
                       </h4>
@@ -1194,10 +1227,10 @@ export const PublicProfileModal = React.memo(({
 
           {/* SECTION 5: OWNER / HOST PROFILE */}
           {((business && owner) || linkedBusiness) && (
-            <section className="space-y-6">
-              <div className="flex flex-col items-start gap-2">
+            <section className="space-y-4">
+              <div className="flex flex-col items-start gap-1">
                 <span className="text-xs font-black text-slate-400 tracking-[0.25em] uppercase">Anfitrión de la Comunidad</span>
-                <h2 className="text-2xl font-black text-white uppercase tracking-wide">
+                <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wide">
                   {business ? 'Perfil del Propietario' : 'Negocio Asociado'}
                 </h2>
               </div>
@@ -1205,35 +1238,41 @@ export const PublicProfileModal = React.memo(({
               {business && owner && (
                 <div 
                   onClick={() => openLinkedUser(owner.id)}
-                  className="p-6 bg-slate-900/60 rounded-3xl border border-white/10 flex items-center justify-between gap-6 cursor-pointer hover:border-sky-500/40 transition-all group max-w-2xl"
+                  className="p-4 sm:p-6 bg-slate-900/70 rounded-2xl sm:rounded-3xl border border-white/10 flex items-center justify-between gap-3 sm:gap-4 cursor-pointer hover:border-sky-500/40 transition-all group max-w-2xl shadow-lg"
                 >
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white/10 shrink-0">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border-2 border-white/10 shrink-0 bg-slate-800 flex items-center justify-center">
                       <img
-                        src={owner.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(`${owner.name} ${owner.surname}`)}&background=0ea5e9&color=fff`}
-                        alt={`${owner.name} ${owner.surname}`}
+                        src={owner.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(`${owner.name || 'Propietario'} ${owner.surname || ''}`)}&background=0ea5e9&color=fff`}
+                        alt={`${owner.name || ''} ${owner.surname || ''}`}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(`${owner.name || 'Propietario'} ${owner.surname || ''}`)}&background=0ea5e9&color=fff`;
+                        }}
                       />
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-base font-black text-white truncate">{owner.name} {owner.surname}</h4>
-                      <p className="text-xs text-sky-400 font-bold uppercase tracking-widest">Miembro Verificado</p>
+                      <h4 className="text-sm sm:text-base font-black text-white truncate">{owner.name} {owner.surname}</h4>
+                      <p className="text-[10px] sm:text-xs text-sky-400 font-bold uppercase tracking-widest">Miembro Verificado</p>
                       {owner.email && (
-                        <p className="text-[11px] text-slate-400 truncate mt-0.5">{owner.email}</p>
+                        <p className="text-[10px] sm:text-[11px] text-slate-400 truncate mt-0.5">{owner.email}</p>
                       )}
                     </div>
                   </div>
-                  <ChevronRight className="w-6 h-6 text-slate-500 group-hover:text-sky-400 transition-colors shrink-0" />
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400 text-xs font-black uppercase tracking-wider shrink-0 group-hover:bg-sky-500 group-hover:text-white transition-all">
+                    <span>Ver Perfil</span>
+                    <ChevronRight className="w-4 h-4 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
                 </div>
               )}
 
               {linkedBusiness && (
                 <div 
                   onClick={() => openLinkedBusiness(linkedBusiness)}
-                  className="p-6 bg-slate-900/60 rounded-3xl border border-white/10 flex items-center justify-between gap-6 cursor-pointer hover:border-amber-500/40 transition-all group max-w-2xl"
+                  className="p-4 sm:p-6 bg-slate-900/70 rounded-2xl sm:rounded-3xl border border-white/10 flex items-center justify-between gap-3 sm:gap-4 cursor-pointer hover:border-amber-500/40 transition-all group max-w-2xl shadow-lg"
                 >
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white/10 shrink-0">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border-2 border-white/10 shrink-0 bg-slate-800">
                       <img
                         src={linkedBusiness.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(linkedBusiness.name)}&background=f59e0b&color=fff`}
                         alt={linkedBusiness.name}
@@ -1241,36 +1280,52 @@ export const PublicProfileModal = React.memo(({
                       />
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-base font-black text-white truncate">{linkedBusiness.name}</h4>
-                      <p className="text-xs text-amber-400 font-bold uppercase tracking-widest">{linkedBusiness.category}</p>
+                      <h4 className="text-sm sm:text-base font-black text-white truncate">{linkedBusiness.name}</h4>
+                      <p className="text-[10px] sm:text-xs text-amber-400 font-bold uppercase tracking-widest">{linkedBusiness.category}</p>
                     </div>
                   </div>
-                  <ChevronRight className="w-6 h-6 text-slate-500 group-hover:text-amber-400 transition-colors shrink-0" />
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-wider shrink-0 group-hover:bg-amber-500 group-hover:text-slate-950 transition-all">
+                    <span>Ver Negocio</span>
+                    <ChevronRight className="w-4 h-4 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
                 </div>
               )}
             </section>
           )}
 
-          {/* SECTION 6: GOOGLE MAPS REVIEWS */}
+          {/* SECTION: COMPLETA TU EXPERIENCIA (4 CAROUSELS) */}
+          <ExperienceRecommendationCarousels
+            currentBusiness={business}
+            allBusinesses={businesses || []}
+            onSelectBusiness={(selected) => {
+              openLinkedBusiness(selected);
+              if (modalContainerRef.current) {
+                modalContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }}
+            onViewOnMap={onViewOnMap}
+          />
+
+          {/* SECTION 6: OPINIONES Y CALIFICACIONES (GOOGLE MAPS) */}
           <section id="landing-reviews" className="space-y-6 pt-6 border-t border-white/10">
-            <div className="flex flex-col items-start gap-2">
+            <div className="flex flex-col items-start gap-1">
               <span className="text-xs font-black text-yellow-400 tracking-[0.25em] uppercase">Opiniones & Calificaciones</span>
-              <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wide flex items-center gap-3">
-                <Star className="w-7 h-7 text-yellow-400 fill-yellow-400" />
-                Reseñas en Google Maps
+              <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-wide flex items-center gap-2.5 break-words">
+                <Star className="w-6 h-6 text-yellow-400 fill-yellow-400 shrink-0" />
+                Reseñas Oficiales de Visitantes
               </h2>
             </div>
 
-            {/* Google Maps Review Card */}
-            <div className="p-6 sm:p-8 bg-gradient-to-br from-slate-900/90 via-[#0c1222] to-slate-950 rounded-3xl border border-white/10 shadow-2xl relative overflow-hidden group hover:border-amber-500/40 transition-all max-w-3xl">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-              
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 relative z-10">
-                <div className="space-y-3 max-w-xl">
+            <div className="w-full max-w-2xl">
+              {/* Google Maps Official Reviews Card */}
+              <div className="p-5 sm:p-7 bg-gradient-to-br from-slate-900/90 via-[#0c1222] to-slate-950 rounded-2xl sm:rounded-3xl border border-white/10 shadow-2xl relative overflow-hidden group hover:border-amber-500/40 transition-all flex flex-col justify-between gap-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+                
+                <div className="space-y-4 relative z-10">
                   {/* Google Brand Mark & Rating Stars */}
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-md shrink-0">
-                      <svg className="w-6 h-6" viewBox="0 0 24 24">
+                    <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-md shrink-0">
+                      <svg className="w-7 h-7" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                         <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
@@ -1291,7 +1346,7 @@ export const PublicProfileModal = React.memo(({
                   </div>
 
                   <p className="text-xs text-slate-300 leading-relaxed font-normal">
-                    Consulta las opiniones de visitantes y clientes en la ficha oficial de Google Maps o comparte tu propia experiencia en <strong className="text-white">{displayName}</strong>.
+                    Consulta las opiniones de visitantes en la ficha oficial de Google Maps o comparte tu propia experiencia en <strong className="text-white">{displayName}</strong>.
                   </p>
                 </div>
 
@@ -1300,10 +1355,10 @@ export const PublicProfileModal = React.memo(({
                   href={googleReviewsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-6 py-4 bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2 shrink-0 group/btn"
+                  className="w-full py-3.5 px-5 bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-xl shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2 group/btn"
                 >
                   <span>Ver y Calificar en Google</span>
-                  <ExternalLink className="w-4 h-4 text-slate-950 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform" />
+                  <ExternalLink className="w-4 h-4 text-slate-950 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform shrink-0" />
                 </a>
               </div>
             </div>
@@ -1344,7 +1399,7 @@ export const PublicProfileModal = React.memo(({
             href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`¡Hola ${business.name}! Los encontré en MontaPulse.`)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="fixed bottom-6 right-6 z-[4100] flex items-center gap-2.5 px-5 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs uppercase tracking-wider rounded-full shadow-[0_10px_30px_rgba(16,185,129,0.45)] hover:shadow-[0_15px_40px_rgba(16,185,129,0.6)] hover:scale-105 active:scale-95 transition-all duration-300 border border-white/20 group animate-in slide-in-from-bottom-5"
+            className="fixed bottom-5 right-5 z-[4100] flex items-center gap-2 p-3 sm:px-5 sm:py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs uppercase tracking-wider rounded-full shadow-[0_10px_30px_rgba(16,185,129,0.45)] hover:shadow-[0_15px_40px_rgba(16,185,129,0.6)] hover:scale-105 active:scale-95 transition-all duration-300 border border-white/20 group"
             title="Contactar por WhatsApp"
           >
             <div className="relative flex items-center justify-center">
@@ -1352,7 +1407,7 @@ export const PublicProfileModal = React.memo(({
               <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-300 rounded-full animate-ping" />
               <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-300 rounded-full" />
             </div>
-            <span className="font-black tracking-widest text-[11px]">WhatsApp</span>
+            <span className="hidden sm:inline font-black tracking-widest text-[11px]">WhatsApp</span>
           </a>
         )}
 

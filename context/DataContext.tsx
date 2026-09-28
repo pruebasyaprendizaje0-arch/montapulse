@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef, useCallback } from 'react';
 import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings, Announcement, MapEntryType, Transaction } from '../types';
-import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition } from '../constants';
+import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition, DEFAULT_MASTER_CATEGORIES, DEFAULT_MASTER_VIBES } from '../constants';
 import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAllSettings,
     incrementViewCount, updateAppSettings, subscribeToUsers, subscribeToTransactions,
@@ -170,6 +170,7 @@ interface DataContextType {
     masterSectors: any[];
     masterVibes: any[];
     masterActivities: any[];
+    handleSeedCategories: () => Promise<void>;
     handleSeedVibes: () => Promise<void>;
     handleSeedActivities: () => Promise<void>;
     toggleSector: (sector: Sector) => void;
@@ -327,19 +328,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [masterCategories, setMasterCategories] = useState<any[]>([]);
     const [masterTags, setMasterTags] = useState<any[]>([]);
     const [masterSectors, setMasterSectors] = useState<any[]>([]);
-    // Default vibes matching the Admin Center canonical list — overwritten by Firestore once loaded
-    const CANONICAL_VIBES = [
-        { name: 'Aburrido', label: 'Aburrido', icon: 'HelpCircle', color: '#94a3b8' },
-        { name: 'Agradecido', label: 'Agradecido', icon: 'Heart', color: '#ec4899' },
-        { name: 'Cansado', label: 'Cansado', icon: 'Moon', color: '#38bdf8' },
-        { name: 'Curioso', label: 'Curioso', icon: 'Compass', color: '#a855f7' },
-        { name: 'Enfermo', label: 'Enfermo', icon: 'Thermometer', color: '#ef4444' },
-        { name: 'Feliz', label: 'Feliz', icon: 'Smile', color: '#f59e0b' },
-        { name: 'Hambriento', label: 'Hambriento', icon: 'Utensils', color: '#fb923c' },
-        { name: 'Inspirado', label: 'Inspirado', icon: 'Sparkles', color: '#c084fc' },
-        { name: 'Relajado', label: 'Relajado', icon: 'Wind', color: '#2dd4bf' },
-        { name: 'Triste', label: 'Triste', icon: 'Frown', color: '#64748b' },
-    ];
+    // Default vibes matching the Option 1 canonical list — overwritten by Firestore once loaded
+    const CANONICAL_VIBES = DEFAULT_MASTER_VIBES;
     const [masterVibes, setMasterVibes] = useState<any[]>(CANONICAL_VIBES);
     const [masterActivities, setMasterActivities] = useState<any[]>([]);
 
@@ -440,8 +430,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         title: '',
         locality: LOCALITIES[0].name,
         sector: Sector.CENTRO,
-        vibe: Vibe.FIESTA,
-        category: 'Fiesta',
+        vibe: DEFAULT_MASTER_VIBES[0]?.name || 'De Fiesta & Farra',
+        category: DEFAULT_MASTER_CATEGORIES[0]?.name || 'Gastronomía & Restaurantes',
         description: '',
         imageUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&q=80&w=600',
         startAt: new Date().toISOString().slice(0, 16),
@@ -1257,20 +1247,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const location = useLocation();
     const activeView = useMemo(() => {
         const path = location.pathname;
-        if (path === '/') return 'explore';
-        if (path === '/feed') return 'feed';
+        if (path === '/' || path === '/history') return 'history';
+        if (path === '/explore' || path === '/feed') return 'explore';
         if (path === '/calendar') return 'calendar';
         if (path === '/passport') return 'favorites';
 
         if (path === '/host') return 'host';
-        if (path === '/history') return 'history';
         if (path === '/plans') return 'plans';
         if (path === '/saved-events') return 'all-favorites';
         if (path === '/community') return 'community';
         if (path === '/chat') return 'chat';
         if (path === '/info') return 'info';
         if (path === '/policies') return 'policies';
-        return 'explore';
+        if (path === '/services' || path.startsWith('/negocio/')) return 'services';
+        return 'history';
     }, [location.pathname]);
 
     // Determine which events to navigate through based on current view
@@ -1608,30 +1598,40 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
+    const handleSeedCategories = async () => {
+        if (isAdmin && !isSuperUser) {
+            showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
+            return;
+        }
+        if (!await showConfirm("¿Cargar las 13 Categorías Maestras Recomendadas (Opción 1: Enfoque Experiencial y Turístico)?", "Cargar Categorías")) return;
+        
+        setLoading(true);
+        try {
+            for (const item of DEFAULT_MASTER_CATEGORIES) {
+                if (!masterCategories.some((c: any) => c.name.toLowerCase() === item.name.toLowerCase())) {
+                    await createMasterDataItem('categories', item);
+                }
+            }
+            showToast("Categorías maestras cargadas correctamente", "success");
+        } catch (error) {
+            console.error("Error seeding categories:", error);
+            showToast("Error al cargar categorías", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSeedVibes = async () => {
         if (isAdmin && !isSuperUser) {
             showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
             return;
         }
-        if (!showConfirm("¿Cargar las vibras predeterminadas? (Fiesta, Relax, etc.)", "Cargar Vibras")) return;
+        if (!await showConfirm("¿Cargar las 10 Vibras Maestras Recomendadas (Opción 1: Lifestyle & Experiencia Turística)?", "Cargar Vibras")) return;
         
-        const defaults = [
-            { name: 'Aburrido', label: 'Aburrido', icon: 'HelpCircle', color: '#94a3b8' },
-            { name: 'Agradecido', label: 'Agradecido', icon: 'Heart', color: '#ec4899' },
-            { name: 'Cansado', label: 'Cansado', icon: 'Moon', color: '#38bdf8' },
-            { name: 'Curioso', label: 'Curioso', icon: 'Compass', color: '#a855f7' },
-            { name: 'Enfermo', label: 'Enfermo', icon: 'Thermometer', color: '#ef4444' },
-            { name: 'Feliz', label: 'Feliz', icon: 'Smile', color: '#f59e0b' },
-            { name: 'Hambriento', label: 'Hambriento', icon: 'Utensils', color: '#fb923c' },
-            { name: 'Inspirado', label: 'Inspirado', icon: 'Sparkles', color: '#c084fc' },
-            { name: 'Relajado', label: 'Relajado', icon: 'Wind', color: '#2dd4bf' },
-            { name: 'Triste', label: 'Triste', icon: 'Frown', color: '#64748b' }
-        ];
-
         setLoading(true);
         try {
-            for (const item of defaults) {
-                if (!masterVibes.some((v: any) => v.name === item.name)) {
+            for (const item of DEFAULT_MASTER_VIBES) {
+                if (!masterVibes.some((v: any) => v.name.toLowerCase() === item.name.toLowerCase())) {
                     await createMasterDataItem('vibes', item);
                 }
             }
@@ -2294,6 +2294,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             },
             toggleSector,
             handleImageUpload,
+            handleSeedCategories,
             handleSeedVibes,
             handleSeedActivities,
             showMigrationPanel,
@@ -2707,16 +2708,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             },
             setActiveView: (view: ViewType) => {
                 const paths: Record<string, string> = {
-                    'explore': '/',
-                    'feed': '/feed',
+                    'history': '/',
+                    'explore': '/explore',
+                    'feed': '/explore',
                     'calendar': '/calendar',
                     'community': '/community',
                     'host': '/host',
                     'favorites': '/passport',
-                    'history': '/history',
                     'plans': '/plans',
                     'all-favorites': '/saved-events',
-                    'policies': '/policies'
+                    'policies': '/policies',
+                    'info': '/info',
+                    'services': '/services'
                 };
                 if (paths[view]) navigate(paths[view]);
             },

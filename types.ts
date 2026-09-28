@@ -133,6 +133,8 @@ export interface UserProfile {
   monthlyAnnouncementCount?: number;
   lastEventResetDate?: number;
   lastAnnouncementResetDate?: number;
+  phone?: string;
+  whatsapp?: string;
   isBanned?: boolean;
 }
 
@@ -233,7 +235,7 @@ export interface MontanitaEvent {
   startAt: any; // Using any to handle Firestore Timestamp vs Date
   endAt: any;
   category: string;
-  vibe: Vibe;
+  vibe: Vibe | string;
   sector: Sector;
   imageUrl: string;
   interestedCount: number;

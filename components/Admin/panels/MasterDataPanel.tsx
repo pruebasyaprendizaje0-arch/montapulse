@@ -14,7 +14,7 @@ import { Vibe } from '../../../types';
 export const MasterDataPanel: React.FC = () => {
     const { 
         masterCategories, masterTags, masterSectors, masterVibes, masterActivities, customLocalities,
-        handleSeedVibes, handleSeedActivities
+        handleSeedCategories, handleSeedVibes, handleSeedActivities
     } = useData();
     const { showToast, showConfirm } = useToast();
 
@@ -22,7 +22,7 @@ export const MasterDataPanel: React.FC = () => {
     const [showCreator, setShowCreator] = useState(false);
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [form, setForm] = useState({ name: '', locality: '', vibe: '', icon: '', color: '', label: '' });
+    const [form, setForm] = useState({ name: '', locality: '', vibe: '', icon: '', color: '', label: '', desc: '' });
 
     const collections = [
         { id: 'localities', label: 'Localidades', icon: Globe, desc: 'Gestión de pueblos y zonas', color: 'text-sky-400', bg: 'bg-sky-400/10' },
@@ -72,7 +72,12 @@ export const MasterDataPanel: React.FC = () => {
                     name: form.name,
                     ...(activeTab === 'sectors' ? { locality: form.locality } : {}),
                     ...(activeTab === 'activities' ? { vibe: form.vibe } : {}),
-                    ...(activeTab === 'vibes' ? { icon: form.icon, color: form.color, label: form.label || form.name } : {})
+                    ...(activeTab === 'vibes' || activeTab === 'categories' ? { 
+                        icon: form.icon, 
+                        color: form.color, 
+                        label: form.label || form.name,
+                        desc: form.desc || ''
+                    } : {})
                 });
                 showToast("Actualizado correctamente", "success");
             } else {
@@ -80,14 +85,19 @@ export const MasterDataPanel: React.FC = () => {
                     name: form.name,
                     ...(activeTab === 'sectors' ? { locality: form.locality } : {}),
                     ...(activeTab === 'activities' ? { vibe: form.vibe } : {}),
-                    ...(activeTab === 'vibes' ? { icon: form.icon, color: form.color, label: form.label || form.name } : {})
+                    ...(activeTab === 'vibes' || activeTab === 'categories' ? { 
+                        icon: form.icon, 
+                        color: form.color, 
+                        label: form.label || form.name,
+                        desc: form.desc || ''
+                    } : {})
                 });
                 showToast("Creado correctamente", "success");
             }
             
             setShowCreator(false);
             setEditingItemId(null);
-            setForm({ name: '', locality: '', vibe: '', icon: '', color: '', label: '' });
+            setForm({ name: '', locality: '', vibe: '', icon: '', color: '', label: '', desc: '' });
         } catch (error) {
             showToast(`Error al ${editingItemId ? 'actualizar' : 'crear'}`, "error");
         } finally {
@@ -103,7 +113,8 @@ export const MasterDataPanel: React.FC = () => {
             vibe: item.vibe || '',
             icon: item.icon || '',
             color: item.color || '',
-            label: item.label || ''
+            label: item.label || '',
+            desc: item.desc || ''
         });
         setShowCreator(true);
     };
@@ -156,13 +167,22 @@ export const MasterDataPanel: React.FC = () => {
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        {activeTab === 'vibes' && masterVibes.length === 0 && (
+                        {activeTab === 'categories' && (
+                            <button 
+                                onClick={handleSeedCategories}
+                                className="flex items-center gap-2 px-6 py-3.5 bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest text-orange-400 transition-all shadow-lg"
+                            >
+                                <Zap className="w-3.5 h-3.5" />
+                                {masterCategories.length === 0 ? 'Cargar Categorías (Opción 1)' : 'Sincronizar Opción 1'}
+                            </button>
+                        )}
+                        {activeTab === 'vibes' && (
                             <button 
                                 onClick={handleSeedVibes}
                                 className="flex items-center gap-2 px-6 py-3.5 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest text-rose-400 transition-all shadow-lg"
                             >
                                 <Zap className="w-3.5 h-3.5" />
-                                Cargar Vibras
+                                {masterVibes.length === 0 ? 'Cargar Vibras (Opción 1)' : 'Sincronizar Opción 1'}
                             </button>
                         )}
                         {activeTab === 'activities' && masterActivities.length === 0 && (
@@ -194,11 +214,23 @@ export const MasterDataPanel: React.FC = () => {
                                 <input 
                                     type="text" 
                                     className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-orange-500/50"
-                                    placeholder={`Ej: ${activeTab === 'localities' ? 'Montañita' : 'Restaurante'}`}
+                                    placeholder={`Ej: ${activeTab === 'localities' ? 'Montañita' : activeTab === 'categories' ? 'Gastronomía & Restaurantes' : activeTab === 'vibes' ? 'De Fiesta & Farra' : 'Restaurante'}`}
                                     value={form.name}
                                     onChange={e => setForm({ ...form, name: e.target.value })}
                                 />
                             </div>
+                            {(activeTab === 'categories' || activeTab === 'vibes') && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Descripción / Subtítulo</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-orange-500/50"
+                                        placeholder={activeTab === 'vibes' ? 'Ej: Discotecas, bares de cócteles, DJs y música en vivo' : 'Ej: Mariscos, pizzas, comida típica, internacional'}
+                                        value={form.desc}
+                                        onChange={e => setForm({ ...form, desc: e.target.value })}
+                                    />
+                                </div>
+                            )}
                             {activeTab === 'sectors' && (
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Localidad</label>
@@ -225,24 +257,26 @@ export const MasterDataPanel: React.FC = () => {
                                     </select>
                                 </div>
                             )}
-                            {activeTab === 'vibes' && (
+                            {(activeTab === 'vibes' || activeTab === 'categories') && (
                                 <>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Etiqueta UI (Label)</label>
-                                        <input 
-                                            type="text" 
-                                            className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-orange-500/50"
-                                            placeholder="Ej: De Fiesta"
-                                            value={form.label}
-                                            onChange={e => setForm({ ...form, label: e.target.value })}
-                                        />
-                                    </div>
+                                    {activeTab === 'vibes' && (
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Etiqueta UI (Label)</label>
+                                            <input 
+                                                type="text" 
+                                                className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-orange-500/50"
+                                                placeholder="Ej: De Fiesta"
+                                                value={form.label}
+                                                onChange={e => setForm({ ...form, label: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Icono (Lucide)</label>
                                         <input 
                                             type="text" 
                                             className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-orange-500/50"
-                                            placeholder="Ej: Zap, Moon, Utensils"
+                                            placeholder="Ej: Utensils, PartyPopper, Hotel, Waves"
                                             value={form.icon}
                                             onChange={e => setForm({ ...form, icon: e.target.value })}
                                         />
@@ -252,14 +286,14 @@ export const MasterDataPanel: React.FC = () => {
                                         <div className="flex gap-2">
                                             <input 
                                                 type="color" 
-                                                className="w-14 h-14 bg-black/40 border border-white/10 rounded-2xl p-1 outline-none"
-                                                value={form.color || '#ff8800'}
+                                                className="w-14 h-14 bg-black/40 border border-white/10 rounded-2xl p-1 outline-none cursor-pointer"
+                                                value={form.color || '#f97316'}
                                                 onChange={e => setForm({ ...form, color: e.target.value })}
                                             />
                                             <input 
                                                 type="text" 
                                                 className="flex-1 bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-white outline-none focus:border-orange-500/50"
-                                                placeholder="#ff8800"
+                                                placeholder="#f97316"
                                                 value={form.color}
                                                 onChange={e => setForm({ ...form, color: e.target.value })}
                                             />
@@ -281,7 +315,7 @@ export const MasterDataPanel: React.FC = () => {
                                 onClick={() => {
                                     setShowCreator(false);
                                     setEditingItemId(null);
-                                    setForm({ name: '', locality: '', vibe: '', icon: '', color: '', label: '' });
+                                    setForm({ name: '', locality: '', vibe: '', icon: '', color: '', label: '', desc: '' });
                                 }}
                                 className="px-6 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
                             >
@@ -293,12 +327,32 @@ export const MasterDataPanel: React.FC = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {getCurrentItems().map((item: any) => (
-                        <div key={item.id} className="p-6 bg-black/20 rounded-3xl border border-white/5 hover:bg-black/40 transition-all group flex items-center justify-between">
-                            <div className="min-w-0">
-                                <h5 className="text-xs font-black text-white uppercase truncate">{item.name}</h5>
-                                {item.locality && (
-                                    <p className="text-[9px] text-slate-500 font-black uppercase mt-1 tracking-wider">{item.locality}</p>
+                        <div key={item.id || item.name} className="p-5 bg-black/20 rounded-3xl border border-white/5 hover:bg-black/40 transition-all group flex items-center justify-between">
+                            <div className="flex items-center gap-3.5 min-w-0">
+                                {item.color && (
+                                    <div 
+                                        className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 border"
+                                        style={{ 
+                                            backgroundColor: `${item.color}15`, 
+                                            borderColor: `${item.color}30`,
+                                            color: item.color 
+                                        }}
+                                    >
+                                        <Building2 className="w-4 h-4" />
+                                    </div>
                                 )}
+                                <div className="min-w-0">
+                                    <h5 className="text-xs font-black text-white uppercase truncate">{item.name}</h5>
+                                    {item.desc && (
+                                        <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5 max-w-[200px]">{item.desc}</p>
+                                    )}
+                                    {item.locality && (
+                                        <p className="text-[9px] text-slate-500 font-black uppercase mt-1 tracking-wider">{item.locality}</p>
+                                    )}
+                                    {item.vibe && (
+                                        <p className="text-[9px] text-orange-400 font-bold uppercase mt-1 tracking-wider">Vibra: {item.vibe}</p>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button 

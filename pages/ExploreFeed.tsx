@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useDeferredValue, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, ShieldCheck, Flame, Star, Search, Filter, Layers, ChevronDown, ChevronUp, TrendingUp, Clock, Trash2, ArrowRight, Radio, Navigation, Route, Compass } from 'lucide-react';
-import { MapView } from '../components/Map/MapView';
+
 import { EventCard } from '../components/EventCard';
 import { Sector, MontanitaEvent, Business, BusinessCategory, Vibe, SubscriptionPlan, MapEntryType } from '../types';
 import { LOCALITIES, LOCALITY_SECTORS, SECTOR_INFO, LOCALITY_POLYGONS, BASE_URL } from '../constants';
@@ -1535,18 +1535,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
             )}
 
             
-            {/* Quick Sector Nav & FAB to return to Map */}
-            <div className="fixed bottom-24 lg:bottom-10 left-1/2 -translate-x-1/2 z-[1100] animate-in fade-in slide-in-from-bottom duration-500 flex flex-col gap-4">
-                <button
-                    onClick={() => {
-                        window.dispatchEvent(new CustomEvent('NAVIGATE_TO_MAP'));
-                    }}
-                    className="flex items-center gap-3 px-8 py-4 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-black text-sm uppercase tracking-widest rounded-full shadow-2xl shadow-black/40 transition-all border border-white/10 cursor-pointer mx-auto"
-                >
-                    <span className="text-lg leading-none">🗺️</span>
-                    Ver Mapa
-                </button>
-            </div>
+
             
             <ItineraryModal
                 isOpen={showItinerary}

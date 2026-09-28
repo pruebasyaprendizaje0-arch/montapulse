@@ -25,7 +25,7 @@ export const Sidebar: React.FC = () => {
     }, []);
 
     const navItems = [
-        { id: 'explore', icon: Compass, label: 'MAPA PULSE', path: '/explore', action: null },
+        { id: 'explore', icon: Compass, label: 'EXPLORAR', path: '/', action: null },
         { id: 'events', icon: Calendar, label: 'EVENTOS', path: '/calendar', action: null },
         { id: 'favorites', icon: Heart, label: 'PASSPORT', path: '/passport', action: 'favorites' },
         { id: 'notifications', icon: Bell, label: 'NOTIFICACIONES', path: '/community', action: null },

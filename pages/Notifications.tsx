@@ -586,8 +586,7 @@ export const Notifications: React.FC = () => {
                                             >
                                                 Todos los estilos
                                             </button>
-                                            {[...Object.values(Vibe), ...masterVibes.map(v => v.name)]
-                                                .filter((v, idx, self) => self.indexOf(v) === idx)
+                                            {(masterVibes && masterVibes.length > 0 ? masterVibes.map((v: any) => v.name) : Object.values(Vibe))
                                                 .map(v => (
                                                     <button
                                                         key={v}

@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { X, Camera, Upload, Sparkles, Calendar, Clock, MapPin, Tag, Zap, AlertTriangle, Crown, Store } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { X, Camera, Upload, Sparkles, Calendar, Clock, MapPin, Tag, Zap, AlertTriangle, Crown, Store, Link as LinkIcon, Image as ImageIcon } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Sector, Vibe, SubscriptionPlan } from '../../types';
 import { LOCALITIES, LOCALITY_SECTORS, PLAN_LIMITS, DEFAULT_NEW_LOCALITY_SECTORS } from '../../constants';
@@ -29,8 +29,22 @@ export const EventEditorModal: React.FC = () => {
 
     const userBusiness = user?.businessId && businesses ? businesses.find(b => b.id === user.businessId) : null;
     const userBusinessEvents = userBusiness && events ? events.filter(e => e.businessId === userBusiness.id) : [];
-    const isSpecialUser = user?.email === 'ubicameinformacion@gmail.com' || user?.role === 'admin';
-    const isPremium = userBusiness?.plan === SubscriptionPlan.PRO || userBusiness?.plan === SubscriptionPlan.ELITE || userBusiness?.plan === SubscriptionPlan.EXPERT || isSpecialUser;
+    const isSpecialUser = user?.email === 'ubicameinformacion@gmail.com' || user?.role === 'admin' || isAdmin;
+    const userPlan = userBusiness?.plan || user?.plan || SubscriptionPlan.FREE;
+    const isEliteOrAbove = userPlan === SubscriptionPlan.ELITE || userPlan === SubscriptionPlan.EXPERT || isSpecialUser;
+    const isPro = userPlan === SubscriptionPlan.PRO;
+    const isPremium = isPro || isEliteOrAbove;
+
+    const [imageMode, setImageMode] = useState<'camera' | 'url'>(isEliteOrAbove ? 'camera' : 'url');
+
+    useEffect(() => {
+        if (isEliteOrAbove) {
+            setImageMode('camera');
+        } else {
+            setImageMode('url');
+        }
+    }, [isEliteOrAbove]);
+
     const planCreditsLimit = isPremium ? Infinity : (PLAN_LIMITS[userBusiness?.plan || SubscriptionPlan.FREE] || 0);
     const availableCredits = userBusiness?.eventCredits ?? 0;
     const isAtLimit = !isPremium && availableCredits <= 0;
@@ -113,12 +127,119 @@ export const EventEditorModal: React.FC = () => {
             )}
 
             <div className="max-w-xl mx-auto w-full space-y-8">
-                {/* Image Upload Section */}
-                <OptimizedImageUploader 
-                    path={`events/${user?.id || 'anonymous'}`}
-                    currentImageUrl={newEvent.imageUrl}
-                    onImageProcessed={(url) => setNewEvent({ ...newEvent, imageUrl: url })}
-                />
+                {/* Image Section */}
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between pl-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <ImageIcon className="w-3.5 h-3.5 text-orange-400" /> Imagen del Pulso
+                        </label>
+                        {isEliteOrAbove ? (
+                            <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                <Crown className="w-3 h-3" /> Elite: Cámara & URL
+                            </span>
+                        ) : (
+                            <span className="text-[9px] font-black text-orange-400 bg-orange-500/10 border border-orange-500/30 px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                <LinkIcon className="w-3 h-3" /> Plan Pro: Solo URL
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Selector de modo para Plan Elite / Expert / Admin */}
+                    {isEliteOrAbove && (
+                        <div className="flex p-1 bg-slate-800/80 rounded-2xl border border-white/10 shadow-inner">
+                            <button
+                                type="button"
+                                onClick={() => setImageMode('camera')}
+                                className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                    imageMode === 'camera'
+                                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg'
+                                        : 'text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                <Camera className="w-4 h-4" />
+                                <span>Cámara del Celular</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setImageMode('url')}
+                                className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                    imageMode === 'url'
+                                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg'
+                                        : 'text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                <LinkIcon className="w-4 h-4" />
+                                <span>Enlace / URL</span>
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Contenido según modo o plan */}
+                    {isEliteOrAbove && imageMode === 'camera' ? (
+                        <OptimizedImageUploader 
+                            path={`events/${user?.id || 'anonymous'}`}
+                            currentImageUrl={newEvent.imageUrl}
+                            onImageProcessed={(url) => setNewEvent({ ...newEvent, imageUrl: url })}
+                        />
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="relative">
+                                <input
+                                    type="url"
+                                    placeholder="Pega aquí la URL de la imagen (ej: https://...)"
+                                    className="w-full bg-slate-800/60 border border-white/10 rounded-2xl pl-4 pr-10 py-4 font-bold text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 shadow-inner text-sm"
+                                    value={newEvent.imageUrl || ''}
+                                    onChange={(e) => setNewEvent({ ...newEvent, imageUrl: e.target.value })}
+                                />
+                                {newEvent.imageUrl && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setNewEvent({ ...newEvent, imageUrl: '' })}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors cursor-pointer"
+                                        title="Limpiar URL"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Previsualización del enlace */}
+                            {newEvent.imageUrl ? (
+                                <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/10 bg-slate-950 group shadow-lg">
+                                    <img 
+                                        src={newEvent.imageUrl} 
+                                        alt="Vista previa del pulso" 
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?auto=format&fit=crop&q=80';
+                                        }}
+                                    />
+                                    <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-xl text-[10px] font-bold text-white border border-white/10">
+                                        Vista Previa de Imagen
+                                    </div>
+                                </div>
+                            ) : (
+                                !isEliteOrAbove && (
+                                    <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2.5 text-xs text-amber-200/90 font-medium">
+                                            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                                                <Camera className="w-4 h-4 text-amber-400" />
+                                            </div>
+                                            <span>¿Quieres tomar fotos directamente con la cámara del celular? Pasa a <strong>Plan ELITE</strong>.</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowHostWizard(false); window.location.href = '/plans'; }}
+                                            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white rounded-xl text-xs font-black uppercase tracking-wider shrink-0 shadow-lg shadow-orange-500/20 self-start sm:self-auto cursor-pointer"
+                                        >
+                                            Ver Plan Elite
+                                        </button>
+                                    </div>
+                                )
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 {/* Form Fields */}
                 <div className="space-y-6">
@@ -200,7 +321,12 @@ export const EventEditorModal: React.FC = () => {
                                 value={newEvent.vibe}
                                 onChange={e => setNewEvent({ ...newEvent, vibe: e.target.value as Vibe })}
                             >
-                                {[...Object.values(Vibe), ...(masterVibes || []).map(v => v.name)].map(v => <option key={v} value={v}>{v}</option>)}
+                                {(masterVibes && masterVibes.length > 0 
+                                    ? masterVibes.map((v: any) => v.name) 
+                                    : Object.values(Vibe)
+                                ).map((v: string) => (
+                                    <option key={v} value={v}>{v}</option>
+                                ))}
                             </select>
                         </div>
                         <div className="space-y-2">
