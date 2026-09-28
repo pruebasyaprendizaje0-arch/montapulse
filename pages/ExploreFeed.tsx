@@ -19,6 +19,9 @@ import { isBusinessOpen } from '../utils/timeUtils';
 import { LocalityManagerModal } from '../components/Modals/LocalityManagerModal';
 import { useSEO } from '../hooks/useSEO';
 import { Skeleton } from '../components/Skeleton';
+import { ECUADOR_GEO_DATA, LocationStructure } from '../utils/ecuadorGeoData';
+
+const ECUADOR_LOCATIONS: LocationStructure = ECUADOR_GEO_DATA;
 import { getCriteriaForMoodOrActivity, filterBusinessesByCriteria, filterEventsByCriteria } from '../utils/activityVibeMatcher';
 
 const ACTIVITY_TO_CATEGORIES: Record<string, BusinessCategory[]> = {
@@ -131,6 +134,86 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
     const [focusedBusinessId, setFocusedBusinessId] = useState<string | null>(null);
     const [showingDirections, setShowingDirections] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+    const [selectedProvince, setSelectedProvince] = useState<string>('Santa Elena');
+    const [selectedCanton, setSelectedCanton] = useState<string>('Santa Elena');
+    const [selectedParroquia, setSelectedParroquia] = useState<string>('Manglaralto');
+    const [selectedComuna, setSelectedComuna] = useState<string>('Montañita');
+    const [showGeoFilters, setShowGeoFilters] = useState<boolean>(false);
+
+    // Sync selectedComuna when currentLocality changes
+    useEffect(() => {
+        if (currentLocality?.name && currentLocality.name !== selectedComuna && selectedComuna !== 'Todas') {
+            setSelectedComuna(currentLocality.name);
+        }
+    }, [currentLocality?.name]);
+
+    // Dynamic Lists for Ecuador Geo
+    const provincesList = useMemo(() => Object.keys(ECUADOR_LOCATIONS), []);
+    
+    const cantonsList = useMemo(() => {
+        if (selectedProvince !== 'Todas') {
+            return Object.keys(ECUADOR_LOCATIONS[selectedProvince] || {});
+        }
+        const set = new Set<string>();
+        Object.values(ECUADOR_LOCATIONS).forEach(provObj => {
+            Object.keys(provObj).forEach(c => set.add(c));
+        });
+        return Array.from(set);
+    }, [selectedProvince]);
+
+    const parroquiasList = useMemo(() => {
+        if (selectedProvince !== 'Todas' && selectedCanton !== 'Todos') {
+            return Object.keys(ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton] || {});
+        }
+        if (selectedProvince !== 'Todas') {
+            const set = new Set<string>();
+            const provObj = ECUADOR_LOCATIONS[selectedProvince] || {};
+            Object.values(provObj).forEach(cantonObj => {
+                Object.keys(cantonObj).forEach(p => set.add(p));
+            });
+            return Array.from(set);
+        }
+        const set = new Set<string>();
+        Object.values(ECUADOR_LOCATIONS).forEach(provObj => {
+            Object.values(provObj).forEach(cantonObj => {
+                Object.keys(cantonObj).forEach(p => set.add(p));
+            });
+        });
+        return Array.from(set);
+    }, [selectedProvince, selectedCanton]);
+
+    const comunasList = useMemo(() => {
+        if (selectedProvince !== 'Todas' && selectedCanton !== 'Todos' && selectedParroquia !== 'Todas') {
+            const list = ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton]?.[selectedParroquia];
+            return list ? list.filter(c => c !== 'Todas') : [];
+        }
+        const set = new Set<string>();
+        if (selectedProvince !== 'Todas' && selectedCanton !== 'Todos') {
+            const cantonObj = ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton] || {};
+            Object.values(cantonObj).forEach(arr => {
+                arr.forEach(c => { if (c !== 'Todas') set.add(c); });
+            });
+        } else if (selectedProvince !== 'Todas') {
+            const provObj = ECUADOR_LOCATIONS[selectedProvince] || {};
+            Object.values(provObj).forEach(cantonObj => {
+                Object.values(cantonObj).forEach(arr => {
+                    arr.forEach(c => { if (c !== 'Todas') set.add(c); });
+                });
+            });
+        } else {
+            Object.values(ECUADOR_LOCATIONS).forEach(provObj => {
+                Object.values(provObj).forEach(cantonObj => {
+                    Object.values(cantonObj).forEach(arr => {
+                        arr.forEach(c => { if (c !== 'Todas') set.add(c); });
+                    });
+                });
+            });
+            (customLocalities || []).forEach(cl => {
+                if (cl.name) set.add(cl.name);
+            });
+        }
+        return Array.from(set);
+    }, [selectedProvince, selectedCanton, selectedParroquia, customLocalities]);
 
     useEffect(() => {
         if (navigator.geolocation) {
@@ -747,6 +830,186 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                 {/* Feed Panel */}
                 {!isEditorFocus && (
                     <div className="flex-1 flex flex-col h-full bg-[#0f172a] overflow-y-auto no-scrollbar relative z-[100] pb-32 px-6 pt-6">
+
+                        {/* Search and Geographic Location Filter Box */}
+                        <div className="mb-4 p-4 rounded-3xl bg-slate-900/90 border border-white/10 shadow-2xl backdrop-blur-xl">
+                            {/* Text Search Input */}
+                            <div className="relative mb-3">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Buscar eventos, negocios, servicios o referencias..."
+                                    className="w-full bg-slate-950/80 hover:bg-slate-950 border border-white/10 focus:border-amber-500/80 text-slate-100 text-xs font-semibold rounded-2xl pl-11 pr-10 py-3.5 outline-none transition-all placeholder:text-slate-500 placeholder:text-xs shadow-inner"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Location Header & Toggle */}
+                            <div className="flex items-center justify-between pt-1">
+                                <button
+                                    onClick={() => setShowGeoFilters(!showGeoFilters)}
+                                    className="flex items-center gap-2.5 text-left group"
+                                >
+                                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-black transition-all">
+                                        <MapPin className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Ubicación Geográfica</span>
+                                        <span className="text-xs font-black text-white group-hover:text-amber-400 transition-colors flex items-center gap-1.5">
+                                            {selectedComuna !== 'Todas' ? selectedComuna : selectedParroquia !== 'Todas' ? selectedParroquia : currentLocality.name}
+                                            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-300 ${showGeoFilters ? 'rotate-180 text-amber-400' : ''}`} />
+                                        </span>
+                                    </div>
+                                </button>
+
+                                <button
+                                    onClick={() => setShowGeoFilters(!showGeoFilters)}
+                                    className="px-3.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-500/40 rounded-xl text-[10px] font-black text-amber-400 uppercase tracking-widest transition-all"
+                                >
+                                    {showGeoFilters ? 'Ocultar' : 'Cambiar Ubicación'}
+                                </button>
+                            </div>
+
+                            {/* Cascading Geo Selectors */}
+                            {showGeoFilters && (
+                                <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    {/* PROVINCIA */}
+                                    <div>
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 pl-1">
+                                            Provincia
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedProvince}
+                                                onChange={(e) => {
+                                                    setSelectedProvince(e.target.value);
+                                                    setSelectedCanton('Todos');
+                                                    setSelectedParroquia('Todas');
+                                                    setSelectedComuna('Todas');
+                                                }}
+                                                className="w-full bg-slate-950/90 border border-white/10 text-slate-200 text-xs font-bold rounded-xl px-3 py-2.5 outline-none cursor-pointer appearance-none pr-8 hover:border-amber-500/30 transition-colors"
+                                            >
+                                                <option value="Todas" className="bg-slate-900">Provincia: Todas</option>
+                                                {provincesList.map(prov => (
+                                                    <option key={prov} value={prov} className="bg-slate-900">{prov}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* CANTÓN */}
+                                    <div>
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 pl-1">
+                                            Cantón
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedCanton}
+                                                onChange={(e) => {
+                                                    setSelectedCanton(e.target.value);
+                                                    setSelectedParroquia('Todas');
+                                                    setSelectedComuna('Todas');
+                                                }}
+                                                className="w-full bg-slate-950/90 border border-white/10 text-slate-200 text-xs font-bold rounded-xl px-3 py-2.5 outline-none cursor-pointer appearance-none pr-8 hover:border-amber-500/30 transition-colors"
+                                            >
+                                                <option value="Todos" className="bg-slate-900">Cantón: Todos</option>
+                                                {cantonsList.map(canton => (
+                                                    <option key={canton} value={canton} className="bg-slate-900">{canton}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* PARROQUIA */}
+                                    <div>
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 pl-1">
+                                            Parroquia
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedParroquia}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setSelectedParroquia(val);
+                                                    setSelectedComuna('Todas');
+                                                    if (val !== 'Todas') {
+                                                        const allLocs = [...LOCALITIES, ...(customLocalities || [])];
+                                                        const foundLoc = allLocs.find(l => l.name.toLowerCase() === val.toLowerCase());
+                                                        if (foundLoc) {
+                                                            setCurrentLocality(foundLoc);
+                                                        } else {
+                                                            setCurrentLocality({
+                                                                id: val.toLowerCase().replace(/\s+/g, '-'),
+                                                                name: val,
+                                                                coords: [-1.825, -80.753],
+                                                                center: [-80.753, -1.825],
+                                                                zoom: 15
+                                                            });
+                                                        }
+                                                    }
+                                                }}
+                                                className="w-full bg-slate-950/90 border border-white/10 text-slate-200 text-xs font-bold rounded-xl px-3 py-2.5 outline-none cursor-pointer appearance-none pr-8 hover:border-amber-500/30 transition-colors"
+                                            >
+                                                <option value="Todas" className="bg-slate-900">Parroquia: Todas</option>
+                                                {parroquiasList.map(parr => (
+                                                    <option key={parr} value={parr} className="bg-slate-900">{parr}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* COMUNA / LOCALIDAD */}
+                                    <div>
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 pl-1">
+                                            Comuna / Localidad
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedComuna}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setSelectedComuna(val);
+                                                    if (val !== 'Todas') {
+                                                        const allLocs = [...LOCALITIES, ...(customLocalities || [])];
+                                                        const foundLoc = allLocs.find(l => l.name.toLowerCase() === val.toLowerCase());
+                                                        if (foundLoc) {
+                                                            setCurrentLocality(foundLoc);
+                                                        } else {
+                                                            setCurrentLocality({
+                                                                id: val.toLowerCase().replace(/\s+/g, '-'),
+                                                                name: val,
+                                                                coords: [-1.825, -80.753],
+                                                                center: [-80.753, -1.825],
+                                                                zoom: 15
+                                                            });
+                                                        }
+                                                    }
+                                                }}
+                                                className="w-full bg-slate-950/90 border border-white/10 text-slate-200 text-xs font-bold rounded-xl px-3 py-2.5 outline-none cursor-pointer appearance-none pr-8 hover:border-amber-500/30 transition-colors"
+                                            >
+                                                <option value="Todas" className="bg-slate-900">Comuna: Todas</option>
+                                                {comunasList.map(com => (
+                                                    <option key={com} value={com} className="bg-slate-900">{com}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Section 1: ¿Cómo te sientes? - Pink (from masterVibes) */}
                         <div className="px-4 py-3 border-b border-white/5 relative">

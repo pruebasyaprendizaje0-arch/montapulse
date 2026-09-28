@@ -19,6 +19,9 @@ import { isBusinessOpen } from '../utils/timeUtils';
 import { LocalityManagerModal } from '../components/Modals/LocalityManagerModal';
 import { useSEO } from '../hooks/useSEO';
 import { Skeleton } from '../components/Skeleton';
+import { ECUADOR_GEO_DATA, LocationStructure } from '../utils/ecuadorGeoData';
+
+const ECUADOR_LOCATIONS: LocationStructure = ECUADOR_GEO_DATA;
 import { getCriteriaForMoodOrActivity, filterBusinessesByCriteria, filterEventsByCriteria } from '../utils/activityVibeMatcher';
 
 const ACTIVITY_TO_CATEGORIES: Record<string, BusinessCategory[]> = {
@@ -131,6 +134,86 @@ export const Explore: React.FC<ExploreProps> = ({
     const [focusedBusinessId, setFocusedBusinessId] = useState<string | null>(null);
     const [showingDirections, setShowingDirections] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+    const [selectedProvince, setSelectedProvince] = useState<string>('Santa Elena');
+    const [selectedCanton, setSelectedCanton] = useState<string>('Santa Elena');
+    const [selectedParroquia, setSelectedParroquia] = useState<string>('Manglaralto');
+    const [selectedComuna, setSelectedComuna] = useState<string>('Montañita');
+    const [showGeoFilters, setShowGeoFilters] = useState<boolean>(false);
+
+    // Sync selectedComuna when currentLocality changes
+    useEffect(() => {
+        if (currentLocality?.name && currentLocality.name !== selectedComuna && selectedComuna !== 'Todas') {
+            setSelectedComuna(currentLocality.name);
+        }
+    }, [currentLocality?.name]);
+
+    // Dynamic Lists for Ecuador Geo
+    const provincesList = useMemo(() => Object.keys(ECUADOR_LOCATIONS), []);
+    
+    const cantonsList = useMemo(() => {
+        if (selectedProvince !== 'Todas') {
+            return Object.keys(ECUADOR_LOCATIONS[selectedProvince] || {});
+        }
+        const set = new Set<string>();
+        Object.values(ECUADOR_LOCATIONS).forEach(provObj => {
+            Object.keys(provObj).forEach(c => set.add(c));
+        });
+        return Array.from(set);
+    }, [selectedProvince]);
+
+    const parroquiasList = useMemo(() => {
+        if (selectedProvince !== 'Todas' && selectedCanton !== 'Todos') {
+            return Object.keys(ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton] || {});
+        }
+        if (selectedProvince !== 'Todas') {
+            const set = new Set<string>();
+            const provObj = ECUADOR_LOCATIONS[selectedProvince] || {};
+            Object.values(provObj).forEach(cantonObj => {
+                Object.keys(cantonObj).forEach(p => set.add(p));
+            });
+            return Array.from(set);
+        }
+        const set = new Set<string>();
+        Object.values(ECUADOR_LOCATIONS).forEach(provObj => {
+            Object.values(provObj).forEach(cantonObj => {
+                Object.keys(cantonObj).forEach(p => set.add(p));
+            });
+        });
+        return Array.from(set);
+    }, [selectedProvince, selectedCanton]);
+
+    const comunasList = useMemo(() => {
+        if (selectedProvince !== 'Todas' && selectedCanton !== 'Todos' && selectedParroquia !== 'Todas') {
+            const list = ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton]?.[selectedParroquia];
+            return list ? list.filter(c => c !== 'Todas') : [];
+        }
+        const set = new Set<string>();
+        if (selectedProvince !== 'Todas' && selectedCanton !== 'Todos') {
+            const cantonObj = ECUADOR_LOCATIONS[selectedProvince]?.[selectedCanton] || {};
+            Object.values(cantonObj).forEach(arr => {
+                arr.forEach(c => { if (c !== 'Todas') set.add(c); });
+            });
+        } else if (selectedProvince !== 'Todas') {
+            const provObj = ECUADOR_LOCATIONS[selectedProvince] || {};
+            Object.values(provObj).forEach(cantonObj => {
+                Object.values(cantonObj).forEach(arr => {
+                    arr.forEach(c => { if (c !== 'Todas') set.add(c); });
+                });
+            });
+        } else {
+            Object.values(ECUADOR_LOCATIONS).forEach(provObj => {
+                Object.values(provObj).forEach(cantonObj => {
+                    Object.values(cantonObj).forEach(arr => {
+                        arr.forEach(c => { if (c !== 'Todas') set.add(c); });
+                    });
+                });
+            });
+            (customLocalities || []).forEach(cl => {
+                if (cl.name) set.add(cl.name);
+            });
+        }
+        return Array.from(set);
+    }, [selectedProvince, selectedCanton, selectedParroquia, customLocalities]);
 
     useEffect(() => {
         if (navigator.geolocation) {
