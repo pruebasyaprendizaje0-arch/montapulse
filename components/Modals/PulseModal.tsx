@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { format, isToday, isTomorrow, isThisWeek, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Vibe, SubscriptionPlan, BusinessCategory, Coupon } from '../../types';
+import { isEventPublicAndActive } from '../../utils/timeUtils';
 import { subscribeToPublicCoupons } from '../../services/couponService';
 import { CouponCard } from '../Coupons/CouponCard';
 import { CouponRedeemModal } from './CouponRedeemModal';
@@ -168,9 +169,9 @@ export const PulseModal: React.FC = () => {
     const todayEvents = useMemo(() => {
         return (eventsWithLiveCounts || [])
             .filter((e: any) => {
+                if (!isEventPublicAndActive(e)) return false;
                 const eventDate = new Date(e.startAt);
-                const isDeactivated = e.status === 'deactivated';
-                return eventDate >= today && eventDate < tomorrow && !isDeactivated;
+                return eventDate >= today && eventDate < tomorrow;
             })
             .sort((a: any, b: any) => {
                 const aPremium = isPremiumEvent(a) ? 0 : 1;
@@ -182,7 +183,7 @@ export const PulseModal: React.FC = () => {
 
     const upcomingEvents = useMemo(() => {
         let events = (eventsWithLiveCounts || [])
-            .filter((e: any) => new Date(e.startAt) >= tomorrow && e.status !== 'deactivated');
+            .filter((e: any) => isEventPublicAndActive(e) && new Date(e.startAt) >= tomorrow);
         
         if (selectedMood) {
             events = events.filter((e: any) => e.vibe === selectedMood || e.moods?.includes(selectedMood));

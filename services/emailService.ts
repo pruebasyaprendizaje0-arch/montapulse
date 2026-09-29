@@ -1,3 +1,5 @@
+import { getAuthorizedHeaders } from './authService';
+
 export interface SendEmailParams {
   to: string;
   subject: string;
@@ -18,11 +20,10 @@ export interface SendEmailResponse {
  */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResponse> {
   try {
+    const headers = await getAuthorizedHeaders();
     const response = await fetch('/api/send-email', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(params),
     });
 

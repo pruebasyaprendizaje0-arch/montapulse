@@ -194,15 +194,14 @@ export const Plans: React.FC = () => {
             if (paymentMethod === 'dlocal_go') {
                 showToast('Solicitud registrada. Conectando con pasarela segura...', 'info');
                 try {
+                    const { getAuthorizedHeaders } = await import('../services/authService');
+                    const headers = await getAuthorizedHeaders();
                     const response = await fetch('/api/create-checkout', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers,
                         body: JSON.stringify({
-                            amount: Number(price),
-                            currency: 'USD',
-                            description: `Plan ${planName} - ${user.email}`,
-                            userId: user.id || (user as any).uid,
-                            planId: selectedPlanForPurchase
+                            planId: selectedPlanForPurchase,
+                            businessId: user.businessId
                         })
                     });
                     const data = await response.json();
@@ -210,9 +209,11 @@ export const Plans: React.FC = () => {
                         window.location.href = data.checkout_url;
                         return;
                     } else {
+                        showToast(data.message || 'Error al generar checkout con dLocal.', 'error');
                         window.open('https://dlocal.com', '_blank');
                     }
-                } catch (e) {
+                } catch (e: any) {
+                    showToast('Error conectando con la pasarela de pagos.', 'error');
                     window.open('https://dlocal.com', '_blank');
                 }
                 showToast('Solicitud de pago con dLocal Go enviada para verificación.', 'success');

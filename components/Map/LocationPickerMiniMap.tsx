@@ -84,6 +84,13 @@ export const LocationPickerMiniMap: React.FC<LocationPickerMiniMapProps> = memo(
     mapRef.current = map;
     updateTiles(map, mapModeRef.current);
 
+    // Auto-switch to street map when satellite reaches max zoom
+    map.on('zoomend', () => {
+      if (map.getZoom() >= 18 && mapModeRef.current === 'satellite') {
+        setMapMode('street');
+      }
+    });
+
     // Custom Draggable Pin
     const customIcon = L.divIcon({
       html: `

@@ -5,6 +5,7 @@ import {
 import { db } from '../firebase.config';
 import { Coupon, CouponRedemption, Business } from '../types';
 import { getBusinessFollowers, createNotification, getBusinessById, safeOnSnapshot } from './firestoreService';
+import { getAuthorizedHeaders } from './authService';
 
 // ==================== HELPERS ====================
 
@@ -429,57 +430,35 @@ export const obtainCoupon = async (
 export const confirmRedemption = async (
     reservationCode: string,
     businessId: string,
-    validatedBy: string
+    _validatedBy?: string
 ): Promise<{ success: boolean; error?: string; couponData?: any; redemptionData?: CouponRedemption }> => {
     try {
-        // 1. Find the reservation
-        const q = query(
-            collection(db, 'couponRedemptions'),
-            where('reservationCode', '==', reservationCode.toUpperCase()),
-            where('businessId', '==', businessId),
-            where('status', '==', 'reserved')
-        );
-        
-        const snap = await getDocs(q);
-        if (snap.empty) {
-            return { success: false, error: 'Código inválido, ya usado o no pertenece a este negocio' };
-        }
-
-        const redemptionDoc = snap.docs[0];
-        const redemptionData = redemptionDoc.data() as CouponRedemption;
-
-        // 2. Check expiration
-        const now = new Date();
-        if (redemptionData.expiresAt?.toDate() < now) {
-            await updateDoc(redemptionDoc.ref, { status: 'expired' });
-            return { success: false, error: 'Este cupón ha expirado' };
-        }
-
-        // 3. Atomic Update: Burn the coupon and increment usage
-        const couponRef = doc(db, 'coupons', redemptionData.couponId);
-        
-        // We use a batch or transaction to ensure atomicity
-        const batch = writeBatch(db);
-        
-        // Increment usage
-        batch.update(couponRef, {
-            currentUses: increment(1),
-            updatedAt: serverTimestamp(),
+        const headers = await getAuthorizedHeaders();
+        const response = await fetch('/api/coupons/redeem', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                reservationCode,
+                businessId
+            })
         });
 
-        // Mark as redeemed
-        batch.update(redemptionDoc.ref, {
-            status: 'redeemed',
-            redeemedAt: serverTimestamp(),
-            validatedBy
-        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+            return {
+                success: false,
+                error: data.message || `Error al procesar el canje (${response.status})`
+            };
+        }
 
-        await batch.commit();
-        
-        return { success: true, redemptionData };
-    } catch (error) {
+        return {
+            success: true,
+            redemptionData: data.redemptionData,
+            couponData: data.couponData
+        };
+    } catch (error: any) {
         console.error('Error confirming redemption:', error);
-        return { success: false, error: 'Error técnico al procesar el canje' };
+        return { success: false, error: error.message || 'Error de red al procesar el canje' };
     }
 };
 

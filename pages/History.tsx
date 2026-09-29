@@ -214,76 +214,87 @@ export const History: React.FC = () => {
             </div>
 
             {/* Hero Section */}
-            <div className="relative h-[70vh] flex-shrink-0 flex items-end z-10">
-                
-                <div className="absolute top-6 left-6 z-10">
-                    <button type="button" onClick={handleGoToExplore} className="p-3 bg-black/50 backdrop-blur-xl border border-white/20 rounded-2xl hover:bg-slate-800 transition-all active:scale-95 shadow-2xl group cursor-pointer">
-                        <ChevronLeft className="w-6 h-6 text-white group-hover:-translate-x-1 transition-transform" />
-                    </button>
-                </div>
+            <div className="relative pt-6 sm:pt-10 pb-8 sm:pb-12 z-10">
+                <div className="max-w-4xl mx-auto px-5 sm:px-8">
+                    {/* Top Bar Controls */}
+                    <div className="flex items-center justify-between gap-3 mb-6">
+                        <button 
+                            type="button" 
+                            onClick={() => {
+                                setActiveView('home');
+                                navigate('/');
+                            }} 
+                            className="px-3.5 py-2 bg-black/50 hover:bg-black/70 backdrop-blur-xl border border-white/20 rounded-2xl text-xs font-bold text-slate-200 hover:text-white transition-all active:scale-95 shadow-lg flex items-center gap-1.5 cursor-pointer"
+                            aria-label="Volver al Inicio"
+                        >
+                            <ChevronLeft className="w-4 h-4 text-orange-400" />
+                            <span>Inicio</span>
+                        </button>
 
-                {isSuperUser && (
-                    <div className="absolute top-6 right-6 z-10 flex gap-2">
-                        {isEditing ? (
-                            <>
-                                <button 
-                                    onClick={handleSave} 
-                                    className="p-3 bg-emerald-500 hover:bg-emerald-600 border border-emerald-400/20 rounded-2xl transition-all active:scale-95 shadow-2xl flex items-center gap-2 text-white font-bold text-sm"
-                                    title="Guardar Cambios"
-                                >
-                                    <Save className="w-5 h-5" />
-                                    <span className="hidden md:inline">Guardar</span>
-                                </button>
-                                <button 
-                                    onClick={() => {
-                                        setEditForm(historyContent);
-                                        setIsEditing(false);
-                                    }} 
-                                    className="p-3 bg-rose-500 hover:bg-rose-600 border border-rose-400/20 rounded-2xl transition-all active:scale-95 shadow-2xl text-white"
-                                    title="Cancelar Edición"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </>
-                        ) : (
-                            <button 
-                                onClick={() => setIsEditing(true)} 
-                                className="p-3 bg-orange-500 hover:bg-orange-600 border border-orange-400/20 rounded-2xl transition-all active:scale-95 shadow-2xl flex items-center gap-2 text-white font-bold text-sm"
-                                title="Editar Contenido"
-                            >
-                                <Edit3 className="w-5 h-5" />
-                                <span className="hidden md:inline">Editar Nosotros</span>
-                            </button>
+                        {isSuperUser && (
+                            <div className="flex items-center gap-2">
+                                {isEditing ? (
+                                    <>
+                                        <button 
+                                            onClick={handleSave} 
+                                            className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 border border-emerald-400/20 rounded-2xl transition-all active:scale-95 shadow-lg flex items-center gap-1.5 text-white font-bold text-xs"
+                                            title="Guardar Cambios"
+                                        >
+                                            <Save className="w-4 h-4" />
+                                            <span>Guardar</span>
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                setEditForm(historyContent);
+                                                setIsEditing(false);
+                                            }} 
+                                            className="p-2 bg-rose-500 hover:bg-rose-600 border border-rose-400/20 rounded-2xl transition-all active:scale-95 shadow-lg text-white"
+                                            title="Cancelar Edición"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button 
+                                        onClick={() => setIsEditing(true)} 
+                                        className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 border border-orange-400/20 rounded-2xl transition-all active:scale-95 shadow-lg flex items-center gap-1.5 text-white font-bold text-xs"
+                                        title="Editar Contenido"
+                                    >
+                                        <Edit3 className="w-4 h-4" />
+                                        <span>Editar</span>
+                                    </button>
+                                )}
+                            </div>
                         )}
                     </div>
-                )}
 
-                <div className="relative z-10 px-8 pb-16 max-w-4xl animate-in fade-in slide-in-from-bottom-8 duration-1000">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="px-3.5 py-1.5 bg-orange-500/25 border border-orange-500/40 rounded-full shadow-lg backdrop-blur-md">
-                            <span className="text-[10px] sm:text-xs font-black text-orange-300 uppercase tracking-[0.2em]">Bienvenido a MontaPulse</span>
+                    <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
+                        <div className="flex items-center gap-2.5 mb-3">
+                            <div className="px-3 py-1 bg-orange-500/25 border border-orange-500/40 rounded-full shadow-lg backdrop-blur-md">
+                                <span className="text-[10px] sm:text-xs font-black text-orange-300 uppercase tracking-[0.2em]">Bienvenido a MontaPulse</span>
+                            </div>
+                            <div className="w-2 h-2 bg-orange-500 rounded-full animate-ping" />
                         </div>
-                        <div className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-ping" />
+                        <h1 className="text-3xl sm:text-5xl md:text-7xl font-black text-white leading-[0.95] tracking-tighter mb-4 sm:mb-6 drop-shadow-xl">
+                            CONECTANDO EL <br/>
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-400 to-orange-400">PULSO</span> DE NUESTRA <br/>
+                            COMUNIDAD
+                        </h1>
+                        {isEditing ? (
+                            <div className="w-full max-w-xl space-y-2">
+                                <label className="text-[10px] uppercase font-black tracking-widest text-orange-500">Subtítulo de Portada</label>
+                                <textarea
+                                    value={editForm.heroSubtitle}
+                                    onChange={(e) => setEditForm({ ...editForm, heroSubtitle: e.target.value })}
+                                    className="w-full bg-black/70 backdrop-blur-xl border border-orange-500/40 rounded-2xl p-4 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all duration-300 resize-y min-h-[100px] text-base font-medium shadow-2xl"
+                                />
+                            </div>
+                        ) : (
+                            <p className="text-sm sm:text-base md:text-lg text-slate-100 max-w-xl leading-relaxed font-semibold drop-shadow-md">
+                                {formatText(historyContent.heroSubtitle)}
+                            </p>
+                        )}
                     </div>
-                    <h1 className="text-5xl md:text-7xl font-black text-white leading-[0.9] tracking-tighter mb-6 drop-shadow-xl">
-                        CONECTANDO EL <br/>
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-400">PULSO</span> DE NUESTRA <br/>
-                        COMUNIDAD
-                    </h1>
-                    {isEditing ? (
-                        <div className="w-full max-w-xl space-y-2">
-                            <label className="text-[10px] uppercase font-black tracking-widest text-orange-500">Subtítulo de Portada</label>
-                            <textarea
-                                value={editForm.heroSubtitle}
-                                onChange={(e) => setEditForm({ ...editForm, heroSubtitle: e.target.value })}
-                                className="w-full bg-black/70 backdrop-blur-xl border border-orange-500/40 rounded-2xl p-4 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 outline-none transition-all duration-300 resize-y min-h-[100px] text-base font-medium shadow-2xl"
-                            />
-                        </div>
-                    ) : (
-                        <p className="text-base md:text-xl text-slate-100 max-w-xl leading-relaxed font-semibold drop-shadow-md">
-                            {formatText(historyContent.heroSubtitle)}
-                        </p>
-                    )}
                 </div>
             </div>
 
@@ -654,15 +665,15 @@ export const History: React.FC = () => {
                 <button
                     type="button"
                     onClick={handleGoToExplore}
-                    className="group relative flex items-center gap-3 px-6 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 text-white rounded-full font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_12px_35px_rgba(249,115,22,0.45)] hover:shadow-[0_16px_45px_rgba(249,115,22,0.7)] hover:scale-105 active:scale-95 transition-all duration-300 border border-white/20 backdrop-blur-xl cursor-pointer"
+                    className="group relative flex items-center gap-2 sm:gap-3 px-5 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 text-white rounded-full font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_12px_35px_rgba(249,115,22,0.45)] hover:shadow-[0_16px_45px_rgba(249,115,22,0.7)] hover:scale-105 active:scale-95 transition-all duration-300 border border-white/20 backdrop-blur-xl cursor-pointer max-w-[calc(100vw-90px)] sm:max-w-none"
                 >
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0 group-hover:rotate-12 transition-transform">
-                        <Sparkles className="w-4 h-4 text-white fill-white/20" />
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0 group-hover:rotate-12 transition-transform">
+                        <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white fill-white/20" />
                     </div>
-                    <span className="drop-shadow-sm whitespace-nowrap font-black">
+                    <span className="drop-shadow-sm whitespace-nowrap font-black truncate">
                         ¿Cómo te sientes hoy?
                     </span>
-                    <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight className="w-3.5 h-3.5 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform shrink-0" />
                     
                     <span className="absolute inset-0 rounded-full bg-orange-500 -z-10 animate-ping opacity-25" />
                 </button>
@@ -674,11 +685,11 @@ export const History: React.FC = () => {
                 onClick={handleOpenWhatsApp}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="fixed bottom-24 right-4 sm:bottom-8 sm:right-8 z-[3000] w-14 h-14 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(37,211,102,0.4)] hover:shadow-[0_12px_35px_rgba(37,211,102,0.6)] hover:scale-110 active:scale-95 transition-all duration-300 cursor-pointer pointer-events-auto"
+                className="fixed bottom-24 right-3 sm:bottom-8 sm:right-8 z-[3000] w-12 h-12 sm:w-14 sm:h-14 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(37,211,102,0.4)] hover:shadow-[0_12px_35px_rgba(37,211,102,0.6)] hover:scale-110 active:scale-95 transition-all duration-300 cursor-pointer pointer-events-auto"
                 title="Contactar al Administrador por WhatsApp"
                 aria-label="Contactar al Administrador por WhatsApp"
             >
-                <svg viewBox="0 0 24 24" className="w-7 h-7 fill-current">
+                <svg viewBox="0 0 24 24" className="w-6 h-6 sm:w-7 sm:h-7 fill-current">
                     <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.729-1.452L0 24zm6.59-4.846c1.6.95 3.498 1.45 5.419 1.451 5.524 0 10.018-4.494 10.022-10.02.002-2.678-1.04-5.197-2.937-7.097-1.9-1.9-4.42-2.946-7.1-2.947-5.522 0-10.016 4.494-10.02 10.02-.001 1.93.504 3.818 1.465 5.424l-.993 3.626 3.715-.975zm11.583-7.73c-.322-.16-.1.21-.322-.16-.322-.16-1.9-1.397-2.193-1.503-.292-.107-.505-.16-.716.16-.21.32-.816.98-.998 1.194-.183.214-.366.24-.688.08-.323-.16-1.364-.502-2.596-1.6c-.96-.856-1.607-1.912-1.795-2.23-.188-.32-.02-.493.14-.653.146-.143.32-.373.48-.56.16-.188.213-.32.32-.533.107-.213.054-.4-.027-.56-.08-.16-.716-1.727-.98-2.368-.258-.622-.52-.538-.716-.548-.184-.01-.395-.01-.606-.01-.21 0-.553.08-.843.393-.29.313-1.107 1.082-1.107 2.64 0 1.557 1.134 3.064 1.293 3.277.16.213 2.23 3.402 5.4 4.766.753.325 1.342.52 1.802.666.756.24 1.444.207 1.987.126.607-.09 1.867-.763 2.13-1.5.264-.737.264-1.37.185-1.503-.08-.133-.293-.213-.615-.373z"/>
                 </svg>
             </a>

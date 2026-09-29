@@ -132,3 +132,25 @@ export const subscribeToAuthChanges = (callback: (user: User | null) => void) =>
         callback(user);
     });
 };
+
+export const getAuthToken = async (): Promise<string | null> => {
+    if (!auth.currentUser) return null;
+    try {
+        return await auth.currentUser.getIdToken();
+    } catch (e) {
+        console.error('Error fetching auth token:', e);
+        return null;
+    }
+};
+
+export const getAuthorizedHeaders = async (extraHeaders: Record<string, string> = {}): Promise<Record<string, string>> => {
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...extraHeaders
+    };
+    const token = await getAuthToken();
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+};

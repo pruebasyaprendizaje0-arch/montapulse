@@ -24,7 +24,9 @@ import {
 import { db } from '../firebase.config';
 import { getEcuadorDate } from './dateUtils';
 import { generateSlug } from '../utils/stringUtils';
+import { isEventPublicAndActive } from '../utils/timeUtils';
 import { MontanitaEvent, Business, UserProfile, ChatRoom, ChatMessage, ProfileReview, PulseNotification, Announcement, SubscriptionPlan, Lead, Transaction } from '../types';
+import { getAuthorizedHeaders } from './authService';
 
 // Helper to sanitize data for Firestore
 const sanitizeData = (data: any): any => {
@@ -172,8 +174,27 @@ export const addProfileReview = async (review: ProfileReview) => {
 
 // ==================== EVENTS ====================
 
+export const isEventPublic = (event: MontanitaEvent): boolean => {
+    return isEventPublicAndActive(event);
+};
+
 export const createEvent = async (event: Omit<MontanitaEvent, 'id'>, userPlan?: SubscriptionPlan, hasBusiness?: boolean) => {
     try {
+        if (!event.title || typeof event.title !== 'string' || event.title.trim().length === 0 || event.title.length > 120) {
+            throw new Error('El título del evento es obligatorio y debe tener máximo 120 caracteres.');
+        }
+        if (!event.startAt) {
+            throw new Error('La fecha y hora de inicio es obligatoria.');
+        }
+        const startDate = event.startAt instanceof Date ? event.startAt : new Date(event.startAt);
+        const endDate = event.endAt ? (event.endAt instanceof Date ? event.endAt : new Date(event.endAt)) : new Date(startDate.getTime() + 4 * 60 * 60 * 1000);
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            throw new Error('Fechas de evento no válidas.');
+        }
+        if (endDate.getTime() < startDate.getTime()) {
+            throw new Error('La fecha de fin no puede ser anterior a la de inicio.');
+        }
+
         // Validate plan for event creation (client-side + server-side via rules)
         if (!hasBusiness) {
             const validPlans = [SubscriptionPlan.PRO, SubscriptionPlan.ELITE, SubscriptionPlan.EXPERT];
@@ -183,14 +204,15 @@ export const createEvent = async (event: Omit<MontanitaEvent, 'id'>, userPlan?: 
         }
 
         const eventsRef = collection(db, 'events');
-        
         const slug = generateLocalSlug(event.title, event.locality) + '-' + Date.now().toString().slice(-4);
-        
+        const validStatus = event.status || 'published';
+
         const docRef = await addDoc(eventsRef, {
             ...sanitizeData(event),
+            status: validStatus,
             slug,
-            startAt: Timestamp.fromDate(event.startAt),
-            endAt: Timestamp.fromDate(event.endAt),
+            startAt: Timestamp.fromDate(startDate),
+            endAt: Timestamp.fromDate(endDate),
             createdAt: serverTimestamp()
         });
         return docRef.id;
@@ -208,11 +230,28 @@ export const updateEvent = async (id: string, data: Partial<MontanitaEvent>) => 
         const eventRef = doc(db, 'events', id);
         const updateData: any = { ...data };
 
+        // Prevent client from mutating ownerId or metric counters directly
+        delete updateData.ownerId;
+        delete updateData.viewCount;
+        delete updateData.clickCount;
+        delete updateData.monthlyViews;
+        delete updateData.weeklyClicks;
+
+        if (data.title !== undefined) {
+            if (!data.title || typeof data.title !== 'string' || data.title.trim().length === 0 || data.title.length > 120) {
+                throw new Error('Título de evento no válido.');
+            }
+        }
+
         if (data.startAt) {
-            updateData.startAt = Timestamp.fromDate(data.startAt);
+            const sDate = data.startAt instanceof Date ? data.startAt : new Date(data.startAt);
+            if (isNaN(sDate.getTime())) throw new Error('Fecha de inicio no válida.');
+            updateData.startAt = Timestamp.fromDate(sDate);
         }
         if (data.endAt) {
-            updateData.endAt = Timestamp.fromDate(data.endAt);
+            const eDate = data.endAt instanceof Date ? data.endAt : new Date(data.endAt);
+            if (isNaN(eDate.getTime())) throw new Error('Fecha de fin no válida.');
+            updateData.endAt = Timestamp.fromDate(eDate);
         }
 
         await updateDoc(eventRef, {
@@ -280,12 +319,15 @@ export const getEvents = async (): Promise<MontanitaEvent[]> => {
     try {
         const eventsRef = collection(db, 'events');
         const snapshot = await getDocs(eventsRef);
-        return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            startAt: doc.data().startAt?.toDate() || getEcuadorDate(),
-            endAt: doc.data().endAt?.toDate() || getEcuadorDate()
-        })) as MontanitaEvent[];
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                startAt: data.startAt?.toDate ? data.startAt.toDate() : (data.startAt || null),
+                endAt: data.endAt?.toDate ? data.endAt.toDate() : (data.endAt || null)
+            };
+        }) as MontanitaEvent[];
     } catch (error) {
         console.error('Error getting events:', error);
         return [];
@@ -332,12 +374,15 @@ export const subscribeToEvents = (callback: (events: MontanitaEvent[]) => void) 
         limit(150) // Tope de seguridad: máx 150 eventos activos
     );
     return safeOnSnapshot(q, (snapshot) => {
-        const events = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            startAt: doc.data().startAt?.toDate() || getEcuadorDate(),
-            endAt: doc.data().endAt?.toDate() || getEcuadorDate()
-        })) as MontanitaEvent[];
+        const events = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                startAt: data.startAt?.toDate ? data.startAt.toDate() : (data.startAt || null),
+                endAt: data.endAt?.toDate ? data.endAt.toDate() : (data.endAt || null)
+            };
+        }) as MontanitaEvent[];
         callback(events);
     }, 'subscribeToEvents');
 };
@@ -679,25 +724,69 @@ export const subscribeToTransactions = (callback: (transactions: Transaction[]) 
 
 // ==================== POINTS & PASS ====================
 
-export const addPoints = async (userId: string, amount: number) => {
-    const userRef = doc(db, 'users_v2', userId);
-    await updateDoc(userRef, {
-        points: increment(amount)
-    });
+export const addPoints = async (userId: string, amount: number, reason?: string) => {
+    try {
+        const headers = await getAuthorizedHeaders();
+        const response = await fetch('/api/admin/points', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                targetUserId: userId,
+                amount,
+                reason: reason || 'Ajuste de puntos'
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Error al actualizar puntos');
+        }
+    } catch (error) {
+        console.error('Error adding points:', error);
+        throw error;
+    }
 };
 
-export const redeemPoints = async (userId: string, amount: number) => {
-    const userRef = doc(db, 'users_v2', userId);
-    await updateDoc(userRef, {
-        points: increment(-amount)
-    });
+export const redeemPoints = async (userId: string, amount: number, reason?: string) => {
+    try {
+        const headers = await getAuthorizedHeaders();
+        const response = await fetch('/api/admin/points', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                targetUserId: userId,
+                amount: -Math.abs(amount),
+                reason: reason || 'Redención de puntos'
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Error al redimir puntos');
+        }
+    } catch (error) {
+        console.error('Error redeeming points:', error);
+        throw error;
+    }
 };
 
 export const togglePulsePass = async (userId: string, active: boolean) => {
-    const userRef = doc(db, 'users_v2', userId);
-    await updateDoc(userRef, {
-        pulsePassActive: active
-    });
+    try {
+        const headers = await getAuthorizedHeaders();
+        const response = await fetch('/api/pulse-pass/toggle', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                targetUserId: userId,
+                active
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Error al actualizar Pulse Pass');
+        }
+    } catch (error) {
+        console.error('Error toggling Pulse Pass:', error);
+        throw error;
+    }
 };
 
 // ==================== FOLLOWS ====================
@@ -803,41 +892,20 @@ export const subscribeToUserFavorites = (userId: string, callback: (eventIds: st
 
 // ==================== RSVPS ====================
 
-export const toggleRSVP = async (userId: string, eventId: string) => {
+export const toggleRSVP = async (_userId: string, eventId: string): Promise<boolean> => {
     try {
-        const rsvpsRef = collection(db, 'rsvps');
-        const q = query(rsvpsRef, where('userId', '==', userId), where('eventId', '==', eventId));
-        const snapshot = await getDocs(q);
-
-        const eventRef = doc(db, 'events', eventId);
-
-        // Usamos una transacción para asegurar que el rsvp y el conteo sean atómicos
-        return await runTransaction(db, async (transaction) => {
-            const eventSnap = await transaction.get(eventRef);
-            let currentCount = 0;
-            if (eventSnap.exists()) {
-                currentCount = eventSnap.data().interestedCount || 0;
-            }
-
-            if (!snapshot.empty) {
-                transaction.delete(snapshot.docs[0].ref);
-                transaction.update(eventRef, {
-                    interestedCount: Math.max(0, currentCount - 1)
-                });
-                return false;
-            } else {
-                const newRsvpRef = doc(collection(db, 'rsvps'));
-                transaction.set(newRsvpRef, {
-                    userId,
-                    eventId,
-                    createdAt: serverTimestamp()
-                });
-                transaction.update(eventRef, {
-                    interestedCount: currentCount + 1
-                });
-                return true;
-            }
+        const headers = await getAuthorizedHeaders();
+        const response = await fetch(`/api/events/${eventId}/rsvp`, {
+            method: 'POST',
+            headers
         });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || `Error al procesar RSVP (${response.status})`);
+        }
+
+        return Boolean(data.rsvp);
     } catch (error) {
         console.error('Error toggling RSVP:', error);
         throw error;
@@ -991,7 +1059,20 @@ export const createPost = async (post: any, isAuthenticated: boolean = false) =>
     }
 };
 
-export const toggleLikePost = async (postId: string, userId: string, isLiked: boolean, authorId: string) => {
+async function awardCommunityPoints(action: 'like_post' | 'comment_post', targetId: string) {
+    try {
+        const headers = await getAuthorizedHeaders();
+        await fetch('/api/points/award', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ action, targetId })
+        });
+    } catch (e) {
+        console.warn('Error awarding community points:', e);
+    }
+}
+
+export const toggleLikePost = async (postId: string, userId: string, isLiked: boolean, _authorId?: string) => {
     const postRef = doc(db, 'posts', postId);
     try {
         if (isLiked) {
@@ -1004,10 +1085,8 @@ export const toggleLikePost = async (postId: string, userId: string, isLiked: bo
                 likes: arrayUnion(userId),
                 likesCount: increment(1)
             });
-            // Award 2 points to the author for each like received
-            if (authorId) {
-                await addPoints(authorId, 2);
-            }
+            // Award 2 points to the author securely in server
+            awardCommunityPoints('like_post', postId);
         }
     } catch (error) {
         console.error('Error toggling like:', error);
@@ -1022,14 +1101,12 @@ export const addCommentToPost = async (postId: string, comment: any) => {
             comments: arrayUnion({
                 ...comment,
                 id: Math.random().toString(36).substr(2, 9),
-                timestamp: getEcuadorDate().toISOString() // Using string for nested timestamp to avoid Firestore nesting issues sometimes
+                timestamp: getEcuadorDate().toISOString()
             }),
             commentsCount: increment(1)
         });
-        // Award points for commenting
-        if (comment.authorId) {
-            await addPoints(comment.authorId, 2);
-        }
+        // Award points for commenting securely in server
+        awardCommunityPoints('comment_post', postId);
     } catch (error) {
         console.error('Error adding comment:', error);
         throw error;
@@ -1625,29 +1702,22 @@ export const deleteAnnouncement = async (announcementId: string, roomMessages?: 
     }
 };
 
-// ==================== BOOSTS ====================
-
-export const purchaseBoost = async (businessId: string, userId: string, points: number, durationHours: number = 24) => {
+export const purchaseBoost = async (businessId: string, _userId?: string, _points: number = 300, durationHours: number = 24) => {
     try {
-        // 1. Deduct points from user
-        const userRef = doc(db, 'users_v2', userId);
-        await updateDoc(userRef, {
-            points: increment(-points)
+        const headers = await getAuthorizedHeaders();
+        const response = await fetch('/api/points/boost', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                businessId,
+                durationHours
+            })
         });
 
-        // 2. Create boost document
-        const boostsRef = collection(db, 'boosts');
-        const expiresAt = getEcuadorDate();
-        expiresAt.setHours(expiresAt.getHours() + durationHours);
-
-        await addDoc(boostsRef, {
-            businessId,
-            userId,
-            type: 'community_boost',
-            createdAt: serverTimestamp(),
-            expiresAt: Timestamp.fromDate(expiresAt),
-            status: 'active'
-        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Error al procesar el boost');
+        }
 
         return true;
     } catch (error) {

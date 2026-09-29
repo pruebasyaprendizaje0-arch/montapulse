@@ -7,7 +7,7 @@ import {
 import { useData } from '../../../context/DataContext';
 import { useToast } from '../../../context/ToastContext';
 import { SubscriptionPlan, UserProfile } from '../../../types';
-import { updateUser, createNotification, togglePulsePass, updateBusiness } from '../../../services/firestoreService';
+import { updateUser, createNotification, togglePulsePass, updateBusiness, addPoints } from '../../../services/firestoreService';
 
 interface UsersPanelProps {
     stats: {
@@ -102,11 +102,16 @@ export const UsersPanel: React.FC<UsersPanelProps> = ({ stats }) => {
     };
 
     const handleAddPoints = async (userId: string, currentPoints: number) => {
-        const amount = window.prompt("¿Cuántos puntos deseas añadir/quitar? (Usa - para quitar)", "50");
-        if (amount && !isNaN(parseInt(amount))) {
-            const newPoints = Math.max(0, (currentPoints || 0) + parseInt(amount));
-            await updateUser(userId, { points: newPoints });
-            showToast(`Puntos actualizados a ${newPoints}`, "success");
+        const amountStr = window.prompt("¿Cuántos puntos deseas añadir/quitar? (Usa - para quitar)", "50");
+        if (amountStr && !isNaN(parseInt(amountStr))) {
+            const amount = parseInt(amountStr);
+            try {
+                await addPoints(userId, amount, "Ajuste manual desde panel de administración");
+                const newPoints = Math.max(0, (currentPoints || 0) + amount);
+                showToast(`Puntos actualizados a ${newPoints}`, "success");
+            } catch (error: any) {
+                showToast(error.message || "Error al actualizar puntos", "error");
+            }
         }
     };
 

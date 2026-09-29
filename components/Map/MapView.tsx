@@ -1,10 +1,12 @@
-import React, { useEffect, useRef, useState, useMemo, memo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, memo, useCallback } from 'react';
 import L from 'leaflet';
-import { Navigation, Layers, Plus, Minus, X, CheckCircle, MapPin, Zap, Flame, Info, Crosshair, Compass, Store } from 'lucide-react';
+import { Navigation, Layers, Plus, Minus, X, CheckCircle, MapPin, Zap, Info, Crosshair, Compass, Store, Sparkles, ChevronRight, ExternalLink, Calendar, ShieldCheck } from 'lucide-react';
 import { Business, Sector, MontanitaEvent, SubscriptionPlan, BusinessCategory, CommunityPost, AppSettings, MapEntryType } from '../../types';
 import { SECTOR_INFO, LOCALITIES, MAP_ICONS } from '../../constants';
 import { useToast } from '../../context/ToastContext';
 import { useTranslation } from 'react-i18next';
+import { escapeHtml } from '../../utils/stringUtils';
+import { isBusinessOpen, isEventPublicAndActive } from '../../utils/timeUtils';
 
 interface MapViewProps {
   onBusinessSelect: (business: Business) => void;
@@ -44,7 +46,7 @@ interface MapViewProps {
   onMoveBusinessComplete?: () => void;
   onStartMoveBusiness?: () => void;
   customLocalities?: { name: string; coords: [number, number]; zoom: number }[];
-  activeTab: 'events' | 'directory' | 'landmarks';
+  activeTab?: 'events' | 'directory' | 'landmarks' | null;
   onAddLocality?: (name: string, coords: [number, number], hasBeach: boolean) => void;
   focusedBusinessId?: string | null;
   directionsFrom?: [number, number] | null;
@@ -67,14 +69,13 @@ const CATEGORY_COLORS: Record<string, { bg: string; border: string; shadow: stri
 };
 
 const REFERENCE_STYLE = { bg: 'linear-gradient(135deg, #0ea5e9, #0284c7)', border: '#38bdf8', shadow: '0 0 15px rgba(56, 189, 248, 0.5)' };
-const BUSINESS_STYLE = { bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', border: '#a78bfa', shadow: '0 0 15px rgba(167, 139, 250, 0.4)' };
 const SECTOR_STYLE = { bg: 'linear-gradient(135deg, #10b981, #059669)', border: '#34d399', shadow: '0 0 15px rgba(52, 211, 153, 0.5)' };
 
 const CATEGORY_ICONS: Record<string, string> = {
   palmtree: '🏖️',
   music: '🍹',
   waves: '🏄',
-  food: '🍕',
+  food: '🍱',
   hotel: '🏨',
   leaf: '🌿',
   mountain: '⛰️',
@@ -103,6 +104,23 @@ const CATEGORY_ICONS: Record<string, string> = {
   location: '📍',
   compass: '🧭',
 };
+
+// Internal representation of map items for clustering
+interface MapClusterItem {
+  id: string;
+  type: 'business' | 'event' | 'reference' | 'sector';
+  lat: number;
+  lng: number;
+  title: string;
+  category: string;
+  iconKey: string;
+  isVerified: boolean;
+  isPremium: boolean;
+  isEvent: boolean;
+  isReference: boolean;
+  isSector: boolean;
+  rawItem: Business | MontanitaEvent;
+}
 
 export const MapView: React.FC<MapViewProps> = memo(({
   onBusinessSelect,
@@ -143,7 +161,7 @@ export const MapView: React.FC<MapViewProps> = memo(({
   onStartMoveBusiness,
   customLocalities = [],
   onAddLocality,
-activeTab,
+  activeTab,
   focusedBusinessId,
   focusCoords,
   directionsFrom,
@@ -158,48 +176,62 @@ activeTab,
   const heatmapLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const userLocationMarkerRef = useRef<L.Marker | null>(null);
+  const focusMarkerRef = useRef<L.Marker | null>(null);
 
-  const [mapMode, setMapMode] = useState<'dark' | 'satellite'>('satellite');
+  const [mapMode, setMapMode] = useState<'street' | 'satellite'>('satellite');
   const [editingSector, setEditingSector] = useState<Sector | null>(null);
   const [tempCoords, setTempCoords] = useState<[number, number][]>([]);
-  const [mousePos, setMousePos] = useState<[number, number] | null>(null);
-  const [showLandmarks, setShowLandmarks] = useState(true);
-  const [showBusinesses, setShowBusinesses] = useState(true);
-  const [showEvents, setShowEvents] = useState(false);
+  
+  // Phase 3 Layer Controls:
+  // Negocios: active by default
+  // Eventos: active by default ONLY if public events exist
+  // Referencias: inactive by default
+  // Sectores: inactive by default
+  const [showBusinesses, setShowBusinesses] = useState<boolean>(true);
+  const [showEvents, setShowEvents] = useState<boolean>(events.length > 0);
+  const [showLandmarks, setShowLandmarks] = useState<boolean>(false);
+  const [showSectors, setShowSectors] = useState<boolean>(false);
+
+  // Selected item modal/card for mobile-first detail view
+  const [selectedItem, setSelectedItem] = useState<MapClusterItem | null>(null);
+  // Cluster modal if multiple items share coordinates or at max zoom
+  const [clusterItemsModal, setClusterItemsModal] = useState<MapClusterItem[] | null>(null);
+
   const [isAddingPoint, setIsAddingPoint] = useState(false);
   const [addingPointType, setAddingPointType] = useState<'business' | 'reference'>('business');
-  const previewPolylineRef = useRef<L.Polyline | null>(null);
 
-  const currentTileModeRef = useRef<'dark' | 'satellite' | 'google' | null>(null);
+  const currentTileModeRef = useRef<'street' | 'satellite' | null>(null);
   const currentZoomRef = useRef<number>(15);
-  // Stable refs for callbacks so they never trigger the big effect
   const onBusinessSelectRef = useRef(onBusinessSelect);
   const onUpdateBusinessRef = useRef(onUpdateBusiness);
   const prevMapCenterRef = useRef<[number, number] | null | undefined>(undefined);
+
   useEffect(() => { onBusinessSelectRef.current = onBusinessSelect; });
   useEffect(() => { onUpdateBusinessRef.current = onUpdateBusiness; });
 
-  const updateTiles = (map: L.Map, mode: 'dark' | 'satellite' | 'google', zoom?: number) => {
-    const currentZoom = zoom ?? currentZoomRef.current;
-    
-    // Check if the current layer is actually on the map
+  // Update default showEvents if events prop changes and user hasn't toggled yet
+  useEffect(() => {
+    if (events.length > 0 && !showEvents) {
+      setShowEvents(true);
+    }
+  }, [events.length]);
+
+  const getTileUrl = (mode: 'street' | 'satellite') => {
+    if (mode === 'satellite') {
+      return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+    }
+    return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  };
+
+  const updateTiles = (map: L.Map, mode: 'street' | 'satellite') => {
     const layerExists = tileLayerRef.current && map.hasLayer(tileLayerRef.current);
     
-    // Skip if already on this mode AND the layer is still there AND it's visible
     if (currentTileModeRef.current === mode && layerExists) {
       if (tileLayerRef.current) tileLayerRef.current.setOpacity(1);
       return;
     }
 
-    let url: string;
-    if (mode === 'dark') {
-      url = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
-    } else if (mode === 'google') {
-      url = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
-    } else {
-      // Google Satellite tiles (pure satellite without labels/clutter) - fast on mobile
-      url = 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
-    }
+    const url = getTileUrl(mode);
 
     if (tileLayerRef.current) {
       map.removeLayer(tileLayerRef.current);
@@ -207,38 +239,33 @@ activeTab,
     }
 
     tileLayerRef.current = L.tileLayer(url, { 
-      maxZoom: 20,
-      attribution: mode === 'dark' ? '&copy; CartoDB' : mode === 'google' ? '&copy; Google' : '&copy; Esri',
+      maxZoom: 19,
+      attribution: mode === 'satellite' ? '&copy; Esri World Imagery' : '&copy; OpenStreetMap contributors',
       noWrap: false,
       keepBuffer: 8,
       crossOrigin: 'anonymous'
     }).addTo(map);
 
-    // Force visibility and order
     tileLayerRef.current.setOpacity(1);
     tileLayerRef.current.bringToBack();
-    
     currentTileModeRef.current = mode;
-    
-    // Update background color based on map mode
-    const bgColor = mode === 'google' ? '#ffffff' : '#020617';
+
+    const bgColor = mode === 'street' ? '#f8fafc' : '#020617';
     const styleEl = document.getElementById('map-bg-style');
     if (styleEl) {
       styleEl.innerHTML = `.leaflet-container { background: ${bgColor} !important; outline: none !important; }`;
     }
-    
-    // Staggered invalidation to ensure layout is captured
+
     [50, 200].forEach(delay => setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize(); }, delay));
   };
 
   const handleZoomChange = (map: L.Map) => {
     const zoom = map.getZoom();
     currentZoomRef.current = zoom;
-    
-    if (zoom >= 18 && currentTileModeRef.current !== 'google') {
-      updateTiles(map, 'google', zoom);
-    } else if (zoom < 18 && zoom >= 15 && currentTileModeRef.current === 'google') {
-      updateTiles(map, mapMode, zoom);
+    if (zoom >= 18 && currentTileModeRef.current !== 'street') {
+      updateTiles(map, 'street');
+    } else if (zoom < 18 && mapMode === 'satellite' && currentTileModeRef.current !== 'satellite') {
+      updateTiles(map, 'satellite');
     }
   };
 
@@ -263,9 +290,12 @@ activeTab,
     onEditBusiness?.(business.id);
   };
 
+  // Initialize Map
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    const center: L.LatLngExpression = [-1.825, -80.753];
+    const defaultCoords = LOCALITIES.find(l => l.name === localityName)?.coords || [-1.825, -80.753];
+    const center: L.LatLngExpression = mapCenter || defaultCoords;
+
     const map = L.map(containerRef.current, {
       zoomControl: false,
       attributionControl: false,
@@ -275,7 +305,7 @@ activeTab,
       scrollWheelZoom: true,
       tap: true,
       preferCanvas: true,
-      minZoom: 12,
+      minZoom: 11,
       maxZoom: 20
     }).setView(center, 15);
 
@@ -286,22 +316,26 @@ activeTab,
 
     updateTiles(map, mapMode);
     
-    // Listen for zoom changes to switch to Google Maps at high zoom
     map.on('zoomend', () => handleZoomChange(map));
+
+    // Re-render clusters on zoom or move end
+    map.on('zoomend moveend', () => {
+      renderClusters();
+    });
     
-    // Inject global fixes for Leaflet rendering glitches
     const style = document.createElement('style');
     style.id = 'map-bg-style';
     style.innerHTML = `
       .leaflet-tile-pane { opacity: 1 !important; }
       .leaflet-layer { opacity: 1 !important; }
       .leaflet-tile { opacity: 1 !important; visibility: visible !important; }
-      .leaflet-container { background: #020617 !important; outline: none !important; }
+      .leaflet-container { background: #020617 !important; outline: none !important; font-family: inherit; }
       .leaflet-marker-icon { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+      .cluster-marker { transition: transform 0.25s ease-out; }
+      .cluster-marker:hover { transform: scale(1.15); }
     `;
     document.head.appendChild(style);
 
-    // Multiple invalidations on startup to ensure tiles load correctly
     [100, 300, 800, 1500].forEach(delay => {
       setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize({ animate: false }); }, delay);
     });
@@ -323,199 +357,205 @@ activeTab,
     if (mapRef.current) updateTiles(mapRef.current, mapMode);
   }, [mapMode]);
 
-  // 1. Data Signature for Draw calls
-  const dataSignature = useMemo(() => {
-      return [
-          businesses.length,
-          events.length,
-          posts.length,
-          selectedSector,
-          activeTab,
-          searchQuery,
-          activeFilter,
-          localityName,
-          isPanelMinimized,
-          showLandmarks,
-          showBusinesses,
-          showEvents
-      ].join('|');
-  }, [businesses, events, posts, selectedSector, activeTab, searchQuery, activeFilter, localityName, isPanelMinimized, showLandmarks, showBusinesses, showEvents]);
+  // 1. Prepare and filter raw map items
+  const validMapItems = useMemo<MapClusterItem[]>(() => {
+    const items: MapClusterItem[] = [];
+    const sq = (searchQuery || '').trim().toLowerCase();
 
-  const lastSignatureRef = useRef<string>('');
+    // Default locality coords
+    const defaultCoords = LOCALITIES.find(l => l.name === localityName)?.coords 
+      || customLocalities?.find(l => l.name === localityName)?.coords 
+      || [-1.825, -80.753];
 
-  // 2. Main Draw Effect with Signature Gate
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !markersLayerRef.current || !polygonsLayerRef.current || !heatmapLayerRef.current) return;
-    
-    // Skip if data hasn't changed meaningfully
-    if (lastSignatureRef.current === dataSignature) return;
-    lastSignatureRef.current = dataSignature;
+    // 1. Process businesses and references
+    businesses.forEach(business => {
+      if (!business || !business.name || business.isPublished === false) return;
 
-    markersLayerRef.current.clearLayers();
-    polygonsLayerRef.current.clearLayers();
-    heatmapLayerRef.current.clearLayers();
+      const isReference = business.isReference === true || business.mapType === MapEntryType.LANDMARK;
+      const isSector = business.mapType === MapEntryType.SECTOR;
+      const isVisibleCategory = activeFilter === 'All' || business.category === activeFilter;
+      const matchesSearch = !sq || business.name.toLowerCase().includes(sq) || (business.category || '').toLowerCase().includes(sq);
+      const matchesLocality = (business.locality || 'Montañita') === localityName || business.name?.toLowerCase().includes('ubicame.info');
 
+      if (!matchesSearch || !isVisibleCategory || !matchesLocality) return;
+
+      // Layer visibility filter
+      if (isReference || isSector) {
+        if (!showLandmarks) return;
+      } else {
+        if (!showBusinesses) return;
+      }
+
+      const hasActiveEvents = events.some(e => e.businessId === business.id && isEventPublicAndActive(e));
+      const isPremium = business.plan === SubscriptionPlan.EXPERT || business.plan === SubscriptionPlan.ELITE;
+      const isVerified = business.isVerified === true || isPremium;
+
+      let iconKey: string;
+      if (isSector) {
+        iconKey = 'compass';
+      } else if (isReference) {
+        iconKey = business.icon || 'location';
+      } else {
+        iconKey = business.category === BusinessCategory.RESTAURANTE ? 'food' :
+          business.category === BusinessCategory.BAR || business.category === BusinessCategory.DISCOTECA || business.category === BusinessCategory.BAR_DISCOTECA ? 'music' :
+            business.category === BusinessCategory.HOTEL || business.category === BusinessCategory.HOSTAL || business.category === BusinessCategory.HOSPAJE ? 'hotel' :
+              business.category === BusinessCategory.ESCUELA_SURF || business.category === BusinessCategory.CENTRO_SURF ? 'waves' :
+                business.category === BusinessCategory.PARQUE || business.category === BusinessCategory.PLAYA ? 'palmtree' :
+                  business.category === BusinessCategory.TOUR_OPERATOR ? 'mountain' :
+                    business.category === BusinessCategory.SHOPPING ? 'shopping' :
+                      business.category === BusinessCategory.MALECON ? 'church' :
+                        business.category === BusinessCategory.TRANSPORT || business.category === BusinessCategory.PARADA_TAXI ? 'bus' :
+                          business.icon || 'store';
+      }
+
+      const lat = business.location?.lat ?? business.coordinates?.[0] ?? defaultCoords[0];
+      const lng = business.location?.lng ?? business.coordinates?.[1] ?? defaultCoords[1];
+
+      if (isNaN(lat) || isNaN(lng)) return;
+
+      items.push({
+        id: business.id,
+        type: isSector ? 'sector' : isReference ? 'reference' : 'business',
+        lat,
+        lng,
+        title: business.name,
+        category: business.category || (isSector ? 'Sector' : 'Referencia'),
+        iconKey,
+        isVerified,
+        isPremium,
+        isEvent: hasActiveEvents,
+        isReference,
+        isSector,
+        rawItem: business
+      });
+    });
+
+    // 2. Process events
     if (showEvents) {
-      events.forEach((event) => {
-        if (!event.coordinates) return;
-        const heat = 0.5 + (Math.random() * 0.5);
-        const radius = 30 + (heat * 20);
+      events.forEach(event => {
+        if (!isEventPublicAndActive(event) || !event.coordinates) return;
+        const matchesEventSearch = !sq || event.title.toLowerCase().includes(sq);
+        const matchesEventLocality = (event.locality || 'Montañita') === localityName;
+        if (!matchesEventSearch || !matchesEventLocality) return;
 
-        L.circle([event.coordinates[0], event.coordinates[1]], {
-          radius: radius,
-          fillColor: '#f43f5e',
-          fillOpacity: 0.15 + (heat * 0.25),
-          color: 'transparent',
-          className: 'heatmap-pulse'
-        }).addTo(heatmapLayerRef.current!);
+        const [lat, lng] = event.coordinates;
+        if (isNaN(lat) || isNaN(lng)) return;
 
-        L.circle([event.coordinates[0], event.coordinates[1]], {
-          radius: 10,
-          fillColor: '#f43f5e',
-          fillOpacity: 0.8,
-          color: '#ffffff',
-          weight: 2,
-          className: 'heatmap-core'
-        }).addTo(heatmapLayerRef.current!);
+        items.push({
+          id: event.id,
+          type: 'event',
+          lat,
+          lng,
+          title: event.title,
+          category: 'Evento Hoy',
+          iconKey: event.isFlashOffer ? 'zap' : 'palmtree',
+          isVerified: true,
+          isPremium: !!event.isPremium,
+          isEvent: true,
+          isReference: false,
+          isSector: false,
+          rawItem: event
+        });
       });
     }
 
-    Object.entries(sectorPolygons).forEach(([sectorName, coords]) => {
-      const sector = sectorName as Sector;
-      const info = SECTOR_INFO[sector] || SECTOR_INFO[Sector.CENTRO];
-      if (editingSector === sector) {
-        L.polygon((tempCoords.length > 0 ? tempCoords : coords) as L.LatLngExpression[], {
-          color: info.color,
-          fillColor: info.color,
-          fillOpacity: 0.4,
-          weight: 4,
-          dashArray: '10, 10'
-        }).addTo(polygonsLayerRef.current!);
+    return items;
+  }, [businesses, events, activeFilter, searchQuery, localityName, customLocalities, showBusinesses, showEvents, showLandmarks]);
+
+  // 2. Clustering & Marker Drawing Function
+  const renderClusters = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !markersLayerRef.current) return;
+
+    markersLayerRef.current.clearLayers();
+
+    if (validMapItems.length === 0) return;
+
+    const zoom = map.getZoom();
+    const clusterRadiusPx = zoom < 14 ? 65 : zoom < 16 ? 50 : 38;
+
+    // Cluster items by pixel distance
+    const clusters: { centerLat: number; centerLng: number; items: MapClusterItem[] }[] = [];
+
+    validMapItems.forEach(item => {
+      const point = map.latLngToLayerPoint([item.lat, item.lng]);
+      let foundCluster = false;
+
+      for (const cluster of clusters) {
+        const clusterPoint = map.latLngToLayerPoint([cluster.centerLat, cluster.centerLng]);
+        const dist = Math.hypot(point.x - clusterPoint.x, point.y - clusterPoint.y);
+
+        if (dist <= clusterRadiusPx) {
+          cluster.items.push(item);
+          // Recalculate centroid
+          const totalLat = cluster.items.reduce((sum, i) => sum + i.lat, 0);
+          const totalLng = cluster.items.reduce((sum, i) => sum + i.lng, 0);
+          cluster.centerLat = totalLat / cluster.items.length;
+          cluster.centerLng = totalLng / cluster.items.length;
+          foundCluster = true;
+          break;
+        }
+      }
+
+      if (!foundCluster) {
+        clusters.push({
+          centerLat: item.lat,
+          centerLng: item.lng,
+          items: [item]
+        });
       }
     });
 
-    businesses.forEach((business) => {
-      const sq = searchQuery || '';
-      const isVisible = activeFilter === 'All' || business.category === activeFilter;
-      const matchesSearch = !sq || (business.name ?? '').toLowerCase().includes(sq.toLowerCase());
-      
-      const isReference = business.isReference === true || business.mapType === MapEntryType.LANDMARK;
-      const isSector = business.mapType === MapEntryType.SECTOR;
-      const hasActiveEvents = events.some(e => e.businessId === business.id);
-      
-      let tabMatch = false;
-      if (activeTab === 'events') {
-        tabMatch = hasActiveEvents;
-      } else if (activeTab === 'directory') {
-        tabMatch = !isReference && !isSector;
-      } else if (activeTab === 'landmarks') {
-        tabMatch = isReference || isSector;
-      }
+    // Draw single markers and cluster markers
+    clusters.forEach(cluster => {
+      if (cluster.items.length === 1) {
+        // --- Single Marker ---
+        const item = cluster.items[0];
+        const isEvent = item.isEvent;
+        const isPremium = item.isPremium;
+        const isSector = item.isSector;
+        const isReference = item.isReference;
 
-      const matchesLocality = (business.locality || 'Montañita') === localityName || business.name?.toLowerCase().includes('ubicame.info');
-      
-      let isActuallyVisible = false;
+        const categoryStyle = CATEGORY_COLORS[item.iconKey] || CATEGORY_COLORS.default;
+        const markerBg = isSector ? SECTOR_STYLE.bg : isReference ? REFERENCE_STYLE.bg : isPremium ? 'linear-gradient(135deg, #b45309, #d97706)' : categoryStyle.bg;
+        const borderColor = isSector ? SECTOR_STYLE.border : isReference ? REFERENCE_STYLE.border : isPremium ? '#fbbf24' : isEvent ? '#f97316' : categoryStyle.border;
+        const markerShadow = isEvent ? 'box-shadow: 0 0 20px rgba(249, 115, 22, 0.8)' : isPremium ? 'box-shadow: 0 0 15px rgba(251, 191, 36, 0.5)' : `box-shadow: ${categoryStyle.shadow}`;
+        const iconSvg = CATEGORY_ICONS[item.iconKey] || '📍';
 
-      // Only evaluate if it matches the general filters (search, category, locality)
-      if (matchesSearch && isVisible && matchesLocality) {
-        // Additive visibility based on the three independent toggles
-        if (showEvents && hasActiveEvents) {
-          isActuallyVisible = true;
-        }
-        if (showLandmarks && (isReference || isSector)) {
-          isActuallyVisible = true;
-        }
-        if (showBusinesses && !isReference && !isSector) {
-          isActuallyVisible = true;
-        }
-      }
-
-      if (isActuallyVisible) {
-        const isPremium = business.plan === SubscriptionPlan.EXPERT;
-
-        let iconKey: string;
-        let markerBg: string;
-        let borderColor: string;
-        let markerShadow: string;
-
-        if (isSector) {
-          iconKey = 'compass';
-          markerBg = SECTOR_STYLE.bg;
-          borderColor = SECTOR_STYLE.border;
-          markerShadow = SECTOR_STYLE.shadow;
-        } else if (isReference) {
-          iconKey = business.icon || 'location';
-          markerBg = REFERENCE_STYLE.bg;
-          borderColor = REFERENCE_STYLE.border;
-          markerShadow = REFERENCE_STYLE.shadow;
-        } else {
-          iconKey = business.category === BusinessCategory.RESTAURANTE ? 'food' :
-            business.category === BusinessCategory.BAR || business.category === BusinessCategory.DISCOTECA || business.category === BusinessCategory.BAR_DISCOTECA ? 'music' :
-              business.category === BusinessCategory.HOTEL || business.category === BusinessCategory.HOSTAL || business.category === BusinessCategory.HOSPAJE ? 'hotel' :
-                business.category === BusinessCategory.ESCUELA_SURF || business.category === BusinessCategory.CENTRO_SURF ? 'waves' :
-                  business.category === BusinessCategory.PARQUE || business.category === BusinessCategory.PLAYA ? 'palmtree' :
-                    business.category === BusinessCategory.TOUR_OPERATOR ? 'mountain' :
-                      business.category === BusinessCategory.SHOPPING ? 'shopping' :
-                        business.category === BusinessCategory.MALECON ? 'church' :
-                          business.category === BusinessCategory.TRANSPORT || business.category === BusinessCategory.PARADA_TAXI ? 'bus' :
-                            business.icon || 'palmtree';
-
-          const categoryStyle = CATEGORY_COLORS[iconKey] || CATEGORY_COLORS.default;
-          markerBg = isPremium ? 'linear-gradient(135deg, #b45309, #d97706)' : categoryStyle.bg;
-          borderColor = isPremium ? '#fbbf24' : categoryStyle.border;
-          markerShadow = isPremium ? 'box-shadow: 0 0 20px rgba(251, 191, 36, 0.4)' : `box-shadow: ${categoryStyle.shadow}`;
-        }
-
-        const svg = CATEGORY_ICONS[iconKey] || CATEGORY_ICONS.palmtree;
+        const sanitizedTitle = escapeHtml(item.title);
 
         const customIcon = L.divIcon({
           html: `
-            <div class="relative group flex flex-col items-center">
-              <div class="absolute inset-x-0 bottom-0 h-2 bg-black/30 blur-md rounded-full transform translate-y-2 scale-75"></div>
-              ${showEvents && hasActiveEvents ? `
-                <div class="absolute inset-0 bg-orange-500 rounded-full blur-[20px] animate-pulse opacity-80 translate-y-2"></div>
-                <div class="absolute inset-0 bg-red-500 rounded-full blur-[15px] animate-ping opacity-50 translate-y-2"></div>
+            <div class="relative group flex flex-col items-center cursor-pointer" role="button" aria-label="${sanitizedTitle}">
+              <div class="absolute inset-x-0 bottom-0 h-2 bg-black/40 blur-sm rounded-full transform translate-y-1 scale-75"></div>
+              ${isEvent ? `
+                <div class="absolute inset-0 bg-orange-500 rounded-2xl blur-[14px] animate-pulse opacity-90"></div>
+                <div class="absolute inset-0 bg-red-500 rounded-2xl blur-[18px] animate-ping opacity-40"></div>
               ` : ''}
-              <div class="relative w-10 h-10 bg-slate-900 border-2 rounded-2xl flex items-center justify-center text-white shadow-2xl transition-all duration-300 group-hover:scale-110 group-hover:-translate-y-1" style="border-color: ${showEvents && hasActiveEvents ? '#f97316' : borderColor}; ${showEvents && hasActiveEvents ? 'box-shadow: 0 0 25px rgba(249, 115, 22, 0.8)' : markerShadow}">
-                ${svg}
+              <div class="relative w-10 h-10 bg-slate-900 border-2 rounded-2xl flex items-center justify-center text-white shadow-xl transition-all duration-300 group-hover:scale-110 group-hover:-translate-y-1" style="border-color: ${borderColor}; ${markerShadow}">
+                <span class="text-base leading-none select-none">${iconSvg}</span>
               </div>
-              
-              <div class="mt-1.5 px-2 py-0.5 bg-slate-900/90 backdrop-blur-md border border-white/10 rounded-lg shadow-xl pointer-events-none transition-all duration-300 group-hover:bg-slate-800 group-hover:border-white/20 group-hover:scale-105">
-                <span class="text-[9px] font-black text-white uppercase tracking-tighter whitespace-nowrap block max-w-[80px] overflow-hidden text-ellipsis">${business.name}</span>
-                ${isSector ? '<span class="block text-[7px] text-emerald-400 font-bold">SECTOR</span>' : isReference ? '<span class="block text-[7px] text-cyan-400 font-bold">REF</span>' : ''}
-              </div>
-
-              ${isPremium && !isReference ? `
-                <div class="absolute -top-2 -left-2 w-5 h-5 bg-amber-500 rounded-full border-2 border-slate-900 flex items-center justify-center z-10 shadow-lg animate-bounce duration-[3s]">
+              ${item.isVerified && !isReference ? `
+                <div class="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-500 rounded-full border border-slate-900 flex items-center justify-center shadow-md">
                   <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
                 </div>
               ` : ''}
-              ${posts.some(p => p.authorId === business.id || p.content.includes(business.name)) && !isReference ? `
-                <div class="absolute -top-2 -right-2 w-4 h-4 bg-sky-500 rounded-full border-2 border-slate-900 animate-pulse flex items-center justify-center">
-                  <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+              ${isEvent ? `
+                <div class="absolute -top-2 -left-2 px-1 py-0.2 bg-gradient-to-r from-orange-500 to-red-500 text-[8px] font-black text-white rounded-full border border-white shadow-lg animate-bounce">
+                  HOY
                 </div>
               ` : ''}
             </div>
           `,
-          className: 'custom-marker',
-          iconSize: [40, 60],
-          iconAnchor: [20, 20],
+          className: 'single-custom-marker',
+          iconSize: [40, 44],
+          iconAnchor: [20, 22],
         });
 
-        const isOwnBusiness = business.id === userBusinessId || business.ownerId === userId;
-        const canEdit = (isAdmin && isSuperUser) || (!isAdmin && isPremiumUser && isOwnBusiness);
-        
-        // Get coordinates - use default locality coords if missing
-        const businessLocality = business.locality || localityName || 'Montañita';
-        const defaultCoords = LOCALITIES.find(l => l.name === businessLocality)?.coords 
-          || customLocalities?.find(l => l.name === businessLocality)?.coords 
-          || [-1.825, -80.753];
-        
-        const lat = business.location?.lat ?? business.coordinates?.[0] ?? defaultCoords[0];
-        const lng = business.location?.lng ?? business.coordinates?.[1] ?? defaultCoords[1];
+        const isOwn = item.type === 'business' && (item.id === userBusinessId || (item.rawItem as Business).ownerId === userId);
+        const canEdit = (isAdmin && isSuperUser) || (!isAdmin && isPremiumUser && isOwn);
 
-        const marker = L.marker([lat, lng], {
+        const marker = L.marker([item.lat, item.lng], {
           icon: customIcon,
           draggable: canEdit,
           autoPan: true,
@@ -523,242 +563,104 @@ activeTab,
           .addTo(markersLayerRef.current!)
           .on('click', (e) => {
             L.DomEvent.stopPropagation(e as any);
-            if (isAdmin) {
-              if (isSuperUser) {
-                handleSuperAdminAction(business);
-              } else {
-                showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
-                onBusinessSelectRef.current(business);
-              }
-            } else if (isPremiumUser && isOwnBusiness) {
-              handlePremiumAction(business);
-            } else {
-              onBusinessSelectRef.current(business);
+            setSelectedItem(item);
+            if (isAdmin && isSuperUser && item.type === 'business') {
+              handleSuperAdminAction(item.rawItem as Business);
             }
           });
 
-        if (canEdit) {
+        if (canEdit && item.type === 'business') {
           marker.on('dragend', (e) => {
             const { lat, lng } = e.target.getLatLng();
-            onUpdateBusinessRef.current?.(business.id, lat, lng);
+            onUpdateBusinessRef.current?.(item.id, lat, lng);
           });
         }
-      }
-    });
+      } else {
+        // --- Cluster Marker ---
+        const count = cluster.items.length;
+        const hasEventInCluster = cluster.items.some(i => i.isEvent);
+        const hasVerifiedInCluster = cluster.items.some(i => i.isVerified);
 
-    const sq = searchQuery || '';
-
-    if (showEvents) {
-      events.forEach(event => {
-        const matchesEventSearch = !sq || event.title.toLowerCase().includes(sq.toLowerCase());
-        const matchesEventLocality = (event.locality || 'Montañita') === localityName;
-        if (!event.coordinates || !matchesEventSearch || !matchesEventLocality) return;
-        const isFlash = event.isFlashOffer;
-      const icon = L.divIcon({
-        html: `
-          <div class="relative group cursor-pointer flex flex-col items-center">
-            ${isFlash ? `
-              <div class="absolute inset-x-0 bottom-0 h-2 bg-black/30 blur-md rounded-full transform translate-y-2 scale-75"></div>
-              <div class="absolute inset-0 bg-rose-500 rounded-full blur-[15px] animate-ping opacity-60 translate-y-[-12px]"></div>
-              <div class="absolute inset-0 bg-rose-400 rounded-full blur-[25px] opacity-20 animate-pulse translate-y-[-12px]"></div>
-            ` : `
-              <div class="absolute inset-x-0 bottom-0 h-2 bg-black/30 blur-md rounded-full transform translate-y-2 scale-75"></div>
-              <div class="absolute inset-0 bg-sky-500 rounded-full blur-[12px] animate-ping opacity-40 translate-y-[-12px]"></div>
-            `}
-            <div class="relative w-12 h-12 ${isFlash ? 'bg-rose-600 shadow-rose-500/50' : 'bg-sky-600 shadow-sky-500/50'} border-2 border-white rounded-full flex items-center justify-center text-white shadow-2xl transition-all duration-300 group-hover:scale-110">
-              ${isFlash ? CATEGORY_ICONS.zap : CATEGORY_ICONS.palmtree}
-              ${isFlash ? `
-                <div class="absolute -top-3 -right-6 bg-rose-500 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-white shadow-xl rotate-12 animate-bounce">
-                  ⚡ FLASH
-                </div>
+        const clusterHtml = `
+          <div class="relative flex items-center justify-center cursor-pointer group cluster-marker" role="button" aria-label="Grupo de ${count} lugares">
+            <div class="absolute inset-0 ${hasEventInCluster ? 'bg-orange-500/80 animate-ping' : 'bg-indigo-500/50'} rounded-full blur-sm"></div>
+            <div class="relative flex items-center justify-center w-11 h-11 ${hasEventInCluster ? 'bg-gradient-to-br from-orange-500 to-amber-600 border-orange-300 shadow-orange-500/60' : 'bg-gradient-to-br from-slate-900 to-indigo-950 border-indigo-400/80 shadow-indigo-500/40'} border-2 rounded-full shadow-2xl text-white font-black text-xs tracking-tight transition-transform duration-300 group-hover:scale-110">
+              <span class="drop-shadow">${count}</span>
+              ${hasVerifiedInCluster ? `
+                <span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border border-slate-900 flex items-center justify-center text-[8px] text-slate-950 font-black">★</span>
               ` : ''}
             </div>
-
-            <div class="mt-2 px-3 py-1 ${isFlash ? 'bg-rose-600/90' : 'bg-sky-600/90'} backdrop-blur-md border border-white/20 rounded-xl shadow-2xl pointer-events-none transition-all duration-300 rotate-[-1deg] group-hover:rotate-0 group-hover:scale-105">
-              <span class="text-[10px] font-black text-white uppercase tracking-tighter whitespace-nowrap block max-w-[100px] overflow-hidden text-ellipsis">${event.title}</span>
-            </div>
           </div>
-        `,
-        className: 'event-marker',
-        iconSize: [48, 80],
-        iconAnchor: [24, 24],
-      });
+        `;
 
-        L.marker([event.coordinates[0], event.coordinates[1]], { icon })
-          .addTo(markersLayerRef.current!)
-          .on('click', () => onBusinessSelectRef.current(event as any));
-      });
-    }
-
-    if (selectedSector) {
-      const coords = sectorPolygons[selectedSector];
-      if (coords && coords.length > 0) {
-        const bounds = L.latLngBounds(coords as L.LatLngExpression[]);
-        if (bounds.isValid()) map.flyToBounds(bounds, { padding: [50, 50], duration: 1.2 });
-      }
-    } else if (mapCenter) {
-      const prev = prevMapCenterRef.current;
-      const centerChanged = !prev || prev[0] !== mapCenter[0] || prev[1] !== mapCenter[1];
-      if (centerChanged) {
-        prevMapCenterRef.current = mapCenter;
-        map.flyTo(mapCenter, 15, { duration: 1.2 });
-      }
-    }
-  }, [businesses, events, sectorPolygons, selectedSector, searchQuery, activeFilter, isAdmin, isSuperUser, editingSector, tempCoords, mapCenter, localityName, showEvents, showLandmarks, showBusinesses, posts, isEditorFocus, activeTab]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const onClick = (e: L.LeafletMouseEvent) => {
-      const { lat, lng } = e.latlng;
-      if (editingSector) {
-        setTempCoords(prev => [...prev, [lat, lng]]);
-      } else if (isAddingPoint && onAddBusiness) {
-        const isRef = addingPointType === 'reference';
-        if (isAdmin && !isSuperUser) {
-          showToast("Activa el Modo Super User en el Panel de Administración para realizar cambios.", "error");
-          setIsAddingPoint(false);
-          return;
-        }
-        if (isSuperUser || isAdmin || (isRef && isEliteUser) || (!isRef && isPremiumUser)) {
-          onAddBusiness(lat, lng, isRef);
-          setIsAddingPoint(false);
-          [100, 300, 600, 1000, 2000].forEach(delay =>
-            setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize({ animate: false }); }, delay)
-          );
-        }
-      } else if (isMovingBusiness && movingBusinessId && onUpdateBusiness) {
-        onUpdateBusiness(movingBusinessId, lat, lng);
-        onMoveBusinessComplete?.();
-      }
-    };
-    const onMouseMove = (e: L.LeafletMouseEvent) => {
-      if (editingSector) setMousePos([e.latlng.lat, e.latlng.lng]);
-    };
-    map.on('click', onClick);
-    map.on('mousemove', onMouseMove);
-    return () => {
-      map.off('click', onClick);
-      map.off('mousemove', onMouseMove);
-    };
-  }, [isAdmin, isSuperUser, isPremiumUser, isEliteUser, isAddingPoint, addingPointType, editingSector, isMovingBusiness, movingBusinessId, onAddBusiness, onUpdateBusiness, onMoveBusinessComplete]);
-
-  // Invalidate map whenever UI interaction states change
-  useEffect(() => {
-    if (!mapRef.current) return;
-    [10, 200, 500].forEach(delay => {
-      setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize({ animate: false }); }, delay);
-    });
-  }, [isAddingPoint, isMovingBusiness, editingSector]);
-
-  useEffect(() => {
-    if (!containerRef.current || !mapRef.current) return;
-    const refresh = () => { if (mapRef.current) mapRef.current.invalidateSize(); };
-    const resizeObserver = new ResizeObserver(refresh);
-    resizeObserver.observe(containerRef.current);
-    window.addEventListener('resize', refresh);
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', refresh);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!mapRef.current || !editingSector || tempCoords.length === 0 || !mousePos) {
-      if (previewPolylineRef.current) {
-        previewPolylineRef.current.remove();
-        previewPolylineRef.current = null;
-      }
-      return;
-    }
-    const map = mapRef.current;
-    const points = [tempCoords[tempCoords.length - 1], mousePos];
-    if (!previewPolylineRef.current) {
-      previewPolylineRef.current = L.polyline(points as L.LatLngExpression[], {
-        color: (SECTOR_INFO[editingSector] || SECTOR_INFO[Sector.CENTRO]).color,
-        weight: 2,
-        dashArray: '5, 10',
-        opacity: 0.8,
-        interactive: false
-      }).addTo(map);
-    } else {
-      previewPolylineRef.current.setLatLngs(points as L.LatLngExpression[]);
-    }
-  }, [mousePos, editingSector, tempCoords]);
-
-  const prevFocusedIdRef = React.useRef<string | null>(null);
-  
-  useEffect(() => {
-    if (focusedBusinessId && focusedBusinessId !== prevFocusedIdRef.current && mapRef.current) {
-      prevFocusedIdRef.current = focusedBusinessId;
-      const business = businesses.find(b => b.id === focusedBusinessId);
-      if (business?.coordinates) {
-        mapRef.current.flyTo([business.coordinates[0], business.coordinates[1]], 16, { duration: 1 });
-        onBusinessSelectRef.current(business);
-      }
-    }
-  }, [focusedBusinessId, businesses]);
-
-  const prevFocusCoordsRef = React.useRef<string>('');
-  const focusMarkerRef = React.useRef<L.Marker | null>(null);
-  
-  useEffect(() => {
-    if (focusCoords && mapRef.current) {
-      const key = `${focusCoords.coords[0]}-${focusCoords.coords[1]}-${focusCoords.zoom}`;
-      if (prevFocusCoordsRef.current !== key) {
-        prevFocusCoordsRef.current = key;
-        
-        // Remove previous focus marker
-        if (focusMarkerRef.current) {
-          focusMarkerRef.current.remove();
-          focusMarkerRef.current = null;
-        }
-        
-        // Add new focus marker
-        const pulseIcon = L.divIcon({
-          className: 'custom-div-icon',
-          html: `
-            <div style="
-              width: 50px;
-              height: 50px;
-              background: linear-gradient(135deg, #f97316, #ea580c);
-              border-radius: 50%;
-              border: 3px solid white;
-              box-shadow: 0 0 20px rgba(249, 115, 22, 0.6);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              animation: pulse 1.5s infinite;
-            ">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                <circle cx="12" cy="10" r="3"></circle>
-              </svg>
-            </div>
-            <style>
-              @keyframes pulse {
-                0% { transform: scale(1); opacity: 1; }
-                50% { transform: scale(1.1); opacity: 0.8; }
-                100% { transform: scale(1); opacity: 1; }
-              }
-            </style>
-          `,
-          iconSize: [50, 50],
-          iconAnchor: [25, 25]
+        const clusterIcon = L.divIcon({
+          html: clusterHtml,
+          className: 'leaflet-cluster-icon',
+          iconSize: [44, 44],
+          iconAnchor: [22, 22]
         });
-        
-        focusMarkerRef.current = L.marker([focusCoords.coords[0], focusCoords.coords[1]], { icon: pulseIcon }).addTo(mapRef.current);
-        
-        setTimeout(() => {
-          mapRef.current?.flyTo([focusCoords.coords[0], focusCoords.coords[1]], focusCoords.zoom, { duration: 1.2 });
-        }, 100);
+
+        L.marker([cluster.centerLat, cluster.centerLng], { icon: clusterIcon })
+          .addTo(markersLayerRef.current!)
+          .on('click', (e) => {
+            L.DomEvent.stopPropagation(e as any);
+            const currentZoom = map.getZoom();
+
+            // If markers are distinct and map can zoom in, expand bounds
+            const uniqueCoords = new Set(cluster.items.map(i => `${i.lat.toFixed(5)},${i.lng.toFixed(5)}`));
+            if (uniqueCoords.size > 1 && currentZoom < 18) {
+              const bounds = L.latLngBounds(cluster.items.map(i => [i.lat, i.lng] as [number, number]));
+              map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+            } else {
+              // At max zoom or same coordinates: open cluster list sheet
+              setClusterItemsModal(cluster.items);
+            }
+          });
       }
-    } else {
-      // Remove marker when focus is cleared
-      if (focusMarkerRef.current) {
-        focusMarkerRef.current.remove();
-        focusMarkerRef.current = null;
+    });
+  }, [validMapItems, isAdmin, isSuperUser, isPremiumUser, userBusinessId, userId]);
+
+  // Trigger render when validMapItems changes
+  useEffect(() => {
+    renderClusters();
+  }, [renderClusters]);
+
+  // Sector polygons rendering
+  useEffect(() => {
+    if (!polygonsLayerRef.current) return;
+    polygonsLayerRef.current.clearLayers();
+
+    if (showSectors) {
+      Object.entries(sectorPolygons).forEach(([sectorName, coords]) => {
+        const sector = sectorName as Sector;
+        const info = SECTOR_INFO[sector] || SECTOR_INFO[Sector.CENTRO];
+        if (coords && coords.length > 0) {
+          L.polygon(coords as L.LatLngExpression[], {
+            color: info.color || '#3b82f6',
+            fillColor: info.color || '#3b82f6',
+            fillOpacity: 0.15,
+            weight: 2,
+            dashArray: '4, 6'
+          }).addTo(polygonsLayerRef.current!);
+        }
+      });
+    }
+  }, [showSectors, sectorPolygons]);
+
+  // Center on locality or focusCoords
+  useEffect(() => {
+    if (mapRef.current && mapCenter) {
+      const prev = prevMapCenterRef.current;
+      if (!prev || prev[0] !== mapCenter[0] || prev[1] !== mapCenter[1]) {
+        prevMapCenterRef.current = mapCenter;
+        mapRef.current.flyTo(mapCenter, 15, { duration: 1.2 });
       }
+    }
+  }, [mapCenter]);
+
+  useEffect(() => {
+    if (mapRef.current && focusCoords) {
+      mapRef.current.flyTo(focusCoords.coords, focusCoords.zoom, { duration: 1.2 });
     }
   }, [focusCoords]);
 
@@ -769,7 +671,7 @@ activeTab,
     const map = mapRef.current;
     if (!map) return;
 
-    showToast("Localizando...", 'info');
+    showToast("Buscando tu ubicación...", 'info');
     map.locate({ 
       setView: true, 
       maxZoom: 16,
@@ -800,30 +702,13 @@ activeTab,
         interactive: false
       }).addTo(map);
 
-      // Add a marker class for extra styling if needed
-      if (userLocationMarkerRef.current.getElement()) {
-        userLocationMarkerRef.current.getElement()?.classList.add('user-location-marker');
-      }
-      
       showToast("Ubicación encontrada", 'success');
       map.off('locationfound', onLocationFound);
       map.off('locationerror', onLocationError);
     };
 
     const onLocationError = (e: L.ErrorEvent) => {
-      console.error('Location error:', e);
-      let msg = "No se pudo obtener tu ubicación";
-      
-      // Map common geolocation error codes to user-friendly messages
-      if (e.message.toLowerCase().includes('denied') || (e as any).code === 1) {
-        msg = "Permiso de ubicación denegado";
-      } else if (e.message.toLowerCase().includes('timeout') || (e as any).code === 3) {
-        msg = "Tiempo de espera agotado";
-      } else if ((e as any).code === 2) {
-        msg = "Posición no disponible";
-      }
-      
-      showToast(msg, 'error');
+      showToast("No se pudo obtener tu ubicación", 'error');
       map.off('locationfound', onLocationFound);
       map.off('locationerror', onLocationError);
     };
@@ -833,284 +718,238 @@ activeTab,
   };
 
   return (
-    <div className={`w-full h-full relative bg-[#020617] overflow-hidden ${isAddingPoint || isMovingBusiness ? 'cursor-crosshair' : ''}`}>
-      {/* Map Container - Independent to avoid DOM conflicts */}
+    <div className="w-full h-full relative bg-[#020617] overflow-hidden">
+      {/* Map Leaflet Container */}
       <div 
         ref={containerRef} 
         className="absolute inset-0 z-0"
+        tabIndex={0}
+        aria-label="Mapa interactivo de exploración"
       />
 
-      {/* UI Overlay */}
-      <div className="absolute inset-0 z-10 pointer-events-none">
-        
-        {/* Help Overlay */}
-        {isAddingPoint && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[2000] px-6 py-3 bg-rose-600 border border-white/20 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce pointer-events-auto">
-            <MapPin className="w-4 h-4 text-white animate-pulse" />
-            <span className="text-sm font-black text-white uppercase tracking-widest italic drop-shadow-lg">
-              {addingPointType === 'reference' ? 'Haz clic para añadir Punto de Referencia' : 'Haz clic para posicionar Negocio'}
-            </span>
-          </div>
-        )}
+      {/* Layer Controls Bar (Accessible, visible, clear labels) */}
+      <div className="absolute top-3 left-3 right-3 sm:left-auto sm:right-4 z-[1000] flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-1">
+        {/* Toggle Negocios */}
+        <button
+          onClick={() => setShowBusinesses(!showBusinesses)}
+          aria-pressed={showBusinesses}
+          aria-label="Capa de Negocios"
+          className={`min-h-[44px] px-3.5 sm:px-4 py-2 rounded-2xl font-black text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-2 border shadow-lg transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
+            showBusinesses
+              ? 'bg-indigo-600 text-white border-indigo-400 shadow-indigo-500/30'
+              : 'bg-slate-900/90 text-slate-400 border-white/10 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <Store className="w-4 h-4 shrink-0" />
+          <span className="whitespace-nowrap">Negocios</span>
+        </button>
 
-        {/* SuperUser Tools */}
-        {isSuperUser && onAddLocality && appSettings?.allowLocalityCreation && (
-          <div className="absolute top-4 right-4 z-[1001] pointer-events-auto">
+        {/* Toggle Eventos */}
+        <button
+          onClick={() => setShowEvents(!showEvents)}
+          aria-pressed={showEvents}
+          aria-label="Capa de Eventos Confirmados"
+          className={`min-h-[44px] px-3.5 sm:px-4 py-2 rounded-2xl font-black text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-2 border shadow-lg transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
+            showEvents
+              ? 'bg-rose-600 text-white border-rose-400 shadow-rose-500/30'
+              : 'bg-slate-900/90 text-slate-400 border-white/10 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <Zap className="w-4 h-4 shrink-0" />
+          <span className="whitespace-nowrap">Eventos</span>
+        </button>
+
+        {/* Toggle Referencias (Inactivo por defecto) */}
+        <button
+          onClick={() => setShowLandmarks(!showLandmarks)}
+          aria-pressed={showLandmarks}
+          aria-label="Capa de Puntos de Referencia"
+          className={`min-h-[44px] px-3.5 sm:px-4 py-2 rounded-2xl font-black text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-2 border shadow-lg transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
+            showLandmarks
+              ? 'bg-sky-600 text-white border-sky-400 shadow-sky-500/30'
+              : 'bg-slate-900/90 text-slate-400 border-white/10 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <MapPin className="w-4 h-4 shrink-0" />
+          <span className="whitespace-nowrap">Referencias</span>
+        </button>
+
+        {/* Toggle Sectores */}
+        <button
+          onClick={() => setShowSectors(!showSectors)}
+          aria-pressed={showSectors}
+          aria-label="Capa de Sectores"
+          className={`min-h-[44px] px-3.5 sm:px-4 py-2 rounded-2xl font-black text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-2 border shadow-lg transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
+            showSectors
+              ? 'bg-emerald-600 text-white border-emerald-400 shadow-emerald-500/30'
+              : 'bg-slate-900/90 text-slate-400 border-white/10 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <Compass className="w-4 h-4 shrink-0" />
+          <span className="whitespace-nowrap">Sectores</span>
+        </button>
+      </div>
+
+      {/* Action Buttons (Zoom & Locate) */}
+      <div className="absolute right-4 bottom-28 z-[1000] flex flex-col gap-2 pointer-events-auto">
+        <button 
+          onClick={zoomIn} 
+          aria-label="Acercar mapa"
+          className="min-w-[44px] min-h-[44px] w-12 h-12 rounded-2xl bg-slate-900/90 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl hover:bg-slate-800 active:scale-95 transition-all shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
+        <button 
+          onClick={zoomOut} 
+          aria-label="Alejar mapa"
+          className="min-w-[44px] min-h-[44px] w-12 h-12 rounded-2xl bg-slate-900/90 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl hover:bg-slate-800 active:scale-95 transition-all shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+        >
+          <Minus className="w-5 h-5" />
+        </button>
+        <button
+          onClick={() => setMapMode(mapMode === 'street' ? 'satellite' : 'street')}
+          aria-label="Cambiar tipo de mapa (Satélite / Calles)"
+          className="min-w-[44px] min-h-[44px] w-12 h-12 rounded-2xl bg-slate-900/90 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl hover:bg-slate-800 active:scale-95 transition-all shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 mt-2"
+        >
+          {mapMode === 'street' ? <Navigation className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
+        </button>
+        <button
+          onClick={handleLocate}
+          aria-label="Centrar en mi ubicación actual"
+          className="min-w-[44px] min-h-[44px] w-12 h-12 rounded-2xl bg-slate-900/90 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl shadow-2xl hover:bg-blue-600 active:scale-95 transition-all mt-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+        >
+          <Crosshair className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Selected Marker Floating Card (Mobile First, positioned above bottom nav) */}
+      {selectedItem && (
+        <div 
+          role="dialog"
+          aria-labelledby="marker-card-title"
+          className="fixed sm:absolute bottom-24 left-3 right-3 sm:left-4 sm:right-auto sm:w-96 z-[2000] bg-slate-900/95 backdrop-blur-2xl border border-white/15 rounded-3xl p-4 shadow-[0_15px_50px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-5 duration-200"
+        >
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="flex items-center gap-2">
+              <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider ${
+                selectedItem.type === 'event' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                selectedItem.type === 'reference' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' :
+                'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+              }`}>
+                {selectedItem.category}
+              </span>
+              {selectedItem.isVerified && (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-[9px] font-black uppercase">
+                  <ShieldCheck className="w-3 h-3" /> Verificado
+                </span>
+              )}
+            </div>
+
             <button
-              onClick={async () => {
-                const name = await showPrompt('Nombre del nuevo pueblo:', 'Nombre del pueblo');
-                if (name) {
-                  const coordsStr = await showPrompt('Coordenadas (lat, lng):', '-1.825, -80.753');
-                  if (coordsStr) {
-                    const coords = coordsStr.split(',').map(s => parseFloat(s.trim())) as [number, number];
-                    if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-                      const hasBeach = await showConfirm('¿Este pueblo tiene playa?', 'Confirmar Playa');
-                      onAddLocality(name, coords, hasBeach);
-                    }
-                  }
-                }
-              }}
-              className="px-5 py-3 rounded-full text-sm font-black uppercase tracking-widest transition-all duration-300 bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:from-emerald-400 hover:to-green-400 border-2 border-emerald-400 shadow-xl shadow-emerald-500/40 animate-pulse"
+              onClick={() => setSelectedItem(null)}
+              aria-label="Cerrar ficha"
+              className="min-h-[44px] min-w-[44px] p-2 -mr-2 -mt-2 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
             >
-              + Agregar Pueblo
+              <X className="w-5 h-5" />
             </button>
           </div>
-        )}
 
-        <div className="absolute inset-x-0 top-20 z-[1000] p-4">
-          <div className="max-w-xl mx-auto space-y-6">
-            {!hideUI && (
-              <div className="flex justify-center">
-                <div className="bg-slate-900/90 backdrop-blur-2xl border border-white/10 rounded-full p-1.5 flex items-center shadow-2xl ring-1 ring-white/5 pointer-events-auto">
-                  {[...LOCALITIES, ...(customLocalities || [])].map((loc) => (
-                    <button
-                      key={loc.name}
-                      onClick={() => onLocalityChange?.(loc.name)}
-                      className={`px-6 py-2 rounded-full text-[11px] font-black uppercase tracking-[0.15em] transition-all duration-300 ${localityName === loc.name ? 'bg-rose-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
-                    >
-                      {loc.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+          <h3 id="marker-card-title" className="text-base sm:text-lg font-black text-white leading-snug mb-1 truncate">
+            {selectedItem.title}
+          </h3>
 
-        {!hideUI && !isPanelMinimized && (
-          <div className="absolute left-6 bottom-32 glass-panel p-5 rounded-[2rem] border-white/5 shadow-2xl animate-in slide-in-from-left duration-700 pointer-events-auto max-w-[200px] z-[1000]">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-sky-500/20 rounded-xl">
-                <Info className="w-4 h-4 text-sky-400" />
-              </div>
-              <span className="text-xs font-black uppercase tracking-widest text-white">Mapa Guide</span>
-            </div>
+          <p className="text-xs text-slate-400 mb-4 line-clamp-2">
+            {selectedItem.type === 'event' 
+              ? (selectedItem.rawItem as MontanitaEvent).description || 'Evento confirmado en ' + localityName
+              : (selectedItem.rawItem as Business).description || 'Ubicado en ' + localityName}
+          </p>
 
-            <div className="space-y-3">
-              {[
-                { key: 'food', label: 'Negocios', color: 'bg-purple-500' },
-                { key: 'church', label: 'Referencias', color: 'bg-cyan-500' },
-                { key: 'zap', label: 'Live Events', special: true }
-              ].map((item) => (
-                <div key={item.key} className="flex items-center gap-3 group">
-                  <div className={`w-8 h-8 ${item.color || 'bg-slate-800'} rounded-lg flex items-center justify-center text-white border border-white/5 shadow-lg group-hover:scale-110 transition-transform ${item.special ? 'ring-2 ring-rose-500 ring-offset-2 ring-offset-slate-900' : ''}`}>
-                    <span dangerouslySetInnerHTML={{ __html: CATEGORY_ICONS[item.key] }} />
-                  </div>
-                  <span className={`text-[10px] font-bold uppercase tracking-tight transition-colors ${item.special ? 'text-rose-400 group-hover:text-rose-300' : 'text-slate-400 group-hover:text-white'}`}>
-                    {item.label}
-                  </span>
-                </div>
-              ))}
-              <div className="pt-2 border-t border-white/10">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center border border-white">
-                    <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                  </div>
-                  <span className="text-[10px] font-bold text-amber-400">Premium</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="absolute right-4 bottom-24 z-[1000] flex flex-col gap-2 pointer-events-auto">
-          {/* EXPERT/SuperUser: full add menu (business + reference) */}
-          {isSuperUser && (
-            <>
-              <button
-                onClick={() => {
-                  const newState = !isAddingPoint;
-                  setIsAddingPoint(newState);
-                  if (!newState) setEditingSector(null);
-                  else setAddingPointType('business');
-                  if (mapRef.current) {
-                    const m = mapRef.current;
-                    [50, 200, 600].forEach(d => setTimeout(() => { if (mapRef.current) m.invalidateSize(); }, d));
-                  }
-                }}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint
-                  ? 'bg-rose-500 border-white text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]'
-                  : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-white hover:border-white/30'}`}
-                title={isAddingPoint ? 'Cancelar' : 'Añadir Punto'}
-              >
-                <Plus className={`w-5 h-5 ${isAddingPoint ? 'rotate-45' : ''}`} />
-              </button>
-              {isAddingPoint && (
-                <div className="flex flex-col gap-2 animate-in slide-in-from-right duration-200">
-                  <button
-                    onClick={() => setAddingPointType('business')}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all text-sm ${addingPointType === 'business'
-                      ? 'bg-amber-500 border-amber-400 text-white'
-                      : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-amber-400'}`}
-                    title="Añadir Negocio"
-                  >
-                    🏪
-                  </button>
-                  <button
-                    onClick={() => setAddingPointType('reference')}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all text-sm ${addingPointType === 'reference'
-                      ? 'bg-sky-500 border-sky-400 text-white'
-                      : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-sky-400'}`}
-                    title="Añadir Punto de Referencia"
-                  >
-                    📍
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ELITE (premium): add menu with both business and reference, but no sector editor */}
-          {isEliteUser && !isSuperUser && (
-            <>
-              <button
-                onClick={() => {
-                  const newState = !isAddingPoint;
-                  setIsAddingPoint(newState);
-                  if (!newState) setAddingPointType('business');
-                  else setAddingPointType('business');
-                  if (mapRef.current) {
-                    const m = mapRef.current;
-                    [50, 200, 600].forEach(d => setTimeout(() => { if (mapRef.current) m.invalidateSize(); }, d));
-                  }
-                }}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint
-                  ? 'bg-rose-500 border-white text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]'
-                  : 'bg-gradient-to-br from-violet-500/80 to-purple-600/80 border-violet-400/50 text-white hover:from-violet-500 hover:to-purple-600'}`}
-                title={isAddingPoint ? 'Cancelar' : 'Añadir al Mapa'}
-              >
-                <Plus className={`w-5 h-5 ${isAddingPoint ? 'rotate-45' : ''}`} />
-              </button>
-              {isAddingPoint && (
-                <div className="flex flex-col gap-2 animate-in slide-in-from-right duration-200">
-                  <button
-                    onClick={() => setAddingPointType('business')}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all text-sm ${addingPointType === 'business'
-                      ? 'bg-amber-500 border-amber-400 text-white'
-                      : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-amber-400'}`}
-                    title="Añadir Negocio"
-                  >
-                    🏪
-                  </button>
-                  <button
-                    onClick={() => setAddingPointType('reference')}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all text-sm ${addingPointType === 'reference'
-                      ? 'bg-sky-500 border-sky-400 text-white'
-                      : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-sky-400'}`}
-                    title="Añadir Punto de Referencia"
-                  >
-                    📍
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* PRO (básico): add business only */}
-          {isPremiumUser && !isEliteUser && !isSuperUser && (
+          <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                const newState = !isAddingPoint;
-                setIsAddingPoint(newState);
-                setAddingPointType('business');
-                if (mapRef.current) {
-                  const m = mapRef.current;
-                  [50, 200, 600].forEach(d => setTimeout(() => { if (mapRef.current) m.invalidateSize(); }, d));
+                if (selectedItem.type === 'business' || selectedItem.type === 'reference') {
+                  onBusinessSelectRef.current(selectedItem.rawItem as Business);
+                } else {
+                  onBusinessSelectRef.current(selectedItem.rawItem as any);
                 }
               }}
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all duration-300 ${isAddingPoint
-                ? 'bg-amber-500 border-white text-white shadow-[0_0_20px_rgba(245,158,11,0.4)]'
-                : 'bg-gradient-to-br from-amber-500/80 to-orange-500/80 border-amber-400/50 text-white hover:from-amber-500 hover:to-orange-500'}`}
-              title={isAddingPoint ? 'Cancelar' : 'Añadir Mi Negocio'}
+              className="min-h-[44px] flex-1 py-2.5 px-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-1.5 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
             >
-              <Plus className={`w-5 h-5 ${isAddingPoint ? 'rotate-45' : ''}`} />
+              <span>Ver Detalles</span>
+              <ChevronRight className="w-4 h-4" />
             </button>
-          )}
 
-          <button onClick={zoomIn} className="w-12 h-12 rounded-2xl bg-slate-900/80 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl pointer-events-auto">
-            <Plus className="w-5 h-5" />
-          </button>
-          <button onClick={zoomOut} className="w-12 h-12 rounded-2xl bg-slate-900/80 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl pointer-events-auto">
-            <Minus className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setMapMode(mapMode === 'dark' ? 'satellite' : 'dark')}
-            className="w-12 h-12 rounded-2xl bg-slate-900/80 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl mt-4 pointer-events-auto"
-            title="Cambiar vista de mapa"
-          >
-            {mapMode === 'dark' ? <Navigation className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
-          </button>
-          
-          {/* Toggle Negocios */}
-          <button
-            onClick={() => setShowBusinesses(!showBusinesses)}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center border border-white/10 backdrop-blur-xl mt-2 transition-all pointer-events-auto ${showBusinesses ? 'bg-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)]' : 'bg-slate-900/80 text-slate-400'}`}
-            title="Mostrar/Ocultar Negocios"
-          >
-            <Store className={`w-5 h-5 ${showBusinesses ? '' : 'opacity-50'}`} />
-          </button>
-
-          {/* Toggle Puntos de Referencia */}
-          <button
-            onClick={() => setShowLandmarks(!showLandmarks)}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center border border-white/10 backdrop-blur-xl mt-2 transition-all pointer-events-auto ${showLandmarks ? 'bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.4)]' : 'bg-slate-900/80 text-slate-400'}`}
-            title="Mostrar/Ocultar Referencias"
-          >
-            <MapPin className={`w-5 h-5 ${showLandmarks ? '' : 'opacity-50'}`} />
-          </button>
-
-          {/* Toggle Eventos */}
-          <button
-            onClick={() => setShowEvents(!showEvents)}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center border border-white/10 backdrop-blur-xl mt-2 transition-all pointer-events-auto ${showEvents ? 'bg-rose-500 text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]' : 'bg-slate-900/80 text-slate-400'}`}
-            title="Mostrar/Ocultar Eventos"
-          >
-            <Zap className={`w-5 h-5 ${showEvents ? '' : 'opacity-50'}`} />
-          </button>
-          {isPremiumUser && userBusinessId && (
             <button
-              onClick={onStartMoveBusiness}
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center border border-white/10 backdrop-blur-xl mt-2 transition-all pointer-events-auto ${isMovingBusiness 
-                ? 'bg-amber-500 text-white shadow-[0_0_20px_rgba(245,158,11,0.4)]' 
-                : 'bg-gradient-to-br from-amber-500/80 to-orange-500/80 text-white border-amber-400/50 hover:from-amber-500 hover:to-orange-500'}`}
-              title="Mover Mi Negocio"
+              onClick={() => {
+                window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedItem.lat},${selectedItem.lng}`, '_blank');
+              }}
+              aria-label="Abrir cómo llegar en Google Maps"
+              className="min-h-[44px] min-w-[44px] px-3.5 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 rounded-2xl font-bold text-xs uppercase transition-all flex items-center justify-center gap-1 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+              title="Cómo llegar"
             >
-              <MapPin className={`w-5 h-5 ${isMovingBusiness ? 'animate-bounce' : ''}`} />
+              <Navigation className="w-4 h-4 text-orange-400" />
             </button>
-          )}
-          <button
-            onClick={handleLocate}
-            data-testid="locate-me-button"
-            className="w-12 h-12 rounded-2xl bg-slate-900/80 text-white flex items-center justify-center border border-white/10 backdrop-blur-xl shadow-2xl hover:bg-blue-600 transition-all mt-2 pointer-events-auto"
-            title="Mi Ubicación"
-          >
-            <Crosshair className="w-5 h-5" />
-          </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Cluster Items Selection Modal */}
+      {clusterItemsModal && (
+        <div 
+          role="dialog"
+          aria-modal="true"
+          aria-label="Lugares en este punto"
+          className="fixed inset-0 z-[3000] bg-slate-950/80 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+        >
+          <div className="bg-slate-900 border border-white/15 rounded-t-[2.5rem] sm:rounded-3xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-white/10 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-white uppercase tracking-tight">
+                  {clusterItemsModal.length} Lugares en esta zona
+                </h3>
+                <p className="text-xs text-slate-400">Selecciona uno para ver su información</p>
+              </div>
+              <button
+                onClick={() => setClusterItemsModal(null)}
+                aria-label="Cerrar lista"
+                className="min-h-[44px] min-w-[44px] p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-2 divide-y divide-white/5">
+              {clusterItemsModal.map(item => (
+                <div 
+                  key={item.id}
+                  onClick={() => {
+                    setClusterItemsModal(null);
+                    setSelectedItem(item);
+                  }}
+                  className="pt-2 first:pt-0 flex items-center justify-between p-3 hover:bg-white/5 rounded-2xl cursor-pointer transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center text-lg shrink-0">
+                      {CATEGORY_ICONS[item.iconKey] || '📍'}
+                    </div>
+                    <div className="text-left truncate">
+                      <h4 className="text-sm font-bold text-white group-hover:text-orange-400 transition-colors truncate">
+                        {item.title}
+                      </h4>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        {item.category}
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-orange-400 group-hover:translate-x-1 transition-all shrink-0" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
 
-
+MapView.displayName = 'MapView';

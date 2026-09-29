@@ -5,19 +5,20 @@ import { MapView } from '../components/Map/MapView';
 import { EventCard } from '../components/EventCard';
 import { Sector, MontanitaEvent, Business, BusinessCategory, Vibe, SubscriptionPlan, MapEntryType } from '../types';
 import { LOCALITIES, LOCALITY_SECTORS, SECTOR_INFO, LOCALITY_POLYGONS, BASE_URL } from '../constants';
-import { getPlannerRecommendations, PlannerSection, getRecommendationForUser } from '../services/geminiService';
 import { deleteBusiness, createBusiness, updateBusiness, incrementBusinessViewCount } from '../services/firestoreService';
 import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { PageLoader } from '../components/common/PageLoader';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
-import { ItineraryModal } from '../components/Modals/ItineraryModal';
-import { AIRecommendationModal } from '../components/Modals/AIRecommendationModal';
-import { PlannerChatModal } from '../components/Modals/PlannerChatModal';
-import { isBusinessOpen } from '../utils/timeUtils';
-import { LocalityManagerModal } from '../components/Modals/LocalityManagerModal';
+import { isBusinessOpen, isEventPublicAndActive } from '../utils/timeUtils';
+import { getWhatsAppUrl } from '../utils/social';
 import { useSEO } from '../hooks/useSEO';
+import type { PlannerSection } from '../services/geminiService';
+
+const ItineraryModal = lazy(() => import('../components/Modals/ItineraryModal').then(m => ({ default: m.ItineraryModal })));
+const PlannerChatModal = lazy(() => import('../components/Modals/PlannerChatModal').then(m => ({ default: m.PlannerChatModal })));
+const LocalityManagerModal = lazy(() => import('../components/Modals/LocalityManagerModal').then(m => ({ default: m.LocalityManagerModal })));
 import { Skeleton } from '../components/Skeleton';
 import { ECUADOR_GEO_DATA, LocationStructure } from '../utils/ecuadorGeoData';
 
@@ -282,6 +283,7 @@ export const Explore: React.FC<ExploreProps> = ({
     const handleAiAsk = async () => {
         setIsAiLoading(true);
         setAiRecData(null);
+        const { getPlannerRecommendations } = await import('../services/geminiService');
         const data = await getPlannerRecommendations(user, businesses, currentLocality.name);
         setAiRecData(data);
         setIsAiLoading(false);
@@ -387,7 +389,7 @@ export const Explore: React.FC<ExploreProps> = ({
     }, [currentMoodCriteria, businesses, currentLocality, userLocation]);
 
     const filteredEvents = useMemo(() => {
-        let result = [...eventsWithLiveCounts];
+        let result = (eventsWithLiveCounts || []).filter(e => isEventPublicAndActive(e));
         
         // Filter by locality with accent normalization & fallback
         result = result.filter(e => {
@@ -507,11 +509,7 @@ export const Explore: React.FC<ExploreProps> = ({
 
     // Eventos futuros para el mapa
     const upcomingEvents = useMemo(() => {
-        const now = new Date();
-        return eventsWithLiveCounts.filter(e => {
-            const eventEnd = e.endAt ? new Date(e.endAt) : new Date(new Date(e.startAt).getTime() + 4 * 3600000);
-            return eventEnd > now && e.status !== 'deactivated';
-        });
+        return (eventsWithLiveCounts || []).filter(e => isEventPublicAndActive(e));
     }, [eventsWithLiveCounts]);
 
     const popularVibe = useMemo(() => {
@@ -779,12 +777,13 @@ export const Explore: React.FC<ExploreProps> = ({
                                             ))
                                         }
 
-                                        {/* Business & Events Results */}
+                                        {/* Business & Events Results with explicit type badges */}
                                         {[...businesses, ...eventsWithLiveCounts]
                                             .filter(item => {
                                                 const locality = 'locality' in item ? item.locality : businesses.find(b => b.id === (item as any).businessId)?.locality;
                                                 const matchesLocality = (locality || 'Montañita') === currentLocality.name;
                                                 const itemName = 'name' in item ? (item as any).name : (item as any).title;
+                                                if (!itemName) return false;
                                                 const itemCategory = (item as any).category;
                                                 const itemSector = (item as any).sector;
                                                 const sq = (searchQuery || '').toLowerCase();
@@ -793,44 +792,66 @@ export const Explore: React.FC<ExploreProps> = ({
                                                     (String(itemCategory || '')).toLowerCase().includes(sq) ||
                                                     (String(itemSector || '')).toLowerCase().includes(sq)
                                                 );
+                                                const isEvent = 'title' in item || 'startAt' in item;
+                                                if (isEvent && !isEventPublicAndActive(item as MontanitaEvent)) return false;
                                                 const isDeactivated = (item as any).status === 'deactivated';
-                                                return matchesLocality && matchesSearch && !isDeactivated;
+                                                const isUnpublished = (item as any).isPublished === false;
+                                                return matchesLocality && matchesSearch && !isDeactivated && !isUnpublished;
                                             })
-                                            .slice(0, 6)
-                                            .map((item, i) => (
-                                                <button
-                                                    key={`item-${i}`}
-                                                    onClick={() => {
-                                                        setSearchQuery('');
-                                                        if ('name' in item) {
-                                                            setPublicProfileId(item.id);
-                                                            setPublicProfileType('business');
-                                                            setShowPublicProfile(true);
-                                                        } else {
-                                                            setSelectedEvent(item as any);
-                                                        }
-                                                    }}
-                                                    className="w-full flex items-center justify-between p-3.5 hover:bg-white/5 rounded-2xl transition-all group"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-sky-400 group-hover:bg-sky-400/10 transition-colors text-lg">
-                                                            {('name' in item) ? (
-                                                                (item as any).category === 'Restaurante' ? '🍱' : 
-                                                                (item as any).category === 'Bar' ? '🍹' : '🏪'
-                                                            ) : '✨'}
-                                                        </div>
-                                                        <div className="text-left">
-                                                            <div className="text-xs font-bold text-white group-hover:text-sky-400 transition-colors">
-                                                                {'name' in item ? item.name : item.title}
+                                            .slice(0, 8)
+                                            .map((item, i) => {
+                                                const isEvent = 'title' in item || 'startAt' in item;
+                                                const isRef = !isEvent && ((item as any).isReference || (item as any).mapType === MapEntryType.LANDMARK);
+                                                const isSector = !isEvent && (item as any).mapType === MapEntryType.SECTOR;
+                                                const typeLabel = isEvent ? 'Evento' : isRef ? 'Referencia' : isSector ? 'Sector' : 'Negocio';
+                                                const typeBadgeStyle = isEvent 
+                                                    ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' 
+                                                    : isRef 
+                                                    ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' 
+                                                    : isSector 
+                                                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                                                    : 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30';
+
+                                                return (
+                                                    <button
+                                                        key={`item-${i}`}
+                                                        onClick={() => {
+                                                            setSearchQuery('');
+                                                            if ('name' in item) {
+                                                                setPublicProfileId(item.id);
+                                                                setPublicProfileType('business');
+                                                                setShowPublicProfile(true);
+                                                            } else {
+                                                                setSelectedEvent(item as any);
+                                                            }
+                                                        }}
+                                                        className="w-full min-h-[44px] flex items-center justify-between p-3 hover:bg-white/5 rounded-2xl transition-all group text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                                                    >
+                                                        <div className="flex items-center gap-3 truncate">
+                                                            <div className="w-10 h-10 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center text-slate-300 group-hover:text-orange-400 group-hover:bg-orange-400/10 transition-colors text-lg shrink-0">
+                                                                {isEvent ? '⚡' : isRef ? '📍' : isSector ? '🧭' : (
+                                                                    (item as any).category === 'Restaurante' ? '🍱' : 
+                                                                    (item as any).category === 'Bar' ? '🍹' : '🏪'
+                                                                )}
                                                             </div>
-                                                            <div className="text-[9px] text-slate-500 uppercase tracking-widest font-black">
-                                                                {(item as any).category || (item as any).sector || 'Evento'}
+                                                            <div className="text-left truncate">
+                                                                <div className="text-xs font-bold text-white group-hover:text-orange-400 transition-colors truncate">
+                                                                    {'name' in item ? (item as any).name : (item as any).title}
+                                                                </div>
+                                                                <div className="flex items-center gap-2 mt-0.5">
+                                                                    <span className={`text-[8px] font-black uppercase px-1.5 py-0.2 rounded border ${typeBadgeStyle}`}>
+                                                                        {typeLabel}
+                                                                    </span>
+                                                                    <span className="text-[9px] text-slate-400 truncate">
+                                                                        {(item as any).category || (item as any).sector || currentLocality.name}
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                    <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-sky-400 group-hover:translate-x-1 transition-all" />
-                                                </button>
-                                            ))
+                                                        <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-orange-400 group-hover:translate-x-1 transition-all shrink-0 ml-2" />
+                                                    </button>
+                                                );
+                                            })
                                         }
 
                                     </div>
@@ -1882,7 +1903,8 @@ export const Explore: React.FC<ExploreProps> = ({
                                                                     <button 
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            window.open(`https://wa.me/${business.whatsapp}`, '_blank');
+                                                                            const waUrl = getWhatsAppUrl(business.whatsapp);
+                                                                            if (waUrl) window.open(waUrl, '_blank');
                                                                         }}
                                                                         className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all duration-300"
                                                                     >
@@ -1929,21 +1951,23 @@ export const Explore: React.FC<ExploreProps> = ({
                         className="flex items-center gap-2.5 px-6 py-3.5 bg-rose-500 hover:bg-rose-400 active:scale-95 text-white font-black text-sm uppercase tracking-widest rounded-full shadow-2xl shadow-rose-500/40 transition-all border border-rose-400/30 cursor-pointer"
                     >
                         <span className="animate-pulse w-2 h-2 rounded-full bg-white inline-block" />
-                        Pulse of Today
+                        ¿Qué hay hoy?
                         <span className="text-base">⚡</span>
                     </button>
                 </div>
             )}
             
-            <ItineraryModal
-                isOpen={showItinerary}
-                onClose={() => setShowItinerary(false)}
-            />
-            <PlannerChatModal
-                isOpen={showPlannerChat}
-                onClose={() => setShowPlannerChat(false)}
-            />
-            <LocalityManagerModal />
+            <Suspense fallback={null}>
+                <ItineraryModal
+                    isOpen={showItinerary}
+                    onClose={() => setShowItinerary(false)}
+                />
+                <PlannerChatModal
+                    isOpen={showPlannerChat}
+                    onClose={() => setShowPlannerChat(false)}
+                />
+                <LocalityManagerModal />
+            </Suspense>
         </>
     );
 };

@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Compass, Calendar, Heart, User, Sparkles, X, Plus, Image as ImageIcon, CheckCircle, Zap, ExternalLink, LogOut, Mail, UserCircle, Store, Camera, Upload, Trash2, Edit3, Search, SlidersHorizontal, Navigation, Layers, Minus, Clock, MapPin, ArrowRight, Settings, ChevronLeft, ChevronRight, MessageCircle, Phone, CreditCard, Banknote, ShieldCheck, Palmtree, Mountain, Activity, Users, Sun, Moon, Eye } from 'lucide-react';
-import { getToken } from 'firebase/messaging';
-import { messaging } from './firebase.config';
+
+
 import { saveFCMToken, getUser, createUser, updateUser, createBusiness, updateBusiness, deleteBusiness, subscribeToEvents, createEvent, updateEvent, deleteEvent, subscribeToBusinesses, updateAppSettings, toggleRSVP, subscribeToUserRSVPs, incrementVisitCount, subscribeToVisitCount } from './services/firestoreService';
 import { PageLoader as PremiumLoader } from './components/common/PageLoader';
 import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan, BusinessCategory } from './types';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS, DEFAULT_NEW_LOCALITY_SECTORS } from './constants';
-import { getSmartRecommendations, generateEventDescription } from './services/geminiService';
+
 import { useAuthContext } from './context/AuthContext';
 import { logout, isSuperAdmin as checkSuperAdmin, updateUserProfile } from './services/authService';
 import { compressImage } from './utils/imageUtils';
@@ -19,9 +19,10 @@ import { useData } from './context/DataContext';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from './hooks/useTheme';
 
-import { EventModal } from './components/EventModal';
+
 
 // Lazy load heavy components
+const EventModal = lazy(() => import('./components/EventModal').then(m => ({ default: m.EventModal })));
 const EventCard = lazy(() => import('./components/EventCard').then(m => ({ default: m.EventCard })));
 const MigrationPanel = lazy(() => import('./components/MigrationPanel').then(m => ({ default: m.MigrationPanel })));
 const LoginScreen = lazy(() => import('./components/LoginScreen').then(m => ({ default: m.LoginScreen })));
@@ -32,9 +33,11 @@ const PublicProfileModal = lazy(() => import('./components/PublicProfileModal').
 
 // Lazy load pages for better performance
 const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
+const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
+const SavedEvents = lazy(() => import('./pages/SavedEvents').then(m => ({ default: m.SavedEvents })));
 const Passport = lazy(() => import('./pages/Passport').then(m => ({ default: m.Passport })));
 
-const ExploreFeed = lazy(() => import('./pages/ExploreFeed').then(m => ({ default: m.ExploreFeed })));
+const Explore = lazy(() => import('./pages/ExploreFeed').then(m => ({ default: m.ExploreFeed })));
 const InfoPage = lazy(() => import('./pages/InfoPage').then(m => ({ default: m.InfoPage })));
 const CalendarPage = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })));
 const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })));
@@ -184,6 +187,7 @@ const Dashboard: React.FC = () => {
   const handleAiAsk = async (query: string) => {
     setIsAiLoading(true);
     try {
+      const { getSmartRecommendations } = await import('./services/geminiService');
       const result = await getSmartRecommendations(events, query);
       setAiRecData(result);
     } catch (err) {
@@ -198,7 +202,7 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user && messaging) {
+    if (user) {
       const requestPermission = async () => {
         try {
           const permission = await Notification.requestPermission();
@@ -215,6 +219,9 @@ const Dashboard: React.FC = () => {
             }
 
             try {
+              const { getToken, getMessaging } = await import('firebase/messaging');
+              const { default: firebaseApp } = await import('./firebase.config');
+              const messaging = getMessaging(firebaseApp);
               const token = await getToken(messaging, { vapidKey });
               if (token) {
                 await saveFCMToken(user.id, token);
@@ -255,7 +262,8 @@ const Dashboard: React.FC = () => {
 
   React.useEffect(() => {
     const path = location.pathname;
-    if (path === '/' || path === '/history') setActiveView('history');
+    if (path === '/') setActiveView('home');
+    else if (path === '/history') setActiveView('history');
     else if (path === '/explore' || path.startsWith('/evento/')) setActiveView('explore');
     else if (path.startsWith('/negocio/')) setActiveView('services');
     else if (path === '/calendar' || path.startsWith('/agenda/')) setActiveView('calendar');
@@ -548,12 +556,20 @@ const Dashboard: React.FC = () => {
 
   const renderView = () => {
     switch (activeView) {
+      case 'home':
+        return (
+          <ErrorBoundary name="Home">
+            <Suspense fallback={<PageLoader />}>
+              <Home />
+            </Suspense>
+          </ErrorBoundary>
+        );
       case 'explore':
       case 'feed':
         return (
-          <ErrorBoundary name="ExploreFeed">
+          <ErrorBoundary name="Explore">
             <Suspense fallback={<PageLoader />}>
-              <ExploreFeed
+              <Explore
                 onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)}
                 userBusinessId={userBusiness?.id}
                 focusCoords={focusMapCoords}
@@ -567,6 +583,15 @@ const Dashboard: React.FC = () => {
           <ErrorBoundary name="Calendar">
             <Suspense fallback={<PageLoader />}>
               <CalendarPage />
+            </Suspense>
+          </ErrorBoundary>
+        );
+      case 'all-favorites':
+      case 'saved':
+        return (
+          <ErrorBoundary name="SavedEvents">
+            <Suspense fallback={<PageLoader />}>
+              <SavedEvents />
             </Suspense>
           </ErrorBoundary>
         );
@@ -630,13 +655,9 @@ const Dashboard: React.FC = () => {
         );
       default:
         return (
-          <ErrorBoundary name="Default ExploreFeed">
+          <ErrorBoundary name="Default Home">
             <Suspense fallback={<PageLoader />}>
-              <ExploreFeed 
-                onEditBusiness={handleEditBusiness} 
-                focusCoords={focusMapCoords}
-                onClearFocusCoords={() => setFocusMapCoords(null)}
-              />
+              <Home />
             </Suspense>
           </ErrorBoundary>
         );
@@ -644,10 +665,10 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className={`fixed inset-0 w-screen bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden flex flex-col font-sans select-none transition-colors duration-500`}>
+    <div className={`fixed inset-0 w-screen bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden flex flex-col font-sans transition-colors duration-500`}>
       <TopNavbar />
-      <div className={`flex-1 w-full flex flex-col relative ${['explore', 'feed', 'favorites', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history', 'guide', 'services'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-        <main className={`flex-1 w-full pb-20 lg:pb-6 ${['explore', 'feed', 'favorites', 'policies', 'plans', 'calendar', 'info', 'history', 'guide'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['explore', 'feed', 'favorites', 'policies', 'plans', 'calendar', 'info', 'history', 'guide'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
+      <div className={`flex-1 w-full flex flex-col relative ${['home', 'explore', 'feed', 'favorites', 'all-favorites', 'saved', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history', 'guide', 'services'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+        <main className={`flex-1 w-full pb-20 lg:pb-6 ${['home', 'explore', 'feed', 'favorites', 'all-favorites', 'saved', 'policies', 'plans', 'calendar', 'info', 'history', 'guide'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['home', 'explore', 'feed', 'favorites', 'all-favorites', 'saved', 'policies', 'plans', 'calendar', 'info', 'history', 'guide'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
           {renderView()}
         </main>
       </div>
@@ -933,6 +954,7 @@ const Dashboard: React.FC = () => {
 
       {/* Event Modal with Navigation */}
       {selectedEvent && (
+        <Suspense fallback={null}>
         <EventModal
           key={selectedEvent.id}
           event={selectedEvent}
@@ -956,6 +978,7 @@ const Dashboard: React.FC = () => {
           onRsvp={() => handleRSVP(selectedEvent.id)}
           isRsvp={!!rsvpStatus[selectedEvent.id]}
         />
+        </Suspense>
       )}
 
       {/* Public Profile Modal */}

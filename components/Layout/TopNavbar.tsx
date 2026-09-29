@@ -21,32 +21,38 @@ export const TopNavbar: React.FC = () => {
     }, []);
 
     const navItems = [
-        { id: 'history', icon: History, label: 'NOSOTROS', path: '/', action: null },
-        { id: 'explore', icon: Compass, label: 'EXPLORAR', path: '/explore', action: null },
-        { id: 'events', icon: Calendar, label: 'EVENTOS', path: '/calendar', action: null },
-        { id: 'favorites', icon: Heart, label: 'PASSPORT', path: '/passport', action: 'favorites' },
-        { id: 'notifications', icon: Bell, label: 'NOTIFICACIONES', path: '/community', action: null },
-        { id: 'plans', icon: Star, label: 'SUSCRIPCIONES', path: '/plans', action: null },
-        { id: 'info', icon: Info, label: 'AYUDA / INFO', path: '/info', action: null },
+        { id: 'history', icon: Home, label: 'NOSOTROS', path: '/', action: 'history' },
+        { id: 'explore', icon: Compass, label: 'EXPLORAR', path: '/explore', action: 'explore' },
+        { id: 'events', icon: Calendar, label: 'EVENTOS', path: '/calendar', action: 'calendar' },
+        { id: 'profile', icon: User, label: 'PASSPORT', path: '/passport', action: 'favorites' },
+        { id: 'notifications', icon: Bell, label: 'NOTIFICACIONES', path: '/community', action: 'community' },
+        { id: 'plans', icon: Star, label: 'SUSCRIPCIONES', path: '/plans', action: 'plans' },
+        { id: 'info', icon: Info, label: 'AYUDA / INFO', path: '/info', action: 'info' },
     ] as const;
 
-    const isActive = (path: string | null) => {
-        if (!path) return false;
-        if (path === '/' && (currentPath === '/' || currentPath === '/history')) return true;
-        if (path === '/explore' && currentPath.startsWith('/explore')) return true;
-        if (path === '/info' && currentPath === '/info') return true;
-        if (path !== '/' && currentPath.startsWith(path)) return true;
-        return false;
+    const isActive = (path: string) => {
+        if (path === '/') return currentPath === '/' || currentPath === '/history';
+        if (path === '/explore') return currentPath.startsWith('/explore') || currentPath.startsWith('/evento/');
+        if (path === '/calendar') return currentPath.startsWith('/calendar') || currentPath.startsWith('/agenda/');
+        if (path === '/passport') return currentPath.startsWith('/passport') || currentPath.startsWith('/saved-events');
+        if (path === '/community') return currentPath.startsWith('/community') || currentPath.startsWith('/chat');
+        if (path === '/plans') return currentPath.startsWith('/plans');
+        if (path === '/info') return currentPath.startsWith('/info');
+        return currentPath.startsWith(path);
     };
 
     return (
         <header className="sticky top-0 left-0 right-0 z-50 bg-slate-900/90 backdrop-blur-xl border-b border-white/10 transition-colors duration-300">
             <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4">
                 
-                {/* Brand / Logo */}
-                <div 
-                    onClick={() => navigate('/')}
-                    className="flex items-center gap-3 cursor-pointer select-none group shrink-0"
+                {/* Brand / Logo Semántico */}
+                <button 
+                    onClick={() => {
+                        setActiveView('home');
+                        navigate('/');
+                    }}
+                    aria-label="Ir al inicio de ubicame.info MontaPulse"
+                    className="flex items-center gap-3 cursor-pointer group shrink-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-2xl p-1"
                 >
                     <div className="w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/25 rotate-3 group-hover:rotate-6 group-hover:scale-105 transition-transform duration-300">
                         <div className="w-2.5 sm:w-3.5 h-2.5 sm:h-3.5 bg-white rounded-full animate-ping" />
@@ -59,10 +65,10 @@ export const TopNavbar: React.FC = () => {
                             PULSE
                         </span>
                     </div>
-                </div>
+                </button>
 
-                {/* Desktop Navigation Links (Option 1 - Top Navbar) */}
-                <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
+                {/* Desktop Navigation Links */}
+                <nav className="hidden lg:flex items-center gap-1 xl:gap-2" aria-label="Navegación principal superior">
                     {navItems.map((item) => {
                         const Icon = item.icon;
                         const active = isActive(item.path);
@@ -70,14 +76,12 @@ export const TopNavbar: React.FC = () => {
                             <button
                                 key={item.id}
                                 onClick={() => {
-                                    if (item.action === 'favorites') {
-                                        setActiveView('favorites');
-                                        navigate('/passport');
-                                        return;
-                                    }
-                                    if (item.path) navigate(item.path);
+                                    if (item.action) setActiveView(item.action as any);
+                                    navigate(item.path);
                                 }}
-                                className={`relative flex items-center gap-2 px-3.5 py-2 xl:px-4 xl:py-2.5 rounded-xl font-black text-xs tracking-wider uppercase transition-all duration-200 group ${
+                                aria-current={active ? "page" : undefined}
+                                aria-label={`Ir a ${item.label}`}
+                                className={`relative flex items-center gap-2 px-3.5 py-2 xl:px-4 xl:py-2.5 rounded-xl font-black text-xs tracking-wider uppercase transition-all duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
                                     active
                                         ? 'text-orange-400 bg-orange-500/15 shadow-[inset_0_0_12px_rgba(249,115,22,0.15)] border border-orange-500/30'
                                         : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
@@ -95,35 +99,38 @@ export const TopNavbar: React.FC = () => {
 
                 {/* Right Action Controls */}
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                    {/* Botón Lupa en Celular -> Abre Ayuda / Información */}
+                    {/* Botón Buscar en Celular -> Abre Directorio */}
                     <button
                         onClick={() => navigate('/info')}
-                        className={`flex lg:hidden p-2 sm:p-2.5 rounded-xl border transition-all active:scale-95 items-center justify-center ${
+                        className={`flex lg:hidden p-2 sm:p-2.5 rounded-xl border transition-all active:scale-95 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
                             currentPath === '/info'
                                 ? 'bg-orange-500 text-white border-orange-400 shadow-md shadow-orange-500/30'
                                 : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border-white/10'
                         }`}
-                        title="Buscar en Ayuda e Información"
-                        aria-label="Buscar en Ayuda e Información"
+                        title="Buscar en Directorio"
+                        aria-label="Buscar en Directorio"
                     >
                         <Search className="w-4 h-4" />
                     </button>
 
-                    {/* Visits Counter */}
-                    <div 
-                        className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-orange-500/10 text-orange-500 rounded-xl border border-orange-500/20 flex items-center gap-1.5 font-mono font-bold text-xs sm:text-sm shadow-sm"
-                        title="Contador de visitas"
-                    >
-                        <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse shrink-0" />
-                        <span>{visitCount.toLocaleString()}</span>
-                    </div>
+                    {/* Contador de Visitas */}
+                    {visitCount > 0 && (
+                        <div 
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-amber-400 shadow-sm"
+                            title="Visitas registradas"
+                        >
+                            <Eye className="w-3.5 h-3.5 text-orange-400" />
+                            <span className="tabular-nums font-black text-xs text-white">{visitCount}</span>
+                        </div>
+                    )}
 
                     {/* Upgrade Plan Button (Desktop only when not Expert) */}
                     {user && user.plan !== 'Expert' && (
                         <button
                             onClick={() => navigate('/plans')}
-                            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+                            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                             title="Mejorar Plan"
+                            aria-label="Mejorar Plan de Membresía"
                         >
                             <Sparkles className="w-3.5 h-3.5 animate-spin" />
                             <span className="hidden md:inline">Mejorar Plan</span>
@@ -133,16 +140,17 @@ export const TopNavbar: React.FC = () => {
                     {/* User Profile Card / Login */}
                     {user ? (
                         <div className="flex items-center gap-2 pl-2 sm:border-l sm:border-white/10">
-                            <div 
+                            <button 
                                 onClick={() => navigate('/passport')}
-                                className="flex items-center gap-2 cursor-pointer group p-1 rounded-xl hover:bg-white/5 transition-all"
-                                title="Ver Perfil / Passport"
+                                className="flex items-center gap-2 group p-1 rounded-xl hover:bg-white/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 text-left"
+                                title="Ver Perfil"
+                                aria-label={`Ver perfil de ${user.name}`}
                             >
                                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl border border-orange-500/50 overflow-hidden ring-2 ring-orange-500/20 shadow-md group-hover:scale-105 transition-transform">
                                     <img 
                                         src={user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'} 
                                         className="w-full h-full object-cover" 
-                                        alt="Avatar" 
+                                        alt={`Avatar de ${user.name}`} 
                                     />
                                 </div>
                                 <div className="hidden xl:flex flex-col text-left">
@@ -157,13 +165,14 @@ export const TopNavbar: React.FC = () => {
                                         {user.role === 'admin' ? (isSuperAdmin ? 'King' : 'Admin') : user.role === 'host' ? 'Host' : 'Visitor'}
                                     </span>
                                 </div>
-                            </div>
+                            </button>
 
                             {/* Logout button */}
                             <button
                                 onClick={logout}
-                                className="p-2 sm:p-2.5 bg-white/5 hover:bg-orange-500/20 text-slate-400 hover:text-orange-400 rounded-xl transition-all active:scale-95 border border-white/5"
+                                className="p-2 sm:p-2.5 bg-white/5 hover:bg-orange-500/20 text-slate-400 hover:text-orange-400 rounded-xl transition-all active:scale-95 border border-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                                 title="Cerrar Sesión"
+                                aria-label="Cerrar Sesión"
                             >
                                 <LogOut className="w-4 h-4" />
                             </button>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { X, Ticket, Plus, Trash2, Edit3, ToggleLeft, ToggleRight, Loader2, Zap, Clock, MapPin, DollarSign, Users, CheckCircle, AlertTriangle, QrCode, BarChart2, Search, RefreshCw } from 'lucide-react';
 import { Coupon, CouponType, Business, CouponRedemption } from '../../types';
 import { 
@@ -8,7 +8,7 @@ import {
 } from '../../services/couponService';
 import { createNotification } from '../../services/firestoreService';
 import { CouponCard } from '../Coupons/CouponCard';
-import { QRScanner } from '../Coupons/QRScanner';
+const QRScanner = lazy(() => import('../Coupons/QRScanner').then(m => ({ default: m.QRScanner })));
 import { useToast } from '../../context/ToastContext';
 import { useData } from '../../context/DataContext';
 import { useAuthContext } from '../../context/AuthContext';
@@ -391,19 +391,26 @@ const CouponManagerModal: React.FC<CouponManagerModalProps> = ({ isOpen, onClose
                                         <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                                         <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Escaneo en Vivo</p>
                                     </div>
-                                    <QRScanner onScanSuccess={(text) => {
-                                        try {
-                                            const data = JSON.parse(text);
-                                            if (data.reservationCode) {
-                                                setValidationCode(data.reservationCode);
-                                                handleValidateCode(data.reservationCode);
+                                    <Suspense fallback={
+                                        <div className="p-8 text-center bg-black/40 rounded-3xl border border-white/10" aria-live="polite">
+                                            <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-2" />
+                                            <p className="text-xs text-slate-400 font-bold">Cargando escáner de cámara...</p>
+                                        </div>
+                                    }>
+                                        <QRScanner onScanSuccess={(text) => {
+                                            try {
+                                                const data = JSON.parse(text);
+                                                if (data.reservationCode) {
+                                                    setValidationCode(data.reservationCode);
+                                                    handleValidateCode(data.reservationCode);
+                                                }
+                                            } catch (e) {
+                                                // Maybe it's just the raw code
+                                                setValidationCode(text);
+                                                handleValidateCode(text);
                                             }
-                                        } catch (e) {
-                                            // Maybe it's just the raw code
-                                            setValidationCode(text);
-                                            handleValidateCode(text);
-                                        }
-                                    }} />
+                                        }} />
+                                    </Suspense>
                                 </div>
                                 <button onClick={() => handleValidateCode()} disabled={isLoading || !validationCode.trim()} className="w-full py-4 bg-emerald-500 text-black font-black uppercase rounded-2xl flex items-center justify-center gap-2">
                                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Validar

@@ -13,9 +13,9 @@ import { getUser, incrementBusinessViewCount } from '../services/firestoreServic
 import { subscribeToBusinessCoupons, obtainCoupon } from '../services/couponService';
 import { useAuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { isBusinessOpen, getEcuadorDate, getEcuadorDayKey, normalizeDay } from '../utils/timeUtils';
+import { isBusinessOpen, getEcuadorDate, getEcuadorDayKey, normalizeDay, formatEcuadorEventDate, isEventPublicAndActive } from '../utils/timeUtils';
 import { useSEO } from '../hooks/useSEO';
-import { TikTokIcon, getInstagramUrl, getFacebookUrl, getTikTokUrl, getYouTubeUrl, getWhatsAppUrl } from '../utils/social';
+import { TikTokIcon, getInstagramUrl, getFacebookUrl, getTikTokUrl, getYouTubeUrl, getWhatsAppUrl, normalizePhoneNumber } from '../utils/social';
 import { ExperienceRecommendationCarousels } from './ExperienceRecommendationCarousels';
 import { BusinessMiniMap } from './Map/BusinessMiniMap';
 
@@ -85,6 +85,7 @@ export const PublicProfileModal = React.memo(({
   
   const avatarRef = useRef<HTMLImageElement>(null);
   const modalContainerRef = useRef<HTMLDivElement>(null);
+  const triggerElementRef = useRef<HTMLElement | null>(null);
   const isMountedRef = useRef(false);
   const lastOpenTimeRef = useRef(0);
 
@@ -94,6 +95,20 @@ export const PublicProfileModal = React.memo(({
       modalContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [businessId]);
+
+  // Initial focus on open and restore on close
+  useEffect(() => {
+    if (isOpen) {
+      triggerElementRef.current = document.activeElement as HTMLElement | null;
+      if (modalContainerRef.current) {
+        modalContainerRef.current.focus();
+      }
+    } else {
+      if (triggerElementRef.current && typeof triggerElementRef.current.focus === 'function') {
+        triggerElementRef.current.focus();
+      }
+    }
+  }, [isOpen]);
 
   // Track page view
   useEffect(() => {
@@ -108,6 +123,35 @@ export const PublicProfileModal = React.memo(({
       isMountedRef.current = false;
     }
   }, [isOpen, businessId]);
+
+  // Focus trap & Escape key handler
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && modalContainerRef.current) {
+        const focusable = modalContainerRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const [fetchedUser, setFetchedUser] = useState<UserProfile | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
@@ -289,14 +333,13 @@ export const PublicProfileModal = React.memo(({
   }
 
   // Filter public pulses for this business/user
-  const now = new Date();
   const allBusinessPulses = events.filter(e =>
     (businessId && e.businessId === businessId) ||
     (userId && e.ownerId === userId)
   );
   
-  const activePulses = allBusinessPulses.filter(e => new Date(e.startAt) > now);
-  const publicPulses = activePulses.length > 0 ? activePulses.slice(0, 4) : allBusinessPulses.slice(0, 4);
+  const activePulses = allBusinessPulses.filter(e => isEventPublicAndActive(e));
+  const publicPulses = activePulses.length > 0 ? activePulses.slice(0, 4) : [];
   const isShowingActive = activePulses.length > 0;
   const totalEventClicks = allBusinessPulses.reduce((sum, e) => sum + (e.clickCount || 0), 0);
 
@@ -311,7 +354,11 @@ export const PublicProfileModal = React.memo(({
     <div 
       ref={modalContainerRef}
       id="public-profile-modal-container"
-      className="fixed inset-0 z-[4000] bg-[#070a13] overflow-y-auto overflow-x-hidden w-full h-full text-slate-100 font-sans selection:bg-orange-500 selection:text-white"
+      tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Perfil de ${displayName}`}
+      className="fixed inset-0 z-[4000] bg-[#070a13] overflow-y-auto overflow-x-hidden w-full h-full text-slate-100 font-sans selection:bg-orange-500 selection:text-white outline-none"
       style={{
         WebkitOverflowScrolling: 'touch',
         touchAction: 'pan-y',
@@ -565,10 +612,15 @@ export const PublicProfileModal = React.memo(({
                             <MapPin className="w-3.5 h-3.5 text-sky-400" />
                             <span className="text-[9px] font-black uppercase tracking-widest text-white/90">Referencia</span>
                           </>
-                        ) : (
+                        ) : (business.isVerified || business.verified) ? (
                           <>
                             <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
                             <span className="text-[9px] font-black uppercase tracking-widest text-white/90">Socio Verificado</span>
+                          </>
+                        ) : (
+                          <>
+                            <Store className="w-3.5 h-3.5 text-slate-300" />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-white/90">Negocio Local</span>
                           </>
                         )
                       ) : (
@@ -581,13 +633,25 @@ export const PublicProfileModal = React.memo(({
 
                     {business && (
                       <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md border shadow-lg ${
-                        businessStatus.isOpen 
-                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' 
-                          : 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                        !businessStatus.hasValidSchedule
+                          ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
+                          : businessStatus.isOpen 
+                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' 
+                            : 'bg-rose-500/20 border-rose-500/40 text-rose-300'
                       }`}>
-                        <Circle className={`w-2 h-2 ${businessStatus.isOpen ? 'fill-emerald-400 text-emerald-400' : 'fill-rose-400 text-rose-400'}`} />
+                        <Circle className={`w-2 h-2 ${
+                          !businessStatus.hasValidSchedule
+                            ? 'fill-slate-400 text-slate-400'
+                            : businessStatus.isOpen 
+                              ? 'fill-emerald-400 text-emerald-400' 
+                              : 'fill-rose-400 text-rose-400'
+                        }`} />
                         <span className="text-[9px] font-black uppercase tracking-widest">
-                          {businessStatus.isOpen ? 'Abierto Ahora' : 'Cerrado'}
+                          {!businessStatus.hasValidSchedule 
+                            ? 'Horario no disponible' 
+                            : businessStatus.isOpen 
+                              ? 'Abierto Ahora' 
+                              : 'Cerrado'}
                         </span>
                       </div>
                     )}
@@ -767,79 +831,90 @@ export const PublicProfileModal = React.memo(({
               </div>
 
               {/* Social Channels Ribbon */}
-              {business && (business.instagram || business.facebook || business.tiktok || business.youtube || business.whatsapp || business.phone) && (
-                <div className="pt-2 w-full">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
-                    <Sparkles className="w-3 h-3 text-orange-400 shrink-0" /> Canales Oficiales:
-                  </p>
-                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full">
-                    {business.whatsapp && (
-                      <a
-                        href={getWhatsAppUrl(business.whatsapp)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold transition-all hover:scale-105"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5 shrink-0" />
-                        <span>WhatsApp</span>
-                      </a>
-                    )}
-                    {business.instagram && (
-                      <a
-                        href={getInstagramUrl(business.instagram)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 rounded-xl text-pink-400 text-xs font-bold transition-all hover:scale-105"
-                      >
-                        <Instagram className="w-3.5 h-3.5 shrink-0" />
-                        <span>Instagram</span>
-                      </a>
-                    )}
-                    {business.facebook && (
-                      <a
-                        href={getFacebookUrl(business.facebook)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-bold transition-all hover:scale-105"
-                      >
-                        <Facebook className="w-3.5 h-3.5 shrink-0" />
-                        <span>Facebook</span>
-                      </a>
-                    )}
-                    {business.tiktok && (
-                      <a
-                        href={getTikTokUrl(business.tiktok)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 rounded-xl text-teal-400 text-xs font-bold transition-all hover:scale-105"
-                      >
-                        <TikTokIcon className="w-3.5 h-3.5 shrink-0" />
-                        <span>TikTok</span>
-                      </a>
-                    )}
-                    {business.youtube && (
-                      <a
-                        href={getYouTubeUrl(business.youtube)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold transition-all hover:scale-105"
-                      >
-                        <Youtube className="w-3.5 h-3.5 shrink-0" />
-                        <span>YouTube</span>
-                      </a>
-                    )}
-                    {business.phone && (
-                      <a
-                        href={`tel:${business.phone}`}
-                        className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl text-sky-400 text-xs font-bold transition-all hover:scale-105"
-                      >
-                        <Phone className="w-3.5 h-3.5 shrink-0" />
-                        <span>Llamar</span>
-                      </a>
-                    )}
+              {business && (() => {
+                const waUrl = business.whatsapp ? getWhatsAppUrl(business.whatsapp) : '';
+                const igUrl = business.instagram ? getInstagramUrl(business.instagram) : '';
+                const fbUrl = business.facebook ? getFacebookUrl(business.facebook) : '';
+                const ttUrl = business.tiktok ? getTikTokUrl(business.tiktok) : '';
+                const ytUrl = business.youtube ? getYouTubeUrl(business.youtube) : '';
+                const normPhone = business.phone ? normalizePhoneNumber(business.phone) : '';
+
+                if (!waUrl && !igUrl && !fbUrl && !ttUrl && !ytUrl && !normPhone) return null;
+
+                return (
+                  <div className="pt-2 w-full">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3 text-orange-400 shrink-0" /> Canales Oficiales:
+                    </p>
+                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full">
+                      {waUrl && (
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold transition-all hover:scale-105"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>WhatsApp</span>
+                        </a>
+                      )}
+                      {igUrl && (
+                        <a
+                          href={igUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 rounded-xl text-pink-400 text-xs font-bold transition-all hover:scale-105"
+                        >
+                          <Instagram className="w-3.5 h-3.5 shrink-0" />
+                          <span>Instagram</span>
+                        </a>
+                      )}
+                      {fbUrl && (
+                        <a
+                          href={fbUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-bold transition-all hover:scale-105"
+                        >
+                          <Facebook className="w-3.5 h-3.5 shrink-0" />
+                          <span>Facebook</span>
+                        </a>
+                      )}
+                      {ttUrl && (
+                        <a
+                          href={ttUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 rounded-xl text-teal-400 text-xs font-bold transition-all hover:scale-105"
+                        >
+                          <TikTokIcon className="w-3.5 h-3.5 shrink-0" />
+                          <span>TikTok</span>
+                        </a>
+                      )}
+                      {ytUrl && (
+                        <a
+                          href={ytUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold transition-all hover:scale-105"
+                        >
+                          <Youtube className="w-3.5 h-3.5 shrink-0" />
+                          <span>YouTube</span>
+                        </a>
+                      )}
+                      {normPhone && (
+                        <a
+                          href={`tel:${normPhone}`}
+                          className="h-9 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-xl text-sky-400 text-xs font-bold transition-all hover:scale-105"
+                        >
+                          <Phone className="w-3.5 h-3.5 shrink-0" />
+                          <span>Llamar</span>
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
             </div>
           </div>
@@ -907,7 +982,7 @@ export const PublicProfileModal = React.memo(({
                     </div>
                     <h3 className="text-base font-black text-white uppercase">Horario de Atención</h3>
                     <p className="text-xs text-slate-300 font-medium">
-                      {business.openingHours ? businessStatus.message : 'Horario no especificado'}
+                      {businessStatus.hasValidSchedule ? businessStatus.message : 'Horario no disponible'}
                     </p>
                   </div>
 
@@ -917,15 +992,29 @@ export const PublicProfileModal = React.memo(({
                       type="button"
                       onClick={() => setShowWeeklySchedule(!showWeeklySchedule)}
                       className={`w-full px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-between gap-1.5 transition-all cursor-pointer border ${
-                        businessStatus.isOpen 
-                           ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25' 
-                           : 'bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25'
+                        !businessStatus.hasValidSchedule
+                          ? 'bg-slate-800/40 text-slate-300 border-white/10 hover:bg-slate-800/60'
+                          : businessStatus.isOpen 
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25' 
+                            : 'bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25'
                       }`}
                       title="Ver horario semanal completo"
                     >
                       <div className="flex items-center gap-1.5 min-w-0 truncate">
-                        <Circle className={`w-2 h-2 shrink-0 ${businessStatus.isOpen ? 'fill-emerald-400 text-emerald-400' : 'fill-rose-400 text-rose-400'}`} />
-                        <span className="truncate">{businessStatus.isOpen ? 'Atendiendo Ahora' : 'Cerrado Ahora'}</span>
+                        <Circle className={`w-2 h-2 shrink-0 ${
+                          !businessStatus.hasValidSchedule
+                            ? 'fill-slate-400 text-slate-400'
+                            : businessStatus.isOpen 
+                              ? 'fill-emerald-400 text-emerald-400' 
+                              : 'fill-rose-400 text-rose-400'
+                        }`} />
+                        <span className="truncate">
+                          {!businessStatus.hasValidSchedule
+                            ? 'Horario no disponible'
+                            : businessStatus.isOpen 
+                              ? 'Atendiendo Ahora' 
+                              : 'Cerrado Ahora'}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1 text-[11px] font-bold text-amber-300 shrink-0">
                         <span>{showWeeklySchedule ? 'Ocultar' : 'Ver Semana'}</span>
@@ -1208,7 +1297,7 @@ export const PublicProfileModal = React.memo(({
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
                       <div className="absolute top-2.5 right-2.5 px-2.5 py-1 bg-black/70 backdrop-blur-md rounded-lg text-[10px] font-bold text-white">
-                        {new Date(pulse.startAt).toLocaleDateString()}
+                        {formatEcuadorEventDate(pulse.startAt).dateFormatted}
                       </div>
                     </div>
                     <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between gap-2">
@@ -1394,22 +1483,27 @@ export const PublicProfileModal = React.memo(({
         {/* ─────────────────────────────────────────────────────────────────────────────
             FLOATING WHATSAPP CTA
         ───────────────────────────────────────────────────────────────────────────── */}
-        {business?.whatsapp && (
-          <a
-            href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`¡Hola ${business.name}! Los encontré en MontaPulse.`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="fixed bottom-5 right-5 z-[4100] flex items-center gap-2 p-3 sm:px-5 sm:py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs uppercase tracking-wider rounded-full shadow-[0_10px_30px_rgba(16,185,129,0.45)] hover:shadow-[0_15px_40px_rgba(16,185,129,0.6)] hover:scale-105 active:scale-95 transition-all duration-300 border border-white/20 group"
-            title="Contactar por WhatsApp"
-          >
-            <div className="relative flex items-center justify-center">
-              <MessageCircle className="w-5 h-5 text-white fill-white/20 group-hover:rotate-12 transition-transform" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-300 rounded-full animate-ping" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-300 rounded-full" />
-            </div>
-            <span className="hidden sm:inline font-black tracking-widest text-[11px]">WhatsApp</span>
-          </a>
-        )}
+        {(() => {
+          const floatingWaUrl = business?.whatsapp ? getWhatsAppUrl(business.whatsapp, `¡Hola ${business.name}! Los encontré en MontaPulse.`) : '';
+          if (!floatingWaUrl) return null;
+          return (
+            <a
+              href={floatingWaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Contactar por WhatsApp a ${business?.name || displayName}`}
+              className="fixed bottom-5 right-5 z-[4100] min-h-[44px] min-w-[44px] flex items-center gap-2 p-3 sm:px-5 sm:py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs uppercase tracking-wider rounded-full shadow-[0_10px_30px_rgba(16,185,129,0.45)] hover:shadow-[0_15px_40px_rgba(16,185,129,0.6)] hover:scale-105 active:scale-95 transition-transform duration-200 border border-white/20 group cursor-pointer"
+              title="Contactar por WhatsApp"
+            >
+              <div className="relative flex items-center justify-center">
+                <MessageCircle className="w-5 h-5 text-white fill-white/20 group-hover:rotate-12 transition-transform duration-200" />
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-300 rounded-full animate-ping" />
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-300 rounded-full" />
+              </div>
+              <span className="hidden sm:inline font-black tracking-widest text-[11px]">WhatsApp</span>
+            </a>
+          );
+        })()}
 
       </div>
     </div>

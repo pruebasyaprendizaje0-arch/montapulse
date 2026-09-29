@@ -2,6 +2,7 @@ import React from 'react';
 import { Calendar as CalendarIcon, Search, ChevronLeft, ChevronRight, Plus, MapPin, Heart } from 'lucide-react';
 import { MontanitaEvent, Vibe, Sector, SubscriptionPlan } from '../types';
 import { useData } from '../context/DataContext';
+import { isEventPublicAndActive, formatEventPrice } from '../utils/timeUtils';
 
 // Vibe badge color map
 const VIBE_COLORS: Record<string, string> = {
@@ -17,12 +18,7 @@ const VIBE_COLORS: Record<string, string> = {
     [Vibe.OTRO]: 'bg-slate-500 text-white',
 };
 
-// Generates mock avatar URLs for participant cluster
-const MOCK_AVATARS = [
-    'https://i.pravatar.cc/40?img=1',
-    'https://i.pravatar.cc/40?img=5',
-    'https://i.pravatar.cc/40?img=9',
-];
+
 
 interface CalendarEventCardProps {
     event: MontanitaEvent;
@@ -50,6 +46,7 @@ const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
     const vibeBg = VIBE_COLORS[event.vibe] || 'bg-amber-400 text-black';
     const displaySector = Object.values(Sector).includes(event.sector as any) ? event.sector : '';
     const locationLabel = [event.locality || locality || businessName, displaySector].filter(Boolean).join(' • ').toUpperCase();
+    const priceInfo = formatEventPrice(event);
 
     return (
         <div
@@ -66,12 +63,21 @@ const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
             {/* Dark Overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/20" />
 
-            {/* Top Row: Vibe Badge + Location + Interest + Heart */}
+            {/* Top Row: Vibe Badge + Location + Heart + Attendees */}
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider ${vibeBg}`}>
                         {event.vibe}
                     </span>
+                    {priceInfo.displayLabel && (
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            priceInfo.isFree
+                                ? 'bg-emerald-500/80 text-white'
+                                : 'bg-amber-400/90 text-slate-950'
+                        }`}>
+                            {priceInfo.displayLabel}
+                        </span>
+                    )}
                     {locationLabel && (
                         <span className="flex items-center gap-1 px-3 py-1 bg-black/50 backdrop-blur-sm rounded-full text-[11px] font-bold text-white/90 uppercase tracking-wider">
                             <MapPin className="w-3 h-3 text-cyan-400" />
@@ -92,7 +98,7 @@ const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
                         />
                     </button>
                     <div className="text-right">
-                        <p className="text-[9px] font-black text-white/60 uppercase tracking-widest">Interest</p>
+                        <p className="text-[9px] font-black text-white/60 uppercase tracking-widest">Asistentes</p>
                         <p className="text-2xl font-black text-white leading-none">{Math.max(0, event.interestedCount || 0)}</p>
                     </div>
                 </div>
@@ -105,26 +111,12 @@ const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
                 </p>
             </div>
 
-            {/* Bottom Row: Title + Avatars + Button */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
-                <div>
-                    <h3 className="text-xl font-black text-white leading-tight mb-2 drop-shadow-lg">
+            {/* Bottom Row: Title + Button */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                    <h3 className="text-xl font-black text-white leading-tight mb-1 drop-shadow-lg truncate">
                         {event.title}
                     </h3>
-                    {/* Avatar Cluster */}
-                    <div className="flex items-center gap-1">
-                        <div className="flex -space-x-2">
-                            {MOCK_AVATARS.map((src, i) => (
-                                <img
-                                    key={i}
-                                    src={src}
-                                    alt=""
-                                    className="w-7 h-7 rounded-full border-2 border-black object-cover"
-                                />
-                            ))}
-                        </div>
-                        <span className="text-xs font-black text-white/80 ml-1">+128</span>
-                    </div>
                 </div>
 
                 {/* RSVP Button */}
@@ -133,12 +125,12 @@ const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
                         e.stopPropagation();
                         onRsvp(event.id);
                     }}
-                    className={`px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-90 shadow-lg ${isRsvp
+                    className={`px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-90 shadow-lg shrink-0 ${isRsvp
                         ? 'bg-emerald-500 text-white shadow-emerald-500/40'
                         : 'bg-orange-500 text-white shadow-orange-500/40'
                         }`}
                 >
-                    {isRsvp ? '¡Pulso Sentido!' : 'Interested'}
+                    {isRsvp ? '¡Asistiré!' : 'Me interesa'}
                 </button>
             </div>
         </div>
@@ -183,7 +175,7 @@ export const Calendar: React.FC = () => {
     const getCalendarTitle = () => {
         if (agendaRange === 'day') {
             const today = new Date();
-            if (calendarBaseDate.toDateString() === today.toDateString()) return 'Today';
+            if (calendarBaseDate.toDateString() === today.toDateString()) return 'Hoy';
             return calendarBaseDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
         }
         if (agendaRange === 'week') {
@@ -200,35 +192,21 @@ export const Calendar: React.FC = () => {
     const getSubtitle = () => {
         if (agendaRange === 'day') {
             const today = new Date();
-            if (calendarBaseDate.toDateString() === today.toDateString()) return 'EVENTS UNTIL 6:00 AM TOMORROW';
+            if (calendarBaseDate.toDateString() === today.toDateString()) return 'EVENTOS HASTA LAS 6:00 AM DE MAÑANA';
             return 'PULSO DIARIO';
         }
         if (agendaRange === 'week') return 'SEMANA A LA VISTA';
         return 'CARTELERA MENSUAL';
     };
 
-    const RANGE_LABELS = { day: 'Daily', week: 'Weekly', month: 'Monthly' } as const;
+    const RANGE_LABELS = { day: 'Hoy', week: 'Semana', month: 'Mes' } as const;
 
     // Check if event is active (ongoing now)
     const isEventActive = (event: MontanitaEvent): boolean => {
         const now = new Date();
         const start = new Date(event.startAt);
         const end = event.endAt ? new Date(event.endAt) : new Date(start.getTime() + 4 * 3600000);
-        return now >= start && now <= end && event.status !== 'deactivated';
-    };
-
-    // Check if event has ended
-    const isEventTerminated = (event: MontanitaEvent): boolean => {
-        const now = new Date();
-        const end = event.endAt ? new Date(event.endAt) : new Date(new Date(event.startAt).getTime() + 4 * 3600000);
-        return now > end || event.status === 'deactivated';
-    };
-
-    // Check if event is upcoming
-    const isEventUpcoming = (event: MontanitaEvent): boolean => {
-        const now = new Date();
-        const start = new Date(event.startAt);
-        return now < start && event.status !== 'deactivated';
+        return now >= start && now <= end && isEventPublicAndActive(event);
     };
 
     // Filter events for a specific date (including ongoing events)
@@ -237,6 +215,8 @@ export const Calendar: React.FC = () => {
         const dateEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
         
         return eventsWithLiveCounts.filter(e => {
+            if (!isEventPublicAndActive(e)) return false;
+
             const start = new Date(e.startAt);
             const end = e.endAt ? new Date(e.endAt) : new Date(start.getTime() + 4 * 3600000);
             
@@ -245,7 +225,7 @@ export const Calendar: React.FC = () => {
             const endsOnDate = end.getDate() === date.getDate() && end.getMonth() === date.getMonth() && end.getFullYear() === date.getFullYear();
             const spansDate = start < dateEnd && end > dateStart;
             
-            return (startsOnDate || endsOnDate || spansDate) && e.status !== 'deactivated';
+            return startsOnDate || endsOnDate || spansDate;
         }).sort((a, b) => {
             // Sort by: active first, then upcoming, then by start time
             const aActive = isEventActive(a);
@@ -262,6 +242,8 @@ export const Calendar: React.FC = () => {
         const month = calendarBaseDate.getMonth();
         
         return eventsWithLiveCounts.filter(e => {
+            if (!isEventPublicAndActive(e)) return false;
+
             const start = new Date(e.startAt);
             const end = e.endAt ? new Date(e.endAt) : new Date(start.getTime() + 4 * 3600000);
             
@@ -270,18 +252,14 @@ export const Calendar: React.FC = () => {
             const endsInMonth = end.getMonth() === month && end.getFullYear() === year;
             const spansMonth = start.getMonth() <= month && end.getMonth() >= month && start.getFullYear() <= year && end.getFullYear() >= year;
             
-            return (startsInMonth || endsInMonth || spansMonth) && e.status !== 'deactivated';
+            return startsInMonth || endsInMonth || spansMonth;
         }).sort((a, b) => {
-            // Sort: active first, then upcoming, then terminated
+            // Sort: active first, then by start time
             const aActive = isEventActive(a);
             const bActive = isEventActive(b);
-            const aTerminated = isEventTerminated(a);
-            const bTerminated = isEventTerminated(b);
             
             if (aActive && !bActive) return -1;
             if (!aActive && bActive) return 1;
-            if (aTerminated && !bTerminated) return 1;
-            if (!aTerminated && bTerminated) return -1;
             return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
         });
     };
@@ -301,7 +279,7 @@ export const Calendar: React.FC = () => {
                         <div className="w-11 h-11 bg-orange-500 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/30">
                             <CalendarIcon className="w-6 h-6 text-white" />
                         </div>
-                        <h1 className="text-xl font-black text-white tracking-tight">Pulse Calendar</h1>
+                        <h1 className="text-xl font-black text-white tracking-tight">Agenda de Eventos</h1>
                     </div>
                     <div className="flex items-center gap-3">
                         {canCreateEvent && (

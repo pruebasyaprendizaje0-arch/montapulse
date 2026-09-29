@@ -59,7 +59,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
         <>
             <div className="absolute top-20 right-6 w-[320px] max-h-[480px] bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-2xl z-[100] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
                 <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5">
-                    <h3 className="text-sm font-black text-white uppercase tracking-widest">Pulse Notifications</h3>
+                    <h3 className="text-sm font-black text-white uppercase tracking-widest">Notificaciones</h3>
                     <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
                         <X className="w-4 h-4 text-slate-400" />
                     </button>

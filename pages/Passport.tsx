@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
     ChevronLeft, Edit3, LogOut, CheckCircle, MapPin, Store, Palmtree, Mountain,
     Zap, Star, Sparkles, MessageCircle, Navigation, CreditCard, Banknote, Mail, Ticket,
     BarChart2, Eye, Users, TrendingUp, Award, Phone, User, X, Camera, ImageIcon, Upload, ShieldCheck, Plus, Activity,
-    Info, FileText, ExternalLink, Trash2, Save, HelpCircle, Globe, Shield, Instagram, Facebook, Twitter, Link, Copy
+    Info, FileText, ExternalLink, Trash2, Save, HelpCircle, Globe, Shield, Instagram, Facebook, Twitter, Link, Copy,
+    QrCode, CalendarCheck
 } from 'lucide-react';
 import { UserProfile, Business, MontanitaEvent, Vibe, SubscriptionPlan, Sector, BusinessCategory, Coupon, CouponRedemption } from '../types';
 import { Calendar, Clock } from 'lucide-react';
@@ -22,13 +23,13 @@ import { PageLoader } from '../components/common/PageLoader';
 import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
-import { DownloadManuals } from '../components/Passport/DownloadManuals';
-import { SuperAdminCenter } from '../components/Admin/SuperAdminCenter';
-import { AIMarketingModal } from '../components/Modals/AIMarketingModal';
-import CouponManagerModal from '../components/Modals/CouponManagerModal';
-import { BusinessQRModal } from '../components/Modals/BusinessQRModal';
-import { QrCode, CalendarCheck } from 'lucide-react';
-import { UserWalletModal } from '../components/Coupons/UserWalletModal';
+
+const DownloadManuals = lazy(() => import('../components/Passport/DownloadManuals').then(m => ({ default: m.DownloadManuals })));
+const SuperAdminCenter = lazy(() => import('../components/Admin/SuperAdminCenter').then(m => ({ default: m.SuperAdminCenter })));
+const AIMarketingModal = lazy(() => import('../components/Modals/AIMarketingModal').then(m => ({ default: m.AIMarketingModal })));
+const CouponManagerModal = lazy(() => import('../components/Modals/CouponManagerModal'));
+const BusinessQRModal = lazy(() => import('../components/Modals/BusinessQRModal').then(m => ({ default: m.BusinessQRModal })));
+const UserWalletModal = lazy(() => import('../components/Coupons/UserWalletModal').then(m => ({ default: m.UserWalletModal })));
 import { subscribeToPublicCoupons, obtainCoupon, subscribeToUserWallet } from '../services/couponService';
 import { CouponCard } from '../components/Coupons/CouponCard';
 
@@ -317,7 +318,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     </div>
 
                     {/* Title */}
-                    <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Mi Passport</h1>
+                    <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Mi Perfil</h1>
                     
                     {/* Subtitle */}
                     <p className="text-slate-300 text-sm font-semibold mb-6 max-w-[280px] leading-relaxed">
@@ -374,7 +375,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     }
 
     if (authLoading || dataLoading) {
-        return <PageLoader message="Abriendo tu Passport..." />;
+        return <PageLoader message="Abriendo tu Perfil..." />;
     }
 
     return (
@@ -395,7 +396,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             }
                         }}
                     >
-                        <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">Mi Passport</h1>
+                        <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">Mi Perfil</h1>
                         <span className="text-[8px] sm:text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-0.5 sm:mt-1">Centro de Control</span>
                     </div>
 
@@ -1143,7 +1144,7 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                 <div className="px-6 mb-12">
                     <div className="flex flex-col gap-6">
                         <div className="flex flex-col">
-                            <h3 className="text-xl font-black tracking-tighter text-white">Menú Passport</h3>
+                            <h3 className="text-xl font-black tracking-tighter text-white">Menú de Perfil</h3>
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Configuración y Seguridad</p>
                         </div>
 
@@ -1186,7 +1187,9 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             <h3 className="text-xl font-black tracking-tighter text-white">Documentación</h3>
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Manuales de usuario y funciones</p>
                         </div>
-                        <DownloadManuals isAdmin={isAdmin || isSuperUser} />
+                        <Suspense fallback={null}>
+                            <DownloadManuals isAdmin={isAdmin || isSuperUser} />
+                        </Suspense>
                     </div>
                 </div>
 
@@ -1719,42 +1722,49 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
             {/* Hidden Command Center Modal */}
             {showAdminCenter && (
-                <SuperAdminCenter onClose={() => setShowAdminCenter(false)} />
+                <Suspense fallback={<div className="fixed inset-0 z-[5000] bg-black/60 backdrop-blur-sm flex items-center justify-center" aria-live="polite"><div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div></div>}>
+                    <SuperAdminCenter onClose={() => setShowAdminCenter(false)} />
+                </Suspense>
             )}
             
             {showAIMarketing && userBusiness && (
-                <AIMarketingModal
-                    isOpen={showAIMarketing}
-                    onClose={() => setShowAIMarketing(false)}
-                    business={userBusiness}
-                    metrics={{ 
-                        monthlyViews: userBusiness.monthlyViews || 0,
-                        totalClicks: userStats.totalClicks || 0,
-                        impactCount: userStats.impactCount || 0,
-                        followers: userBusiness.followerCount || 0
-                    }}
-                />
+                <Suspense fallback={<div className="fixed inset-0 z-[5000] bg-black/60 backdrop-blur-sm flex items-center justify-center" aria-live="polite"><div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div></div>}>
+                    <AIMarketingModal
+                        isOpen={showAIMarketing}
+                        onClose={() => setShowAIMarketing(false)}
+                        business={userBusiness}
+                        metrics={{ 
+                            monthlyViews: userBusiness.monthlyViews || 0,
+                            totalClicks: userStats.totalClicks || 0,
+                            impactCount: userStats.impactCount || 0,
+                            followers: userBusiness.followerCount || 0
+                        }}
+                    />
+                </Suspense>
             )}
 
             {showCouponManager && userBusiness && (
-                <CouponManagerModal
-                    isOpen={showCouponManager}
-                    onClose={() => setShowCouponManager(false)}
-                    business={userBusiness}
-                />
+                <Suspense fallback={<div className="fixed inset-0 z-[5000] bg-black/60 backdrop-blur-sm flex items-center justify-center" aria-live="polite"><div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div></div>}>
+                    <CouponManagerModal
+                        isOpen={showCouponManager}
+                        onClose={() => setShowCouponManager(false)}
+                        business={userBusiness}
+                    />
+                </Suspense>
             )}
 
-
             {showUserWallet && user && (
-                <UserWalletModal
-                    isOpen={showUserWallet}
-                    onClose={() => {
-                        setShowUserWallet(false);
-                        setInitialWalletRedemptionId(null);
-                    }}
-                    userId={user.id}
-                    initialRedemptionId={initialWalletRedemptionId}
-                />
+                <Suspense fallback={<div className="fixed inset-0 z-[5000] bg-black/60 backdrop-blur-sm flex items-center justify-center" aria-live="polite"><div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div></div>}>
+                    <UserWalletModal
+                        isOpen={showUserWallet}
+                        onClose={() => {
+                            setShowUserWallet(false);
+                            setInitialWalletRedemptionId(null);
+                        }}
+                        userId={user.id}
+                        initialRedemptionId={initialWalletRedemptionId}
+                    />
+                </Suspense>
             )}
 
             {showReferralsModal && userBusiness && (
@@ -1886,14 +1896,16 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
             )}
 
             {(selectedQRBiz || userBusiness) && (
-                <BusinessQRModal
-                    isOpen={showQRModal}
-                    onClose={() => {
-                        setShowQRModal(false);
-                        setSelectedQRBiz(null);
-                    }}
-                    business={(selectedQRBiz || userBusiness)!}
-                />
+                <Suspense fallback={<div className="fixed inset-0 z-[5000] bg-black/60 backdrop-blur-sm flex items-center justify-center" aria-live="polite"><div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div></div>}>
+                    <BusinessQRModal
+                        isOpen={showQRModal}
+                        onClose={() => {
+                            setShowQRModal(false);
+                            setSelectedQRBiz(null);
+                        }}
+                        business={(selectedQRBiz || userBusiness)!}
+                    />
+                </Suspense>
             )}
         </>
     );

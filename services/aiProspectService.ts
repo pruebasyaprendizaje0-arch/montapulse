@@ -1,4 +1,5 @@
 import { BusinessCategory, Sector } from '../types';
+import { getAuthorizedHeaders } from './authService';
 
 const OPENROUTER_URL = '/api/ai/openrouter';
 
@@ -42,11 +43,10 @@ Devuelve ÚNICAMENTE un array JSON que contenga objetos con las siguientes llave
 IMPORTANTE: Devuelve la respuesta en formato JSON plano y limpio. No envuelvas el JSON en marcas de código de markdown de triple comilla (como \`\`\`json).`;
 
   try {
+    const headers = await getAuthorizedHeaders();
     const response = await fetch(OPENROUTER_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model: model,
         messages: [
@@ -114,11 +114,10 @@ ${instructions ? `Instrucciones del administrador: "${instructions}"` : ''}
 El tono debe ser muy amigable, fresco, playero pero sumamente profesional. Destaca el beneficio clave de publicar sus eventos y ofertas en el mapa interactivo de MontaPulse para que cientos de turistas y locales los encuentren en tiempo real. Responde ÚNICAMENTE con el cuerpo del mensaje, sin introducciones ni comentarios adicionales.`;
 
   try {
+    const headers = await getAuthorizedHeaders();
     const response = await fetch(OPENROUTER_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model: model,
         messages: [

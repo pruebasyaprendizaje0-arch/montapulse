@@ -38,11 +38,12 @@ export const generateItinerary = async (
             ...
         `;
 
+        const { getAuthorizedHeaders } = await import('./authService');
+        const headers = await getAuthorizedHeaders();
+
         const response = await fetch('/api/ai/gemini', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers,
             body: JSON.stringify({ prompt }),
         });
 

@@ -5,19 +5,20 @@ import { X, Sparkles, MapPin, Store, Waves, Leaf, ExternalLink, Heart, Zap, Shie
 import { EventCard } from '../components/EventCard';
 import { Sector, MontanitaEvent, Business, BusinessCategory, Vibe, SubscriptionPlan, MapEntryType } from '../types';
 import { LOCALITIES, LOCALITY_SECTORS, SECTOR_INFO, LOCALITY_POLYGONS, BASE_URL } from '../constants';
-import { getPlannerRecommendations, PlannerSection, getRecommendationForUser } from '../services/geminiService';
 import { deleteBusiness, createBusiness, updateBusiness, incrementBusinessViewCount } from '../services/firestoreService';
 import { useAuthContext } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { PageLoader } from '../components/common/PageLoader';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
-import { ItineraryModal } from '../components/Modals/ItineraryModal';
-import { AIRecommendationModal } from '../components/Modals/AIRecommendationModal';
-import { PlannerChatModal } from '../components/Modals/PlannerChatModal';
-import { isBusinessOpen } from '../utils/timeUtils';
-import { LocalityManagerModal } from '../components/Modals/LocalityManagerModal';
+import { isBusinessOpen, isEventPublicAndActive } from '../utils/timeUtils';
+import { getWhatsAppUrl } from '../utils/social';
 import { useSEO } from '../hooks/useSEO';
+import type { PlannerSection } from '../services/geminiService';
+
+const ItineraryModal = lazy(() => import('../components/Modals/ItineraryModal').then(m => ({ default: m.ItineraryModal })));
+const PlannerChatModal = lazy(() => import('../components/Modals/PlannerChatModal').then(m => ({ default: m.PlannerChatModal })));
+const LocalityManagerModal = lazy(() => import('../components/Modals/LocalityManagerModal').then(m => ({ default: m.LocalityManagerModal })));
 import { Skeleton } from '../components/Skeleton';
 import { ECUADOR_GEO_DATA, LocationStructure } from '../utils/ecuadorGeoData';
 
@@ -282,6 +283,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
     const handleAiAsk = async () => {
         setIsAiLoading(true);
         setAiRecData(null);
+        const { getPlannerRecommendations } = await import('../services/geminiService');
         const data = await getPlannerRecommendations(user, businesses, currentLocality.name);
         setAiRecData(data);
         setIsAiLoading(false);
@@ -387,7 +389,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
     }, [currentMoodCriteria, businesses, currentLocality, userLocation]);
 
     const filteredEvents = useMemo(() => {
-        let result = [...eventsWithLiveCounts];
+        let result = (eventsWithLiveCounts || []).filter(e => isEventPublicAndActive(e));
         
         // Filter by locality with accent normalization & fallback
         result = result.filter(e => {
@@ -507,11 +509,7 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
 
     // Eventos futuros para el mapa
     const upcomingEvents = useMemo(() => {
-        const now = new Date();
-        return eventsWithLiveCounts.filter(e => {
-            const eventEnd = e.endAt ? new Date(e.endAt) : new Date(new Date(e.startAt).getTime() + 4 * 3600000);
-            return eventEnd > now && e.status !== 'deactivated';
-        });
+        return (eventsWithLiveCounts || []).filter(e => isEventPublicAndActive(e));
     }, [eventsWithLiveCounts]);
 
     const popularVibe = useMemo(() => {
@@ -793,6 +791,8 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                                                     (String(itemCategory || '')).toLowerCase().includes(sq) ||
                                                     (String(itemSector || '')).toLowerCase().includes(sq)
                                                 );
+                                                const isEvent = 'title' in item || 'startAt' in item;
+                                                if (isEvent && !isEventPublicAndActive(item as MontanitaEvent)) return false;
                                                 const isDeactivated = (item as any).status === 'deactivated';
                                                 return matchesLocality && matchesSearch && !isDeactivated;
                                             })
@@ -1959,7 +1959,8 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
                                                                     <button 
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            window.open(`https://wa.me/${business.whatsapp}`, '_blank');
+                                                                            const waUrl = getWhatsAppUrl(business.whatsapp);
+                                                                            if (waUrl) window.open(waUrl, '_blank');
                                                                         }}
                                                                         className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all duration-300"
                                                                     >
@@ -1987,15 +1988,17 @@ export const ExploreFeed: React.FC<ExploreProps> = ({
             
 
             
-            <ItineraryModal
-                isOpen={showItinerary}
-                onClose={() => setShowItinerary(false)}
-            />
-            <PlannerChatModal
-                isOpen={showPlannerChat}
-                onClose={() => setShowPlannerChat(false)}
-            />
-            <LocalityManagerModal />
+            <Suspense fallback={null}>
+                <ItineraryModal
+                    isOpen={showItinerary}
+                    onClose={() => setShowItinerary(false)}
+                />
+                <PlannerChatModal
+                    isOpen={showPlannerChat}
+                    onClose={() => setShowPlannerChat(false)}
+                />
+                <LocalityManagerModal />
+            </Suspense>
         </>
     );
 };

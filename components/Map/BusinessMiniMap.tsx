@@ -31,19 +31,19 @@ export const BusinessMiniMap: React.FC<BusinessMiniMapProps> = memo(({
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
-  
+
   const [mapMode, setMapMode] = useState<'street' | 'satellite'>('street');
   const mapModeRef = useRef<'street' | 'satellite'>('street');
   mapModeRef.current = mapMode;
-  
+
   const [copied, setCopied] = useState(false);
   const { showToast } = useToast();
 
   // Extract coordinates or fallback to locality
   const rawCoords = business.coordinates || (business.location ? [business.location.lat, business.location.lng] : null);
   const localityDefault = LOCALITIES.find(l => l.name === (business.locality || 'Montañita'))?.coords || [-1.825, -80.753];
-  const coordinates: [number, number] = (rawCoords && rawCoords.length === 2 && !isNaN(rawCoords[0]) && !isNaN(rawCoords[1])) 
-    ? [Number(rawCoords[0]), Number(rawCoords[1])] 
+  const coordinates: [number, number] = (rawCoords && rawCoords.length === 2 && !isNaN(rawCoords[0]) && !isNaN(rawCoords[1]))
+    ? [Number(rawCoords[0]), Number(rawCoords[1])]
     : [localityDefault[0], localityDefault[1]];
 
   const hasPreciseCoords = !!(rawCoords && rawCoords.length === 2 && !isNaN(rawCoords[0]) && !isNaN(rawCoords[1]));
@@ -108,11 +108,11 @@ export const BusinessMiniMap: React.FC<BusinessMiniMapProps> = memo(({
     // Determine category styling
     const iconKey = business.category === BusinessCategory.RESTAURANTE ? 'food' :
       business.category === BusinessCategory.BAR || business.category === BusinessCategory.DISCOTECA || business.category === BusinessCategory.BAR_DISCOTECA ? 'music' :
-      business.category === BusinessCategory.HOTEL || business.category === BusinessCategory.HOSTAL || business.category === BusinessCategory.HOSPAJE ? 'hotel' :
-      business.category === BusinessCategory.ESCUELA_SURF || business.category === BusinessCategory.CENTRO_SURF ? 'waves' :
-      business.category === BusinessCategory.TOUR_OPERATOR ? 'mountain' :
-      business.category === BusinessCategory.SHOPPING ? 'shopping' :
-      business.icon || 'default';
+        business.category === BusinessCategory.HOTEL || business.category === BusinessCategory.HOSTAL || business.category === BusinessCategory.HOSPAJE ? 'hotel' :
+          business.category === BusinessCategory.ESCUELA_SURF || business.category === BusinessCategory.CENTRO_SURF ? 'waves' :
+            business.category === BusinessCategory.TOUR_OPERATOR ? 'mountain' :
+              business.category === BusinessCategory.SHOPPING ? 'shopping' :
+                business.icon || 'default';
 
     const style = CATEGORY_COLORS[iconKey] || CATEGORY_COLORS.default;
 
@@ -142,7 +142,7 @@ export const BusinessMiniMap: React.FC<BusinessMiniMapProps> = memo(({
     markerRef.current = marker;
 
     // Invalidation timers for reliable rendering
-    const timers = [50, 200, 500, 1000].map(delay => 
+    const timers = [50, 200, 500, 1000].map(delay =>
       setTimeout(() => {
         if (mapRef.current) {
           mapRef.current.invalidateSize();
@@ -218,8 +218,8 @@ export const BusinessMiniMap: React.FC<BusinessMiniMapProps> = memo(({
   return (
     <div className={`relative w-full rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 bg-slate-950 shadow-2xl flex flex-col group ${className}`}>
       {/* Mini-map Leaflet Container */}
-      <div 
-        ref={containerRef} 
+      <div
+        ref={containerRef}
         style={{ height, width: '100%' }}
         className="w-full relative z-0 bg-slate-950"
       />
@@ -245,9 +245,8 @@ export const BusinessMiniMap: React.FC<BusinessMiniMapProps> = memo(({
         <div className="flex items-center gap-1 p-1 bg-slate-950/85 backdrop-blur-md border border-white/15 rounded-xl shadow-lg">
           <button
             onClick={() => setMapMode('street')}
-            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              mapMode === 'street' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-            }`}
+            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${mapMode === 'street' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
             title="Modo Calles (OpenStreetMap)"
           >
             Calles
@@ -259,9 +258,8 @@ export const BusinessMiniMap: React.FC<BusinessMiniMapProps> = memo(({
               }
               setMapMode('satellite');
             }}
-            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-              mapMode === 'satellite' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-            }`}
+            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${mapMode === 'satellite' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
             title="Modo Satélite"
           >
             Satélite

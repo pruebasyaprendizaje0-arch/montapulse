@@ -148,6 +148,7 @@ export interface Business {
   description: string;
   services?: string[];
   icon?: string;
+  verified?: boolean;
   isVerified: boolean;
   coordinates: [number, number];
   location?: { lat: number; lng: number }; // For compatibility
@@ -224,6 +225,8 @@ export interface ProfileReview {
   createdAt?: any;
 }
 
+export type EventStatus = 'draft' | 'published' | 'confirmed' | 'cancelled' | 'expired' | 'active' | 'readonly' | 'deactivated';
+
 export interface MontanitaEvent {
   id: string;
   slug?: string;
@@ -245,7 +248,10 @@ export interface MontanitaEvent {
   viewCount?: number;
   ownerId?: string;
   isFeatured?: boolean;
-  status?: 'active' | 'readonly' | 'deactivated';
+  status?: EventStatus;
+  price?: number;
+  currency?: string;
+  isFree?: boolean;
   clickCount?: number;
   weeklyClicks?: number;
   monthlyViews?: number;
@@ -331,10 +337,10 @@ export interface HelpSupportSettings {
 
 export type AgendaRange = 'day' | 'week' | 'month';
 
-export type ViewType = 'explore' | 'feed' | 'calendar' | 'favorites' | 'host' | 'history' | 'guide' | 'all-favorites' | 'plans' | 'community' | 'chat'    | 'admin-users'
+export type ViewType = 'home' | 'explore' | 'feed' | 'calendar' | 'favorites' | 'saved' | 'host' | 'history' | 'guide' | 'all-favorites' | 'plans' | 'community' | 'chat' | 'admin-users'
     | 'policies'
- | 'services'
- | 'info';
+    | 'services'
+    | 'info';
 
 export interface PolicySection {
   title: string;
@@ -451,6 +457,22 @@ export interface Transaction {
   gateway: string;
   timestamp: any;
   rawBody?: any;
+}
+
+export interface PaymentOrder {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  businessId?: string;
+  type: 'subscription' | 'menu_addon';
+  planId?: string;
+  amount: number;
+  currency: 'USD';
+  status: 'pending' | 'PAID' | 'failed' | 'cancelled';
+  createdAt: any;
+  processedAt?: any;
+  dlocalPaymentId?: string;
+  referralRewardGranted?: boolean;
 }
 
 // ==================== DIGITAL MENU QR ====================

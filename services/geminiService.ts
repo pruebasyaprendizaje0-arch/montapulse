@@ -1,5 +1,6 @@
 
 import { MontanitaEvent, Sector, Business, UserProfile, SubscriptionPlan } from "../types";
+import { getAuthorizedHeaders } from "./authService";
 
 export interface PlannerSection {
   category: string;
@@ -14,11 +15,10 @@ export interface PlannerSection {
 const OPENROUTER_URL = '/api/ai/openrouter';
 
 async function callOpenRouter(messages: { role: string; content: string }[], jsonMode?: boolean): Promise<string> {
+  const headers = await getAuthorizedHeaders();
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       messages,
       jsonMode,

@@ -26,13 +26,13 @@ import {
 } from '../services/couponService';
 import { Coupon, CouponRedemption } from '../types';
 
-import { generateEventDescription } from '../services/geminiService';
+
 import { useNavigate, useLocation } from 'react-router-dom';
 import { compressImage } from '../utils/imageUtils';
 import { useAuthContext } from './AuthContext';
 import { useToast } from './ToastContext';
 import { resetFirestoreCache } from '../firebase.config';
-import { getDefaultOpeningHours, getEcuadorDate } from '../utils/timeUtils';
+import { getDefaultOpeningHours, getEcuadorDate, isEventPublicAndActive } from '../utils/timeUtils';
 import { guardarSitiosEnLocal, obtenerSitiosLocales } from '../utils/db';
 
 export type CommunityTab = 'chats' | 'updates' | 'communities' | 'calls' | 'notifications' | 'profile';
@@ -507,7 +507,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const eventNotifications: PulseNotification[] = [];
 
         events.forEach(event => {
-            if (event.status === 'deactivated') return;
+            if (!isEventPublicAndActive(event)) return;
 
             const eventStart = new Date(event.startAt);
             const eventEnd = new Date(event.endAt);
@@ -1161,19 +1161,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const favoritedEvents = useMemo(() => {
-        const now = new Date();
         return eventsWithLiveCounts.filter(e => {
             if (!favorites.includes(e.id)) return false;
-            const eventEnd = e.endAt ? new Date(e.endAt) : new Date(new Date(e.startAt).getTime() + 4 * 3600000);
-            return eventEnd > now;
+            return isEventPublicAndActive(e);
         });
     }, [eventsWithLiveCounts, favorites]);
 
     const filteredEvents = useMemo(() => {
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
         let filtered = eventsWithLiveCounts.filter(e => {
+            if (!isEventPublicAndActive(e)) return false;
+
             const biz = businesses.find(b => b.id === e.businessId);
             const eventLocality = e.locality || biz?.locality || 'Montañita';
             const matchesLocality = eventLocality === currentLocality.name;
@@ -1192,12 +1189,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 eventDate.getFullYear() === calendarBaseDate.getFullYear()
             );
 
-            // "cada mes se actualicen los eventos" -> Solo mostrar eventos del mes actual o futuros
-            const isCurrentOrFutureMonth = eventDate >= startOfMonth;
-            const eventEndDate = e.endAt ? new Date(e.endAt) : new Date(eventDate.getTime() + 4 * 3600000);
-            const isActive = now < eventEndDate;
-
-            return matchesLocality && matchesSector && matchesSearch && matchesFilter && matchesMood && isCurrentOrFutureMonth && isActive && matchesCalendarDate;
+            return matchesLocality && matchesSector && matchesSearch && matchesFilter && matchesMood && matchesCalendarDate;
         });
 
         // Boost premium events if they match mood
@@ -1214,7 +1206,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!a.isPremium && b.isPremium) return 1;
             return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
         });
-    }, [eventsWithLiveCounts, businesses, currentLocality, selectedSector, searchQuery, activeFilter, selectedMood]);
+    }, [eventsWithLiveCounts, businesses, currentLocality, selectedSector, searchQuery, activeFilter, selectedMood, isCalendarFilterActive, calendarBaseDate]);
 
     const filteredBusinesses = useMemo(() => {
         return businesses.filter(b => {
@@ -1248,8 +1240,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const activeView = useMemo(() => {
         const path = location.pathname;
         if (path === '/' || path === '/history') return 'history';
-        if (path === '/explore' || path === '/feed') return 'explore';
-        if (path === '/calendar') return 'calendar';
+        if (path === '/home') return 'home';
+        if (path === '/explore' || path === '/feed' || path.startsWith('/evento/')) return 'explore';
+        if (path === '/calendar' || path.startsWith('/agenda/')) return 'calendar';
         if (path === '/passport') return 'favorites';
 
         if (path === '/host') return 'host';
@@ -1260,6 +1253,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (path === '/info') return 'info';
         if (path === '/policies') return 'policies';
         if (path === '/services' || path.startsWith('/negocio/')) return 'services';
+        if (path === '/ruta-del-spondylus' || path.startsWith('/guia/')) return 'guide';
         return 'history';
     }, [location.pathname]);
 
@@ -1270,8 +1264,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         if (activeView === 'calendar') {
+            const activeEvents = events.filter(e => isEventPublicAndActive(e));
             if (agendaRange === 'day') {
-                return events.filter(e => {
+                return activeEvents.filter(e => {
                     const eDate = new Date(e.startAt);
                     return eDate.getDate() === calendarBaseDate.getDate() &&
                         eDate.getMonth() === calendarBaseDate.getMonth() &&
@@ -1281,13 +1276,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (agendaRange === 'week') {
                 const weekEnd = new Date(calendarBaseDate);
                 weekEnd.setDate(weekEnd.getDate() + 7);
-                return events.filter(e => {
+                return activeEvents.filter(e => {
                     const eDate = new Date(e.startAt);
                     return eDate >= calendarBaseDate && eDate < weekEnd;
                 }).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
             }
             // Monthly
-            return events.filter(e => {
+            return activeEvents.filter(e => {
                 const eDate = new Date(e.startAt);
                 return eDate.getMonth() === calendarBaseDate.getMonth() &&
                     eDate.getFullYear() === calendarBaseDate.getFullYear();
@@ -1297,10 +1292,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (activeView === 'explore') return filteredEvents;
 
         return [...events]
-            .filter(e => {
-                const eventEndDate = e.endAt ? new Date(e.endAt) : new Date(new Date(e.startAt).getTime() + 4 * 3600000);
-                return new Date() < eventEndDate;
-            })
+            .filter(e => isEventPublicAndActive(e))
             .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     }, [activeView, events, favoritedEvents, filteredEvents, agendaRange, calendarBaseDate]);
 
@@ -2219,6 +2211,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
                 setIsGeneratingDesc(true);
                 try {
+                    const { generateEventDescription } = await import('../services/geminiService');
                     const desc = await generateEventDescription(newEvent.title, newEvent.sector);
                     setGeneratedDesc(desc);
                     setNewEvent(prev => ({ ...prev, description: desc }));
@@ -2695,14 +2688,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             },
             setActiveView: (view: ViewType) => {
                 const paths: Record<string, string> = {
-                    'history': '/',
+                    'home': '/',
+                    'history': '/history',
                     'explore': '/explore',
                     'feed': '/explore',
                     'calendar': '/calendar',
                     'community': '/community',
                     'host': '/host',
                     'favorites': '/passport',
+                    'profile': '/passport',
                     'plans': '/plans',
+                    'saved': '/saved-events',
                     'all-favorites': '/saved-events',
                     'policies': '/policies',
                     'info': '/info',

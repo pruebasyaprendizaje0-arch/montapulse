@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs",
     "deploy": "npm run build && npx firebase-tools deploy --only hosting,functions,firestore:rules,storage"
   },
   "dependencies": {
@@ -35,6 +36,7 @@
     "resend": "^6.12.4"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/vite": "^4.2.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",

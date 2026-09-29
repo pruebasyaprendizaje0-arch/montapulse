@@ -1,4 +1,6 @@
 
+import { getAuthorizedHeaders } from './authService';
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -21,11 +23,10 @@ Reglas:
 
 
 export async function sendChatMessage(messages: ChatMessage[], model?: string, signal?: AbortSignal): Promise<string> {
+  const headers = await getAuthorizedHeaders();
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       model: model,
       messages: [
@@ -51,11 +52,10 @@ export async function sendChatMessageStream(
   model?: string,
   signal?: AbortSignal,
 ): Promise<void> {
+  const headers = await getAuthorizedHeaders();
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       model: model,
       messages: [

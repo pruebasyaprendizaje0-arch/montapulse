@@ -271,8 +271,8 @@ export const InfoPage: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-2xl sm:text-3xl font-black text-amber-400 uppercase tracking-tight">📱 INFO {localityName}</h1>
-                            <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest">Puntos de Referencia y Negocios Premium</p>
+                            <h1 className="text-2xl sm:text-3xl font-black text-amber-400 uppercase tracking-tight">📱 DIRECTORIO {localityName}</h1>
+                            <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest">Negocios, Servicios y Referencias</p>
                         </div>
                         {/* Botón cerrar en móvil */}
                         <button
