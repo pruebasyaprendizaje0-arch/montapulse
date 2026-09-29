@@ -1008,8 +1008,17 @@ app.get('/negocio/:slug', async (req, res) => {
                 .replace(/<meta name="twitter:.*?".*?>/is, '')
                 .replace(/<link rel="canonical".*?>/is, '')
                 .replace(/<script type="application\/ld\+json">.*?WebSite.*?<\/script>/is, '')
-            .replace('<head>', `<head>\n${metaTags}`);
-        baseHtml = injectRootHtml(baseHtml, semanticPayload);
+                .replace('<head>', `<head>\n${metaTags}`);
+            baseHtml = injectRootHtml(baseHtml, semanticPayload);
+        }
+
+        res.status(200).send(baseHtml);
+    } catch (error) {
+        logger.error('[SEO] Error en negocio SEO:', error);
+        res.status(500).send('Error interno');
+    }
+});
+
 // =========================================================================
 // SEGURIDAD Y PROTECCIÓN DE ENDPOINTS - FASE 1 (MontaPulse / ubicame.info)
 // =========================================================================

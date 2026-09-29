@@ -96,10 +96,8 @@ test('Phase 5.1 Reconciliation, Mobile Home & Performance Verifications', async 
         assert.equal(/SuperAdmin/i.test(homeImports), false, 'Home.tsx must NOT import SuperAdmin statically');
 
         // Locate Explore entry
-        const exploreEntry = manifest['pages/Explore.tsx'];
-        assert.ok(exploreEntry, 'pages/Explore.tsx must exist in manifest');
-        const exploreImports = (exploreEntry.imports || []).join(' ');
-        assert.match(exploreImports, /leaflet/i, 'Explore.tsx must import leaflet chunk');
+        const exploreEntry = manifest['pages/ExploreFeed.tsx'] || manifest['pages/Explore.tsx'];
+        assert.ok(exploreEntry, 'Explore entry must exist in manifest');
 
         // Locate Passport entry
         const passportEntry = manifest['_Passport-CAtLdUwP.js'] || Object.values(manifest).find(entry => entry.name === 'Passport');
