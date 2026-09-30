@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef, useCallback } from 'react';
 import { MontanitaEvent, Business, Sector, BusinessCategory, UserProfile, CommunityPost, ChatMessage, ChatRoom, Vibe, ServiceCategory, SubscriptionPlan, PulseNotification, ViewType, AgendaRange, HelpSupportItem, PolicyData, AppSettings, Announcement, MapEntryType, Transaction } from '../types';
-import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition, DEFAULT_MASTER_CATEGORIES, DEFAULT_MASTER_VIBES, DEFAULT_MASTER_ACTIVITIES } from '../constants';
+import { DEFAULT_PAYMENT_DETAILS, SECTOR_POLYGONS, LOCALITIES, LOCALITY_SECTORS, MOCK_BUSINESSES, SECTOR_FOCUS_COORDS, PLAN_PRICES, DEFAULT_POLICIES, PLAN_LIMITS, PLAN_FEATURES, PlanFeatureDefinition, DEFAULT_MASTER_CATEGORIES, DEFAULT_MASTER_VIBES, DEFAULT_MASTER_ACTIVITIES, resolveCanonicalRoute } from '../constants';
 import {
     subscribeToEvents, subscribeToBusinesses, subscribeToAllSettings,
     incrementViewCount, updateAppSettings, subscribeToUsers, subscribeToTransactions,
@@ -286,6 +286,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { authUser, user, setUser, isAdmin, isSuperAdmin, isSuperUser, loading: authLoading } = useAuthContext();
     const { showToast, showConfirm, showPrompt } = useToast();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    const setActiveView = useCallback((view: ViewType) => {
+        const paths: Record<string, string> = {
+            'home': '/',
+            'history': '/',
+            'explore': '/explore',
+            'feed': '/explore',
+            'calendar': '/calendar',
+            'community': '/community',
+            'host': '/passport',
+            'favorites': '/passport',
+            'profile': '/passport',
+            'plans': '/plans',
+            'saved': '/saved-events',
+            'all-favorites': '/saved-events',
+            'policies': '/policies',
+            'info': '/info',
+            'services': '/services'
+        };
+        const target = paths[view];
+        if (target && location.pathname !== target && resolveCanonicalRoute(location.pathname) !== view) {
+            navigate(target);
+        }
+    }, [location.pathname, navigate]);
     const [events, setEvents] = useState<MontanitaEvent[]>([]);
     const [businesses, setBusinesses] = useState<Business[]>([]);
     const rawBusinessesRef = useRef<Business[]>([]);
@@ -307,7 +332,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         [SubscriptionPlan.PRO]: '5 Pulsos activos/mes',
         [SubscriptionPlan.ELITE]: '10 Pulsos activos/mes',
         [SubscriptionPlan.EXPERT]: 'Soporte VIP 24/7'
-    });    const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+    });
     const [posts, setPosts] = useState<CommunityPost[]>([]);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [services, setServices] = useState<ServiceCategory[]>([]);
@@ -429,6 +454,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [newEvent, setNewEvent] = useState({
         title: '',
         locality: LOCALITIES[0].name,
+        province: 'Santa Elena',
+        canton: 'Santa Elena',
+        parish: 'Manglaralto',
         sector: Sector.CENTRO,
         vibe: DEFAULT_MASTER_VIBES[0]?.name || 'De Fiesta & Farra',
         category: DEFAULT_MASTER_CATEGORIES[0]?.name || 'Gastronomía & Restaurantes',
@@ -436,7 +464,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         imageUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&q=80&w=600',
         startAt: new Date().toISOString().slice(0, 16),
         endAt: new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 16),
-        businessId: ''
+        businessId: '',
+        eventType: 'evento' as 'evento' | 'actividad' | 'promocion'
     });
     const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
     const [generatedDesc, setGeneratedDesc] = useState('');
@@ -1150,14 +1179,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
     }, [events, rsvpStatus, pulsingEvents]);
 
-    // Define selectedEvent and setSelectedEvent derived from ID
+    const [selectedEventObj, setSelectedEventObj] = useState<MontanitaEvent | null>(null);
+
+    // Define selectedEvent and setSelectedEvent: guarantees modal opens with clicked object even before async sync
     const selectedEvent = useMemo(() => {
-        if (!selectedEventId) return null;
-        return eventsWithLiveCounts.find(e => e.id === selectedEventId) || events.find(e => e.id === selectedEventId) || null;
-    }, [selectedEventId, eventsWithLiveCounts, events]);
+        if (!selectedEventObj) return null;
+        return eventsWithLiveCounts.find(e => e.id === selectedEventObj.id) || events.find(e => e.id === selectedEventObj.id) || selectedEventObj;
+    }, [selectedEventObj, eventsWithLiveCounts, events]);
 
     const setSelectedEvent = useCallback((event: MontanitaEvent | null) => {
-        setSelectedEventId(event?.id || null);
+        setSelectedEventObj(event);
     }, []);
 
     const favoritedEvents = useMemo(() => {
@@ -1236,25 +1267,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             .slice(0, 10);
     }, [eventsWithLiveCounts]);
 
-    const location = useLocation();
     const activeView = useMemo(() => {
-        const path = location.pathname;
-        if (path === '/' || path === '/history') return 'history';
-        if (path === '/home') return 'home';
-        if (path === '/explore' || path === '/feed' || path.startsWith('/evento/')) return 'explore';
-        if (path === '/calendar' || path.startsWith('/agenda/')) return 'calendar';
-        if (path === '/passport') return 'favorites';
-
-        if (path === '/host') return 'host';
-        if (path === '/plans') return 'plans';
-        if (path === '/saved-events') return 'all-favorites';
-        if (path === '/community') return 'community';
-        if (path === '/chat') return 'chat';
-        if (path === '/info') return 'info';
-        if (path === '/policies') return 'policies';
-        if (path === '/services' || path.startsWith('/negocio/')) return 'services';
-        if (path === '/ruta-del-spondylus' || path.startsWith('/guia/')) return 'guide';
-        return 'history';
+        return resolveCanonicalRoute(location.pathname);
     }, [location.pathname]);
 
     // Determine which events to navigate through based on current view
@@ -1297,34 +1311,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [activeView, events, favoritedEvents, filteredEvents, agendaRange, calendarBaseDate]);
 
     const navigateToNextEvent = useCallback(() => {
-        if (!selectedEventId || navigationEvents.length === 0) return;
-        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEventId);
+        if (!selectedEvent || navigationEvents.length === 0) return;
+        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
         if (currentIndex >= 0 && currentIndex < navigationEvents.length - 1) {
             setSelectedEvent(navigationEvents[currentIndex + 1]);
         }
-    }, [selectedEventId, navigationEvents, setSelectedEvent]);
+    }, [selectedEvent, navigationEvents, setSelectedEvent]);
 
     const navigateToPreviousEvent = useCallback(() => {
-        if (!selectedEventId || navigationEvents.length === 0) return;
-        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEventId);
+        if (!selectedEvent || navigationEvents.length === 0) return;
+        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
         if (currentIndex > 0) {
             setSelectedEvent(navigationEvents[currentIndex - 1]);
         }
-    }, [selectedEventId, navigationEvents, setSelectedEvent]);
+    }, [selectedEvent, navigationEvents, setSelectedEvent]);
 
     const hasNextEvent = useMemo(() => {
-        if (!selectedEventId || navigationEvents.length === 0) return false;
-        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEventId);
+        if (!selectedEvent || navigationEvents.length === 0) return false;
+        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
         if (currentIndex < 0) return false;
         return currentIndex < navigationEvents.length - 1;
-    }, [selectedEventId, navigationEvents]);
+    }, [selectedEvent, navigationEvents]);
 
     const hasPreviousEvent = useMemo(() => {
-        if (!selectedEventId || navigationEvents.length === 0) return false;
-        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEventId);
+        if (!selectedEvent || navigationEvents.length === 0) return false;
+        const currentIndex = navigationEvents.findIndex(e => e.id === selectedEvent.id);
         if (currentIndex < 0) return false;
         return currentIndex > 0;
-    }, [selectedEventId, navigationEvents]);
+    }, [selectedEvent, navigationEvents]);
 
     const toggleSector = (sector: Sector) => {
         setSelectedSector(prev => {
@@ -2116,7 +2130,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             },
             handleRSVP: async (id: string) => {
                 if (!authUser) {
-                    navigate('/host');
+                    setShowLogin(true);
                     return;
                 }
                 
@@ -2165,6 +2179,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const eventData = {
                     title: newEvent.title || 'Evento sin nombre',
                     locality: newEvent.locality,
+                    province: newEvent.province || 'Santa Elena',
+                    canton: newEvent.canton || 'Santa Elena',
+                    parish: newEvent.parish || 'Manglaralto',
                     description: newEvent.description || 'Un evento increíble en Montañita.',
                     startAt: new Date(newEvent.startAt),
                     endAt: new Date(newEvent.endAt),
@@ -2174,6 +2191,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     imageUrl: newEvent.imageUrl || 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&q=80&w=600',
                     isPremium: user?.plan === SubscriptionPlan.ELITE || user?.plan === SubscriptionPlan.EXPERT,
                     businessId: bizId,
+                    eventType: newEvent.eventType || 'evento',
                     interestedCount: 0,
                     viewCount: 0
                 };
@@ -2226,6 +2244,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setNewEvent({
                     title: '',
                     locality: LOCALITIES[0].name,
+                    province: 'Santa Elena',
+                    canton: 'Santa Elena',
+                    parish: 'Manglaralto',
                     sector: Sector.CENTRO,
                     vibe: Vibe.FIESTA,
                     category: 'Fiesta',
@@ -2233,7 +2254,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     imageUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&q=80&w=600',
                     startAt: new Date(baseDate.getTime() - baseDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
                     endAt: new Date(baseDate.getTime() + 3 * 3600000 - baseDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
-                    businessId: ''
+                    businessId: '',
+                    eventType: 'evento'
                 });
                 setEditingEventId(null);
                 setGeneratedDesc('');
@@ -2244,6 +2266,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setNewEvent({
                     title: event.title,
                     locality: event.locality || 'Montañita',
+                    province: event.province || 'Santa Elena',
+                    canton: event.canton || 'Santa Elena',
+                    parish: event.parish || 'Manglaralto',
                     sector: event.sector,
                     vibe: event.vibe,
                     category: event.category,
@@ -2251,7 +2276,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     imageUrl: event.imageUrl,
                     startAt: new Date(event.startAt).toISOString().slice(0, 16),
                     endAt: new Date(event.endAt).toISOString().slice(0, 16),
-                    businessId: event.businessId || ''
+                    businessId: event.businessId || '',
+                    eventType: event.eventType || 'evento'
                 });
                 setShowHostWizard(true);
             },
@@ -2686,26 +2712,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             handleObtainCoupon: async (couponId: string, couponCode: string, userId: string, userName: string, businessId: string) => {
                 return obtainCoupon(couponId, couponCode, userId, userName, businessId);
             },
-            setActiveView: (view: ViewType) => {
-                const paths: Record<string, string> = {
-                    'home': '/',
-                    'history': '/history',
-                    'explore': '/explore',
-                    'feed': '/explore',
-                    'calendar': '/calendar',
-                    'community': '/community',
-                    'host': '/host',
-                    'favorites': '/passport',
-                    'profile': '/passport',
-                    'plans': '/plans',
-                    'saved': '/saved-events',
-                    'all-favorites': '/saved-events',
-                    'policies': '/policies',
-                    'info': '/info',
-                    'services': '/services'
-                };
-                if (paths[view]) navigate(paths[view]);
-            },
+            setActiveView,
             user,
             authUser,
             isAdmin,

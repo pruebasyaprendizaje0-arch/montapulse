@@ -1,10 +1,35 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import fs from 'fs';
+import { defineConfig, loadEnv, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
+function swCacheBusterPlugin(): Plugin {
+  const buildVersion = `${Date.now()}`;
+  return {
+    name: 'sw-cache-buster',
+    transformIndexHtml(html) {
+      return html.replace(
+        '</head>',
+        `  <meta name="app-build-version" content="${buildVersion}">\n</head>`
+      );
+    },
+    closeBundle() {
+      const swDistPath = path.resolve(__dirname, 'dist/sw.js');
+      if (fs.existsSync(swDistPath)) {
+        let content = fs.readFileSync(swDistPath, 'utf-8');
+        content = content.replace(/const CACHE_VERSION = [^;]+;/, `const CACHE_VERSION = 'ubicame-pulse-v-${buildVersion}';`);
+        fs.writeFileSync(swDistPath, content, 'utf-8');
+        console.log(`\x1b[32m[Cache-Buster]\x1b[0m Inyectada versión ${buildVersion} en dist/sw.js`);
+      }
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+  const isDev = mode === 'development';
+
   return {
     server: {
       port: 5173,
@@ -18,7 +43,8 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
-      tailwindcss()
+      tailwindcss(),
+      swCacheBusterPlugin()
     ],
     resolve: {
       alias: {
@@ -26,7 +52,7 @@ export default defineConfig(({ mode }) => {
       }
     },
     esbuild: {
-      drop: ['console', 'debugger']
+      drop: isDev ? [] : ['console', 'debugger']
     },
     optimizeDeps: {
       esbuildOptions: {
@@ -41,6 +67,9 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash].[ext]',
           manualChunks(id) {
             // Firebase submodules
             if (id.includes('node_modules/firebase/firestore') || id.includes('node_modules/@firebase/firestore')) {
@@ -61,10 +90,6 @@ export default defineConfig(({ mode }) => {
             // React core — siempre necesario
             if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router-dom')) {
               return 'vendor-react';
-            }
-            // Leaflet — solo necesario en la vista del mapa
-            if (id.includes('node_modules/leaflet')) {
-              return 'leaflet';
             }
             // i18n — puede cambiar independientemente
             if (id.includes('node_modules/i18next') || id.includes('node_modules/react-i18next')) {

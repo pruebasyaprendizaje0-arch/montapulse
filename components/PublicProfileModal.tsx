@@ -4,7 +4,7 @@ import {
   User, Building2, ChevronLeft, ChevronRight, ChevronDown, Clock, Circle, Ticket, Edit3, 
   Trash2, Navigation2, UserCircle, Share2, Compass, QrCode, ExternalLink, 
   CalendarCheck, Wifi, CreditCard, Dog, Car, Sparkles, Instagram, Facebook, 
-  Youtube, Phone, CheckCircle2, Award, Heart, MessageSquare, Menu as MenuIcon
+  Youtube, Phone, CheckCircle2, Award, Heart, MessageSquare, Menu as MenuIcon, Scissors
 } from 'lucide-react';
 import { Business, UserProfile, MontanitaEvent, Coupon, Sector, MapEntryType } from '../types';
 import { useData } from '../context/DataContext';
@@ -18,6 +18,7 @@ import { useSEO } from '../hooks/useSEO';
 import { TikTokIcon, getInstagramUrl, getFacebookUrl, getTikTokUrl, getYouTubeUrl, getWhatsAppUrl, normalizePhoneNumber } from '../utils/social';
 import { ExperienceRecommendationCarousels } from './ExperienceRecommendationCarousels';
 import { BusinessMiniMap } from './Map/BusinessMiniMap';
+import { CustomerBookingModal } from './Modals/CustomerBookingModal';
 
 const DAYS_OF_WEEK = [
   { key: 'lunes', name: 'Lunes' },
@@ -81,6 +82,7 @@ export const PublicProfileModal = React.memo(({
   const [activeTab, setActiveTab] = useState<'all' | 'services' | 'amenities' | 'pulses' | 'reviews'>('all');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [showWeeklySchedule, setShowWeeklySchedule] = useState(false);
+  const [showCustomerBooking, setShowCustomerBooking] = useState(false);
   const currentDayKey = useMemo(() => getEcuadorDayKey(getEcuadorDate()), []);
   
   const avatarRef = useRef<HTMLImageElement>(null);
@@ -158,7 +160,7 @@ export const PublicProfileModal = React.memo(({
   const [coupons, setCoupons] = useState<Coupon[]>([]);
 
   // Find the target profile
-  const business = businessId ? businesses.find(b => b.id === businessId) : null;
+  const business = businessId ? (businesses.find(b => b.id === businessId || b.slug === businessId || (b.name && b.name.toLowerCase() === businessId.toLowerCase()))) : null;
   const userProfile = userId ? (allUsers.find(u => u.id === userId) || fetchedUser) : fetchedUser;
   const isFollowing = businessId ? isBusinessFollowed(businessId) : false;
 
@@ -267,9 +269,14 @@ export const PublicProfileModal = React.memo(({
   };
 
   const openLinkedUser = (uid: string) => {
-    setPublicProfileId(uid);
-    setPublicProfileType('user');
-    setShowPublicProfile(true);
+    // Solo mostrar perfiles de negocios: si el usuario tiene negocio vinculado, abrir ese
+    const linkedBiz = businesses.find(b => b.ownerId === uid || allUsers.find(u => u.id === uid)?.businessId === b.id);
+    if (linkedBiz) {
+      setPublicProfileId(linkedBiz.id);
+      setPublicProfileType('business');
+      setShowPublicProfile(true);
+    }
+    // Si no tiene negocio, no abrir ningún perfil
   };
 
   // ── ALL HOOKS MUST BE ABOVE ANY EARLY RETURNS ──────────────────────────────
@@ -305,7 +312,7 @@ export const PublicProfileModal = React.memo(({
   // Early returns AFTER all hooks
   if (!isOpen) return null;
 
-  const isDataLoading = isLoadingUser || (!business && !owner) || dataLoading;
+  const isDataLoading = !business && !owner && (isLoadingUser || dataLoading);
 
   if (isDataLoading) {
     return (
@@ -313,7 +320,13 @@ export const PublicProfileModal = React.memo(({
         <div className="w-full max-w-6xl mx-auto flex-1 flex flex-col min-h-screen p-4 sm:p-8">
           <div className="flex items-center justify-between border-b border-white/10 pb-6">
             <div className="h-8 w-40 bg-slate-800/60 rounded-xl animate-pulse" />
-            <div className="h-8 w-24 bg-slate-800/60 rounded-full animate-pulse" />
+            <button
+              onClick={onClose}
+              className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all border border-white/10 cursor-pointer"
+              aria-label="Cerrar perfil"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 my-auto py-12">
             <div className="lg:col-span-6 h-96 bg-slate-900/60 rounded-3xl animate-pulse border border-white/5" />
@@ -816,18 +829,40 @@ export const PublicProfileModal = React.memo(({
                   </a>
                 )}
 
-                {/* Booking online if available */}
-                {business && business.bookingUrl && (
-                  <a
-                    href={business.bookingUrl.startsWith('http') ? business.bookingUrl : `https://${business.bookingUrl}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full sm:w-auto sm:flex-1 h-11 sm:h-12 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 rounded-xl sm:rounded-2xl border border-yellow-500/20 transition-all text-xs font-black uppercase tracking-wider"
-                  >
-                    <CalendarCheck className="w-4 h-4 text-yellow-400 shrink-0" />
-                    <span className="truncate">Reservar</span>
-                  </a>
-                )}
+                {/* Direct Customer Booking / Turno Module Button */}
+                {business && (() => {
+                  const effectiveBookingMode = business.bookingMode && business.bookingMode !== 'none'
+                    ? business.bookingMode
+                    : ((business.category || '').toLowerCase().includes('bar') ||
+                       (business.category || '').toLowerCase().includes('surf') ||
+                       (business.category || '').toLowerCase().includes('salud') ||
+                       (business.category || '').toLowerCase().includes('barber') ||
+                       (business.category || '').toLowerCase().includes('spa') ? 'turnos' : 'reservas');
+
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerBooking(true)}
+                      className={`w-full sm:w-auto sm:flex-1 h-11 sm:h-12 flex items-center justify-center gap-2 px-4 py-2 sm:py-3 text-white font-black text-xs uppercase tracking-wider rounded-xl sm:rounded-2xl shadow-xl transition-all cursor-pointer hover:scale-[1.03] active:scale-95 ${
+                        effectiveBookingMode === 'turnos'
+                          ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-800 shadow-indigo-600/30'
+                          : 'bg-gradient-to-r from-teal-500 via-emerald-600 to-teal-700 shadow-teal-500/30'
+                      }`}
+                    >
+                      {effectiveBookingMode === 'turnos' ? (
+                        <>
+                          <Scissors className="w-4 h-4 text-white shrink-0" />
+                          <span className="truncate">Pedir Turno</span>
+                        </>
+                      ) : (
+                        <>
+                          <CalendarCheck className="w-4 h-4 text-white shrink-0" />
+                          <span className="truncate">Reservar</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
               </div>
 
               {/* Social Channels Ribbon */}
@@ -1122,6 +1157,15 @@ export const PublicProfileModal = React.memo(({
               </div>
             </div>
 
+            {/* ── MAPA & UBICACIÓN ── */}
+            <BusinessMiniMap
+              coordinates={business?.coordinates as [number, number] | undefined}
+              name={business?.name}
+              sector={business?.sector}
+              locality={business?.locality}
+              address={business?.address}
+            />
+
             {/* Verified Amenities Pill Badges */}
             {business && (business.hasWifi || business.hasParking || business.petFriendly || business.isBeachfront) && (
               <div className="p-4 sm:p-6 bg-slate-900/40 rounded-2xl sm:rounded-3xl border border-white/5 space-y-3">
@@ -1158,25 +1202,16 @@ export const PublicProfileModal = React.memo(({
               </div>
             )}
 
-            {/* SECTION: MAPA & UBICACIÓN EN PEQUEÑO */}
+            {/* SECTION: UBICACIÓN */}
             {business && (
-              <div id="landing-map" className="space-y-4 pt-2">
-                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-                  <div className="flex flex-col items-start gap-1">
-                    <span className="text-xs font-black text-sky-400 tracking-[0.25em] uppercase flex items-center gap-1.5">
-                      <Compass className="w-4 h-4 text-sky-400" />
-                      Geolocalización Oficial
-                    </span>
-                    <h3 className="text-lg sm:text-2xl font-black text-white uppercase tracking-wide break-words">
-                      Mapa & Ubicación del Local
-                    </h3>
-                  </div>
-                  <p className="text-xs text-slate-400 font-medium">
-                    {business.locality || 'Montañita'} · {business.sector ? `Sector ${business.sector}` : 'Ecuador'}
-                  </p>
-                </div>
-
-                <BusinessMiniMap business={business} height="320px" />
+              <div className="space-y-2 pt-2 rounded-2xl border border-white/10 bg-slate-900/50 p-4">
+                <span className="text-xs font-black text-sky-400 tracking-[0.25em] uppercase flex items-center gap-1.5">
+                  <Compass className="w-4 h-4 text-sky-400" />
+                  Ubicación
+                </span>
+                <p className="text-sm text-slate-200 font-semibold">
+                  {business.locality || 'Montañita'} · {business.sector ? `Sector ${business.sector}` : 'Ecuador'}
+                </p>
               </div>
             )}
           </section>
@@ -1504,6 +1539,15 @@ export const PublicProfileModal = React.memo(({
             </a>
           );
         })()}
+
+        {/* Customer Booking & Turnos Modal */}
+        {business && (
+          <CustomerBookingModal
+            isOpen={showCustomerBooking}
+            onClose={() => setShowCustomerBooking(false)}
+            business={business}
+          />
+        )}
 
       </div>
     </div>

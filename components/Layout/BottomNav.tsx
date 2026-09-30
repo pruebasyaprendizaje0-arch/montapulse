@@ -19,12 +19,12 @@ export const BottomNav: React.FC = () => {
     ] as const;
 
     const isActive = (path: string) => {
-        if (path === '/') return currentPath === '/' || currentPath === '/history';
-        if (path === '/explore') return currentPath.startsWith('/explore') || currentPath.startsWith('/evento/');
-        if (path === '/info') return currentPath.startsWith('/info');
+        if (path === '/') return currentPath === '/' || currentPath === '/history' || currentPath === '/nosotros';
+        if (path === '/explore') return currentPath === '/explore' || currentPath === '/feed' || currentPath.startsWith('/evento/');
+        if (path === '/info') return currentPath.startsWith('/info') || currentPath.startsWith('/buscar') || currentPath.startsWith('/directorio');
         if (path === '/calendar') return currentPath.startsWith('/calendar') || currentPath.startsWith('/agenda/');
-        if (path === '/community') return currentPath.startsWith('/community') || currentPath.startsWith('/chat');
-        if (path === '/passport') return currentPath.startsWith('/passport') || currentPath.startsWith('/saved-events');
+        if (path === '/community') return currentPath.startsWith('/community') || currentPath.startsWith('/chat') || currentPath.startsWith('/avisos') || currentPath.startsWith('/notificaciones');
+        if (path === '/passport') return currentPath.startsWith('/passport') || currentPath.startsWith('/saved-events') || currentPath.startsWith('/perfil') || currentPath.startsWith('/profile');
         return currentPath.startsWith(path);
     };
 

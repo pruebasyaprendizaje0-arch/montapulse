@@ -30,8 +30,10 @@ const AIMarketingModal = lazy(() => import('../components/Modals/AIMarketingModa
 const CouponManagerModal = lazy(() => import('../components/Modals/CouponManagerModal'));
 const BusinessQRModal = lazy(() => import('../components/Modals/BusinessQRModal').then(m => ({ default: m.BusinessQRModal })));
 const UserWalletModal = lazy(() => import('../components/Coupons/UserWalletModal').then(m => ({ default: m.UserWalletModal })));
+const BusinessOSModal = lazy(() => import('../components/Passport/BusinessOSModal').then(m => ({ default: m.BusinessOSModal })));
 import { subscribeToPublicCoupons, obtainCoupon, subscribeToUserWallet } from '../services/couponService';
 import { CouponCard } from '../components/Coupons/CouponCard';
+import { BusinessDashboard } from '../components/Passport/BusinessDashboard';
 
 const HELP_ICON_MAP: Record<string, any> = {
     Mail, MessageCircle, Info, FileText, ExternalLink, Zap, Star, ShieldCheck, Activity,
@@ -103,6 +105,8 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
     const [showCopied, setShowCopied] = useState(false);
     const [showQRModal, setShowQRModal] = useState(false);
     const [selectedQRBiz, setSelectedQRBiz] = useState<Business | null>(null);
+    const [showBusinessOS, setShowBusinessOS] = useState(false);
+    const [passportTab, setPassportTab] = useState<'business' | 'personal'>('business');
 
     const handleShareBusiness = (biz: Business) => {
         const url = `${BASE_URL}/negocio/${biz.slug || biz.id}`;
@@ -402,8 +406,16 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
 
                     <div className="flex items-center gap-3">
                         <button
+                            onClick={() => handleOpenNewEventWizard()}
+                            className="px-4 py-2.5 sm:px-5 sm:py-3 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 text-white rounded-2xl border border-orange-400/40 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-orange-500/25 font-black text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer"
+                            title="Crear un nuevo evento"
+                        >
+                            <Plus className="w-4 h-4 stroke-[3]" />
+                            <span>Crear Evento</span>
+                        </button>
+                        <button
                             onClick={onEditProfile}
-                            className="p-4 bg-white/5 text-white rounded-2xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all shadow-xl group flex items-center gap-2"
+                            className="p-3.5 sm:p-4 bg-white/5 text-white rounded-2xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all shadow-xl group flex items-center gap-2 cursor-pointer"
                             title="Editar Perfil"
                         >
                             <Edit3 className="w-5 h-5 text-orange-500 group-hover:scale-110 transition-transform" />
@@ -412,8 +424,32 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Profile Hero - Passport Card Style */}
-                <div className="px-6 mb-10">
+                {/* Main View Switcher (Only if owner) */}
+                {userBusiness && (
+                    <div className="px-6 mb-8">
+                        <div className="flex p-1.5 bg-white/5 border border-white/10 rounded-[2rem] backdrop-blur-xl">
+                            <button
+                                onClick={() => setPassportTab('business')}
+                                className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[1.5rem] text-xs font-black uppercase tracking-[0.2em] transition-all duration-500 ${passportTab === 'business' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xl shadow-orange-500/20 scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <Store className={`w-4 h-4 ${passportTab === 'business' ? 'animate-pulse' : ''}`} />
+                                <span className="mb-[-2px]">Mi Negocio</span>
+                            </button>
+                            <button
+                                onClick={() => setPassportTab('personal')}
+                                className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[1.5rem] text-xs font-black uppercase tracking-[0.2em] transition-all duration-500 ${passportTab === 'personal' ? 'bg-white/10 text-white shadow-xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <User className="w-4 h-4" />
+                                <span className="mb-[-2px]">Mi Perfil</span>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {(passportTab === 'personal' || !userBusiness) && (
+                    <>
+                        {/* Profile Hero - Passport Card Style */}
+                        <div className="px-6 mb-10">
                     <div className="relative group perspective-1000">
                         {/* Interactive Card Background */}
                         <div className="absolute inset-0 bg-gradient-to-br from-orange-600/30 via-transparent to-amber-600/30 rounded-[3rem] blur-3xl opacity-30 group-hover:opacity-50 transition-opacity duration-1000" />
@@ -715,240 +751,43 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                         </div>
                     </div>
                 )}
+                </>
+            )}
 
-                {/* Mi Negocio Section */}
+            {/* ── BUSINESS DASHBOARD VIEW ── */}
+            {passportTab === 'business' && userBusiness && (
                 <div className="px-6 sm:px-8 mb-12">
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-black tracking-tight">Mi Negocio</h3>
-                        {user?.businessId && (
-                            <button 
-                                onClick={() => {
-                                    setPublicProfileId(user.businessId!);
-                                    setPublicProfileType('business');
-                                    setShowPublicProfile(true);
-                                }}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black text-orange-500 uppercase tracking-widest hover:bg-white/10 transition-all"
-                            >
-                                <Store className="w-4 h-4" />
-                                Ver Perfil
-                            </button>
-                        )}
+                    <div className="flex items-center justify-between mb-5">
+                        <div>
+                            <h3 className="text-xl font-black tracking-tight text-white">Mi Negocio</h3>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Dashboard & Herramientas</p>
+                        </div>
                     </div>
-
                     {user?.businessId && businesses.find(b => b.id === user.businessId) ? (() => {
                         const biz = businesses.find(b => b.id === user.businessId)!;
                         return (
-                            <div
-                                onClick={() => {
-                                    setShowBusinessEdit(true);
-                                    setEditingBusinessId(user.businessId);
-                                }}
-                                className="w-full relative overflow-hidden rounded-[2.5rem] bg-[#111111] border border-white/5 cursor-pointer group shadow-2xl"
-                            >
-                                <div className="absolute inset-0">
-                                    <img
-                                        src={biz.imageUrl}
-                                        alt="Business"
-                                        className="w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-700"
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/20" />
-                                </div>
-                                <div className="relative p-5 sm:p-8 flex flex-col gap-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-16 h-16 rounded-2xl bg-black/50 backdrop-blur-md p-1 border border-white/10 shadow-2xl overflow-hidden shrink-0 flex items-center justify-center">
-                                            {biz.icon ? (
-                                                (biz.icon.startsWith('http') || biz.icon.startsWith('data:image')) ? (
-                                                    <img
-                                                        src={biz.icon}
-                                                        alt="Icon"
-                                                        className="w-full h-full object-cover rounded-xl"
-                                                    />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center bg-orange-500/10 rounded-xl">
-                                                        <span className="text-3xl">
-                                                            {MAP_ICONS.find(i => i.id === biz.icon || i.emoji === biz.icon)?.emoji || biz.icon}
-                                                        </span>
-                                                    </div>
-                                                )
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center bg-orange-500/20 rounded-xl">
-                                                    <Store className="w-8 h-8 text-orange-500" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col text-left">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-white font-black text-xl leading-none">{biz.name}</span>
-                                                {biz.isVerified && <CheckCircle className="w-4 h-4 text-sky-400 fill-sky-400/10" />}
-                                            </div>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 border border-white/10">
-                                                    <span className="text-[10px]">
-                                                        {getCategoryEmoji(biz.category)}
-                                                    </span>
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{biz.category}</span>
-                                                </div>
-                                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 border border-white/10">
-                                                    <span className="text-[10px]">{SECTOR_INFO[biz.sector]?.symbol || '📍'}</span>
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{biz.sector}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Metrics Dashboard */}
-                                    <div className="grid grid-cols-2 gap-3 mt-2">
-                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-1 hover:bg-white/10 transition-colors">
-                                            <div className="flex items-center gap-2 text-orange-400 mb-1">
-                                                <Eye className="w-4 h-4" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Vistas / Mes</span>
-                                            </div>
-                                            <div className="flex items-end gap-2">
-                                                <span className="text-2xl font-black text-white leading-none">{biz.monthlyViews || 0}</span>
-                                                <span className="text-[10px] text-slate-500 font-bold mb-0.5 uppercase">Totales: {biz.viewCount || 0}</span>
-                                            </div>
-                                        </div>
-                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-1 hover:bg-white/10 transition-colors">
-                                            <div className="flex items-center gap-2 text-sky-400 mb-1">
-                                                <TrendingUp className="w-4 h-4" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Clicks Eventos</span>
-                                            </div>
-                                            <div className="flex items-end gap-2">
-                                                <span className="text-2xl font-black text-white leading-none">{userStats.totalClicks}</span>
-                                                <span className="text-[10px] text-slate-500 font-bold mb-0.5 uppercase">Interés: {userStats.impactCount}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col gap-3 mt-2 pt-4 border-t border-white/10">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em]">Gestionar Negocio</span>
-                                            <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/5 group-hover:bg-orange-500 group-hover:border-orange-400 transition-colors">
-                                                <Edit3 className="w-4 h-4 text-white" />
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3 overflow-x-auto pb-4 -mx-5 px-5 touch-pan-x no-scrollbar">
-                                            <button
-                                                 onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onNavigate?.('plans');
-                                                }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-amber-500/10 flex items-center gap-1.5 shrink-0"
-                                            >
-                                                <Zap className="w-3.5 h-3.5 fill-current" />
-                                                Mejorar Plan
-                                            </button>
-                                            <button
-                                                 onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setShowAIMarketing(true);
-                                                }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-indigo-500/10 flex items-center gap-1.5 shrink-0"
-                                            >
-                                                <Sparkles className="w-3.5 h-3.5 fill-current" />
-                                                Asistente IA
-                                            </button>
-                                            <button
-                                                 onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setShowCouponManager(true);
-                                                }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-emerald-500/10 flex items-center gap-1.5 shrink-0"
-                                            >
-                                                <Ticket className="w-3.5 h-3.5" />
-                                                Cupones
-                                            </button>
-
-                                            <button
-                                                 onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (biz.menuUrl) {
-                                                        window.open(biz.menuUrl.startsWith('http') ? biz.menuUrl : `https://${biz.menuUrl}`, '_blank');
-                                                    } else {
-                                                        setEditingBusinessId(biz.id);
-                                                        setShowBusinessEdit(true);
-                                                        showToast('Configura el enlace a tu Menú QR en la sección de edición.', 'info');
-                                                    }
-                                                }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-pink-500 to-rose-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-pink-500/10 flex items-center gap-1.5 shrink-0"
-                                                title={biz.menuUrl ? "Abrir Menú QR" : "Configurar enlace de Menú QR"}
-                                            >
-                                                <QrCode className="w-3.5 h-3.5" />
-                                                Menú QR
-                                            </button>
-                                            <button
-                                                 onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (biz.bookingUrl) {
-                                                        window.open(biz.bookingUrl.startsWith('http') ? biz.bookingUrl : `https://${biz.bookingUrl}`, '_blank');
-                                                    } else {
-                                                        setEditingBusinessId(biz.id);
-                                                        setShowBusinessEdit(true);
-                                                        showToast('Configura el enlace a tu Sistema de Reservas en la sección de edición.', 'info');
-                                                    }
-                                                }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-orange-500/10 flex items-center gap-1.5 shrink-0"
-                                                title={biz.bookingUrl ? "Abrir Sistema de Reservas" : "Configurar enlace de Reservas"}
-                                            >
-                                                <CalendarCheck className="w-3.5 h-3.5" />
-                                                Reservas
-                                            </button>
-                                            <button
-                                                 onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setShowReferralsModal(true);
-                                                }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-pink-500 to-rose-500 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-pink-500/10 flex items-center gap-1.5 shrink-0"
-                                            >
-                                                <Users className="w-3.5 h-3.5" />
-                                                Mis Sugeridos
-                                            </button>
-                                            <button
-                                                 onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedQRBiz(biz);
-                                                    setShowQRModal(true);
-                                                }}
-                                                className="px-4 py-1.5 bg-gradient-to-r from-sky-500 to-blue-600 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-sky-500/20 flex items-center gap-1.5 shrink-0"
-                                                title="Ver y descargar Código QR oficial para tu negocio"
-                                            >
-                                                <QrCode className="w-3.5 h-3.5" />
-                                                Código QR
-                                            </button>
-                                            <button
-                                                 onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setPublicProfileId(biz.id);
-                                                    setPublicProfileType('business');
-                                                    setShowPublicProfile(true);
-                                                }}
-                                                className="px-4 py-1.5 bg-white/10 border border-white/20 rounded-full text-[10px] font-black text-white uppercase tracking-widest hover:bg-white/20 active:scale-95 transition-all flex items-center gap-1.5 shadow-lg shrink-0"
-                                            >
-                                                <Eye className="w-3.5 h-3.5" />
-                                                Vista Previa
-                                            </button>
-                                            <button
-                                                 onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleShareBusiness(biz);
-                                                }}
-                                                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shadow-lg shrink-0 ${showCopied ? 'bg-emerald-500 text-white shadow-emerald-500/10' : 'bg-white/10 border border-white/20 text-white hover:bg-white/20 shadow-white/5'}`}
-                                            >
-                                                {showCopied ? (
-                                                    <>
-                                                        <CheckCircle className="w-3.5 h-3.5" />
-                                                        ¡COPIADO!
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Link className="w-3.5 h-3.5" />
-                                                        ENLACE
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <BusinessDashboard
+                                biz={biz}
+                                businessEvents={businessEvents}
+                                businessFollowers={businessFollowers}
+                                availableCredits={availableCredits}
+                                planCreditsLimit={isPremium ? null : (planCreditsLimit as number)}
+                                creditsRemaining={creditsRemaining}
+                                isPremium={isPremium}
+                                referredBusinesses={referredBusinesses}
+                                onEditBusiness={() => { setShowBusinessEdit(true); setEditingBusinessId(user.businessId); }}
+                                onViewProfile={() => { setPublicProfileId(biz.id); setPublicProfileType('business'); setShowPublicProfile(true); }}
+                                onShareBusiness={() => handleShareBusiness(biz)}
+                                onOpenAIMarketing={() => setShowAIMarketing(true)}
+                                onOpenCouponManager={() => setShowCouponManager(true)}
+                                onOpenQR={() => { setSelectedQRBiz(biz); setShowQRModal(true); }}
+                                onCreateEvent={handleOpenNewEventWizard}
+                                onViewEvent={setSelectedEvent}
+                                onOpenReferrals={() => setShowReferralsModal(true)}
+                                onNavigatePlans={() => onNavigate?.('plans')}
+                                onOpenBusinessOS={() => setShowBusinessOS(true)}
+                                showCopied={showCopied}
+                            />
                         );
                     })() : !user?.businessId ? (
                         <button
@@ -961,291 +800,124 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                             <span className="font-black text-slate-300">Añadir tu Negocio</span>
                         </button>
                     ) : null}
+
+                    {/* Compact Sign Out option for Business View */}
+                    <div className="pt-8">
+                        <button
+                            onClick={logout}
+                            className="w-full py-3.5 flex items-center justify-center gap-2 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 font-black text-xs uppercase tracking-widest transition-all cursor-pointer"
+                        >
+                            <LogOut className="w-4 h-4" />
+                            <span>Cerrar Sesión</span>
+                        </button>
+                    </div>
                 </div>
+            )}
 
-                {/* Me Siguen Section */}
-                {userBusiness && (
-                    <div className="px-6 sm:px-8 mb-12">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-black tracking-tight">Me Siguen</h3>
-                            {businessFollowers.length > 0 && (
-                                <div className="flex items-center gap-4">
-                                    {businessFollowers.length > 8 && (
-                                        <button
-                                            onClick={() => setShowAllFollowers(!showAllFollowers)}
-                                            className="text-[11px] font-black text-amber-500 uppercase tracking-widest"
-                                        >
-                                            {showAllFollowers ? 'Ver Menos' : 'Ver Todos'}
-                                        </button>
-                                    )}
-                                    <div className="px-4 py-2 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center gap-2">
-                                        <Users className="w-4 h-4 text-amber-400" />
-                                        <span className="text-xs font-black uppercase tracking-widest text-amber-400">
-                                            {businessFollowers.length} {businessFollowers.length === 1 ? 'seguidor' : 'seguidores'}
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {businessFollowers.length > 0 ? (
-                            <div className={`flex ${showAllFollowers ? 'flex-wrap' : 'overflow-x-auto no-scrollbar'} gap-3 pb-2`}>
-                                {(showAllFollowers ? businessFollowers : businessFollowers.slice(0, 8)).map((followerId) => {
-                                    const follower = allUsers.find(u => u.id === followerId);
-                                    if (!follower) {
-                                        const followedBiz = businesses.find(b => b.id === followerId);
-                                        if (!followedBiz) return null;
-                                        return (
-                                            <div
-                                                key={followerId}
-                                                onClick={() => {
-                                                    setPublicProfileId(followerId);
-                                                    setPublicProfileType('business');
-                                                    setShowPublicProfile(true);
-                                                }}
-                                                className="min-w-[80px] w-[80px] shrink-0 flex flex-col items-center gap-2 cursor-pointer group"
-                                            >
-                                                <div className="w-16 h-16 rounded-full border-2 border-amber-500/30 p-0.5 group-hover:border-amber-500/60 transition-colors overflow-hidden">
-                                                    <img
-                                                        src={followedBiz.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(followedBiz.name)}&background=random&color=fff`}
-                                                        className="w-full h-full rounded-full object-cover"
-                                                        alt={followedBiz.name}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-center gap-1 w-full px-1">
-                                                    <div className="flex items-center gap-0.5 px-1 py-0.25 rounded-md bg-white/5 border border-white/10">
-                                                        <span className="text-[8px]">
-                                                            {getCategoryEmoji(followedBiz.category)}
-                                                        </span>
-                                                        {followedBiz.sector && (
-                                                            <>
-                                                                <span className="text-white/10 text-[6px]">|</span>
-                                                                <span className="text-[8px]">
-                                                                    {SECTOR_INFO[followedBiz.sector as Sector]?.symbol || '📍'}
-                                                                </span>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                    <span className="text-[9px] font-black text-slate-400 text-center truncate group-hover:text-amber-400 transition-colors">
-                                                        {followedBiz.name.split(' ')[0]}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-                                    const followerName = follower.name || 'Member';
-                                    return (
-                                        <div
-                                            key={followerId}
-                                            onClick={() => {
-                                                setPublicProfileId(followerId);
-                                                setPublicProfileType('user');
-                                                setShowPublicProfile(true);
-                                            }}
-                                            className="min-w-[80px] w-[80px] shrink-0 flex flex-col items-center gap-2 cursor-pointer group"
-                                        >
-                                            <div className="w-16 h-16 rounded-full border-2 border-amber-500/30 p-0.5 group-hover:border-amber-500/60 transition-colors">
-                                                <img
-                                                    src={follower.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(followerName)}&background=random&color=fff`}
-                                                    className="w-full h-full rounded-full object-cover"
-                                                    alt={followerName}
-                                                />
-                                            </div>
-                                            <span className="text-[9px] font-black text-slate-400 text-center truncate w-full group-hover:text-amber-400 transition-colors">
-                                                {followerName.split(' ')[0]}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
+            {/* ── PERSONAL PROFILE OPTIONS (Only in Personal Tab or if No Business) ── */}
+            {(passportTab === 'personal' || !userBusiness) && (
+                <>
+                    {/* Navigation Grid (Compact 2/3 column micro-grid) */}
+                    <div className="px-6 mb-10">
+                        <div className="flex flex-col gap-4">
+                            <div className="flex flex-col">
+                                <h3 className="text-xl font-black tracking-tight text-white">Menú de Perfil</h3>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Configuración y Seguridad</p>
                             </div>
-                        ) : (
-                            <div className="py-8 text-center bg-[#111111] rounded-[2.5rem] border border-dashed border-white/10">
-                                <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                                <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Aún no te siguen</p>
-                                <p className="text-[10px] text-slate-600 mt-1">Comparte tu negocio para atraer seguidores</p>
-                            </div>
-                        )}
-                    </div>
-                )}
 
-                {/* Eventos del Negocio */}
-                {userBusiness && (
-                    <div className="px-8 mb-12">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-black tracking-tight">Mis Eventos</h3>
-                            <div className="flex items-center gap-3">
-                                {planCreditsLimit === Infinity ? (
-                                    <div className="px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center gap-2">
-                                        <Zap className="w-4 h-4 text-emerald-400" />
-                                        <span className="text-xs font-black uppercase tracking-widest text-emerald-400">Créditos Ilimitados</span>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <button
-                                            onClick={() => onNavigate('plans')}
-                                            className="px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-[10px] font-black text-amber-400 uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-all flex items-center gap-2"
-                                        >
-                                            <Award className="w-3.5 h-3.5" />
-                                            Mejorar
-                                        </button>
-                                        <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 ${availableCredits <= 1 ? 'bg-rose-500/20 border border-rose-500/30' : 'bg-orange-500/20 border border-orange-500/30'}`}>
-                                            <Zap className={`w-4 h-4 ${availableCredits <= 1 ? 'text-rose-400' : 'text-orange-400'}`} />
-                                            <span className={`text-xs font-black uppercase tracking-widest ${availableCredits <= 1 ? 'text-rose-400' : 'text-orange-400'}`}>
-                                                {availableCredits}/{planCreditsLimit} Créditos Restantes
-                                            </span>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        {businessEvents.length > 0 ? (
-                            <>
-                                <div className="flex justify-end mb-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {[
+                                    ...(userBusiness ? [{ label: 'Gestión de Reservas & Turnos', icon: CalendarCheck, color: 'text-teal-400', action: () => setShowBusinessOS(true), desc: 'Habitaciones & turnos OS' }] : []),
+                                    { label: 'Editar Perfil', icon: User, color: 'text-orange-400', action: onEditProfile, desc: 'Nombre, avatar y detalles' },
+                                    { label: 'Pulse Pass', icon: Zap, color: 'text-amber-400', action: () => setShowPulsePass(true), desc: 'Tu ID para eventos' },
+                                    { label: 'Preferencias', icon: Sparkles, color: 'text-purple-400', action: () => setShowPreferences(true), desc: 'Filtros y visualización' },
+                                    { label: 'Seguridad', icon: ShieldCheck, color: 'text-emerald-400', action: () => setShowSecurity(true), desc: 'Cuenta y privacidad' },
+                                    { label: 'Políticas', icon: Shield, color: 'text-slate-400', action: () => navigate('/policies'), desc: 'Términos y condiciones' },
+                                    { label: 'Soporte', icon: MessageCircle, color: 'text-slate-400', action: () => setShowHelp(true), desc: 'Centro de ayuda' }
+                                ].map((option, i) => (
                                     <button
-                                        onClick={() => handleOpenNewEventWizard()}
-                                        disabled={creditsRemaining !== null && creditsRemaining <= 0}
-                                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${creditsRemaining !== null && creditsRemaining <= 0 ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-500/20'}`}
+                                        key={i}
+                                        onClick={option.action}
+                                        className="group flex items-center gap-3.5 p-3.5 bg-[#0c1626]/80 hover:bg-[#132238] border border-white/5 hover:border-orange-500/30 rounded-2xl transition-all duration-300 active:scale-[0.98] cursor-pointer backdrop-blur-md text-left"
                                     >
-                                        <Plus className="w-4 h-4" />
-                                        Crear Evento
-                                    </button>
-                                </div>
-                                <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4">
-                                    {businessEvents.slice(0, 5).map((event) => (
-                                        <div key={event.id} className="min-w-[260px] w-[260px] shrink-0">
-                                            <EventCard
-                                                event={event}
-                                                onClick={(e) => setSelectedEvent(e)}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        ) : (
-                            <div className="w-full py-8 bg-[#111111] rounded-[2.5rem] border border-dashed border-white/10 flex flex-col items-center justify-center gap-4">
-                                <Sparkles className="w-8 h-8 text-slate-600" />
-                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No hay eventos creados</p>
-                                <button
-                                    onClick={() => handleOpenNewEventWizard()}
-                                    className="flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                    Crear Primer Evento
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-
-
-                {/* Navigation Grid */}
-                <div className="px-6 mb-12">
-                    <div className="flex flex-col gap-6">
-                        <div className="flex flex-col">
-                            <h3 className="text-xl font-black tracking-tighter text-white">Menú de Perfil</h3>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Configuración y Seguridad</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-3">
-                            {[
-                                { label: 'Editar Perfil', icon: User, color: 'text-orange-400', action: onEditProfile, desc: 'Nombre, avatar y detalles' },
-                                { label: 'Pulse Pass', icon: Zap, color: 'text-amber-400', action: () => setShowPulsePass(true), desc: 'Tu ID para eventos' },
-                                { label: 'Preferencias', icon: Sparkles, color: 'text-purple-400', action: () => setShowPreferences(true), desc: 'Filtros y visualización' },
-                                { label: 'Seguridad', icon: ShieldCheck, color: 'text-emerald-400', action: () => setShowSecurity(true), desc: 'Cuenta y privacidad' },
-                                { label: 'Políticas', icon: Shield, color: 'text-slate-400', action: () => navigate('/policies'), desc: 'Términos y condiciones' },
-                                { label: 'Soporte', icon: MessageCircle, color: 'text-slate-400', action: () => setShowHelp(true), desc: 'Centro de ayuda' }
-                            ].map((option, i) => (
-                                <button
-                                    key={i}
-                                    onClick={option.action}
-                                    className="group flex items-center justify-between p-5 bg-[#111111] rounded-3xl border border-white/5 hover:bg-white/5 hover:border-white/10 transition-all duration-300 active:scale-[0.98]"
-                                >
-                                    <div className="flex items-center gap-5">
-                                        <div className={`w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center ${option.color} group-hover:scale-110 transition-transform duration-500 shadow-inner`}>
+                                        <div className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center ${option.color} group-hover:scale-105 transition-transform shrink-0`}>
                                             <option.icon className="w-5 h-5" />
                                         </div>
-                                        <div className="text-left">
-                                            <p className="font-black text-sm text-slate-200 group-hover:text-white transition-colors tracking-tight">{option.label}</p>
-                                            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">{option.desc}</p>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-black text-xs text-slate-200 group-hover:text-white transition-colors tracking-tight truncate">{option.label}</p>
+                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider truncate mt-0.5">{option.desc}</p>
                                         </div>
-                                    </div>
-                                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-slate-700 group-hover:text-white transition-colors">
-                                        <ChevronLeft className="w-5 h-5 rotate-180" />
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Documentation Section */}
-                <div className="px-6 mb-12">
-                    <div className="flex flex-col gap-4">
-                        <div className="flex flex-col">
-                            <h3 className="text-xl font-black tracking-tighter text-white">Documentación</h3>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Manuales de usuario y funciones</p>
-                        </div>
-                        <Suspense fallback={null}>
-                            <DownloadManuals isAdmin={isAdmin || isSuperUser} />
-                        </Suspense>
-                    </div>
-                </div>
-
-                {/* Your Vibe Selector */}
-                <div className="px-6 mb-12">
-                    <div className="flex flex-col gap-6">
-                        <div className="flex flex-col">
-                            <h3 className="text-xl font-black tracking-tighter text-white">Tu Estilo</h3>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personaliza tu experiencia</p>
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                             {masterVibes
-                                .map(v => v.name)
-                                .filter((v, idx, self) => self.indexOf(v) === idx)
-                                .map(v => (
-                                <button
-                                    key={v}
-                                    onClick={() => {
-                                        if (user) {
-                                            setUser({ ...user, preferredVibe: v });
-                                        }
-                                        navigate('/', { state: { filter: v } });
-                                    }}
-                                    className={`relative px-4 py-4 rounded-3xl border font-black text-[11px] transition-all uppercase tracking-widest overflow-hidden active:scale-95 duration-300 ${user?.preferredVibe === v ? 'bg-orange-500 border-orange-400 text-white shadow-2xl shadow-orange-500/20' : 'bg-[#111111] border-white/5 text-slate-500 hover:text-slate-300 hover:border-white/10'}`}
-                                >
-                                    <div className="relative z-10">{v}</div>
-                                    {user?.preferredVibe === v && (
-                                        <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-
-                {/* Removed Admin Center from main flow, now in hidden modal */}
-
-                {/* Final Sign Out */}
-                <div className="px-6 pt-12 pb-24">
-                    <button
-                        onClick={logout}
-                        className="group relative w-full h-[88px] flex items-center justify-center rounded-[2.5rem] bg-gradient-to-br from-rose-600/10 to-orange-600/10 border border-white/5 hover:border-rose-500/30 transition-all duration-500 active:scale-95 shadow-lg active:shadow-inner"
-                    >
-                        <div className="flex items-center gap-4 group-hover:scale-105 transition-transform duration-500">
-                            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-500 shadow-inner group-hover:bg-rose-500 group-hover:text-white transition-all duration-500">
-                                <LogOut className="w-5 h-5" />
+                                        <ChevronLeft className="w-4 h-4 text-slate-600 group-hover:text-slate-300 rotate-180 shrink-0" />
+                                    </button>
+                                ))}
                             </div>
-                            <span className="font-black text-rose-500 text-sm uppercase tracking-[0.4em] mb-[-2px]">Cerrar Sesión</span>
                         </div>
-                    </button>
-                    <p className="text-center mt-8 text-[9px] font-black text-slate-700 uppercase tracking-[0.5em] opacity-50">
-                        Pulse v4.0.0 {isAdmin ? 'ADMINISTRADOR' : (planNames[user?.plan || SubscriptionPlan.FREE]?.toUpperCase() || 'VISITANTE')}
-                    </p>
-                </div>
-            </div>
+                    </div>
+
+                    {/* Documentation Section */}
+                    <div className="px-6 mb-10">
+                        <div className="flex flex-col gap-3">
+                            <div className="flex flex-col">
+                                <h3 className="text-xl font-black tracking-tight text-white">Documentación</h3>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Manuales de usuario y funciones</p>
+                            </div>
+                            <Suspense fallback={null}>
+                                <DownloadManuals isAdmin={isAdmin || isSuperUser} />
+                            </Suspense>
+                        </div>
+                    </div>
+
+                    {/* Your Vibe Selector */}
+                    <div className="px-6 mb-10">
+                        <div className="flex flex-col gap-3">
+                            <div className="flex flex-col">
+                                <h3 className="text-xl font-black tracking-tight text-white">Tu Estilo</h3>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personaliza tu experiencia</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2 pt-1">
+                                {masterVibes
+                                    .map(v => v.name)
+                                    .filter((v, idx, self) => self.indexOf(v) === idx)
+                                    .map(v => {
+                                        const isSelected = user?.preferredVibe === v;
+                                        return (
+                                            <button
+                                                key={v}
+                                                onClick={() => {
+                                                    if (user) {
+                                                        setUser({ ...user, preferredVibe: v });
+                                                    }
+                                                    navigate('/', { state: { filter: v } });
+                                                }}
+                                                className={`px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-300 cursor-pointer ${
+                                                    isSelected
+                                                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20 scale-105'
+                                                        : 'bg-[#0c1626]/80 border border-white/5 text-slate-400 hover:text-white hover:border-white/15'
+                                                }`}
+                                            >
+                                                {v}
+                                            </button>
+                                        );
+                                    })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Final Sign Out */}
+                    <div className="px-6 pt-4 pb-20">
+                        <button
+                            onClick={logout}
+                            className="group w-full py-4 flex items-center justify-center gap-3 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/40 transition-all duration-300 active:scale-98 cursor-pointer"
+                        >
+                            <LogOut className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
+                            <span className="font-black text-rose-400 text-xs uppercase tracking-[0.2em]">Cerrar Sesión</span>
+                        </button>
+                        <p className="text-center mt-6 text-[9px] font-black text-slate-600 uppercase tracking-[0.4em] opacity-60">
+                            Pulse v4.0.0 • {isAdmin ? 'ADMINISTRADOR' : (planNames[user?.plan || SubscriptionPlan.FREE]?.toUpperCase() || 'VISITANTE')}
+                        </p>
+                    </div>
+                </>
+            )}
 
             {/* Modals & Overlays */}
             {showAboutEdit && (
@@ -1907,6 +1579,21 @@ export const Passport: React.FC<PassportProps> = ({ onNavigate }) => {
                     />
                 </Suspense>
             )}
+
+            {userBusiness && (
+                <Suspense fallback={null}>
+                    <BusinessOSModal
+                        isOpen={showBusinessOS}
+                        onClose={() => setShowBusinessOS(false)}
+                        business={userBusiness}
+                        onNavigatePlans={() => {
+                            setShowBusinessOS(false);
+                            onNavigate?.('plans');
+                        }}
+                    />
+                </Suspense>
+            )}
+            </div>
         </>
     );
 };

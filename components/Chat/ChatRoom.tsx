@@ -64,7 +64,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
         if (!inputText.trim() || !user) return;
 
         const isBusinessMsg = !!(sendAsBusiness && userBusiness);
-        
+
         const messageData = {
             senderId: isBusinessMsg ? userBusiness.id : user.id,
             senderName: isBusinessMsg ? userBusiness.name : user.name,
@@ -110,7 +110,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
         if (!user || (!inputText.trim() && !selectedImage)) return;
 
         const isBusinessMsg = !!(sendAsBusiness && userBusiness);
-        
+
         const messageData = {
             senderId: isBusinessMsg ? userBusiness.id : user.id,
             senderName: isBusinessMsg ? userBusiness.name : user.name,
@@ -132,7 +132,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
 
     const handleClearChat = async () => {
         const confirmed = await showConfirm('¿Estás seguro de que quieres eliminar todos los mensajes de este chat para todos los participantes?', 'Limpiar Chat');
-        if (confirmed) { 
+        if (confirmed) {
             setShowOptionsMenu(false);
             try {
                 await clearRoomMessages(room.id);
@@ -186,7 +186,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                         <Video className="w-5 h-5" />
                     </button>
                     <div className="relative">
-                        <button 
+                        <button
                             onClick={() => setShowOptionsMenu(!showOptionsMenu)}
                             className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
                         >
@@ -215,22 +215,29 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                                         </div>
                                     </div>
                                 )}
-                                {partnerId && (
-                                    <button 
-                                        onClick={() => {
-                                            setShowOptionsMenu(false);
-                                            setPublicProfileId(partnerId);
-                                            setPublicProfileType('user');
-                                            setShowPublicProfile(true);
-                                        }}
-                                        className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
-                                    >
-                                        <User className="w-5 h-5 text-slate-400" />
-                                        <span className="text-sm font-bold text-white">Ver perfil</span>
-                                    </button>
-                                )}
+                                {partnerId && (() => {
+                                    const partnerUser = allUsers.find(u => u.id === partnerId);
+                                    const partnerUserBiz = partnerUser?.businessId
+                                        ? businesses.find(b => b.id === partnerUser.businessId)
+                                        : businesses.find(b => b.ownerId === partnerId);
+                                    if (!partnerUserBiz) return null;
+                                    return (
+                                        <button
+                                            onClick={() => {
+                                                setShowOptionsMenu(false);
+                                                setPublicProfileId(partnerUserBiz.id);
+                                                setPublicProfileType('business');
+                                                setShowPublicProfile(true);
+                                            }}
+                                            className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
+                                        >
+                                            <User className="w-5 h-5 text-slate-400" />
+                                            <span className="text-sm font-bold text-white">Ver perfil</span>
+                                        </button>
+                                    );
+                                })()}
                                 {partnerBusiness && (
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             setShowOptionsMenu(false);
                                             setPublicProfileId(partnerBusiness.id);
@@ -243,7 +250,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                                         <span className="text-sm font-bold text-amber-400">Ver negocio</span>
                                     </button>
                                 )}
-                                <button 
+                                <button
                                     onClick={() => {
                                         setShowOptionsMenu(false);
                                         showToast('Función de búsqueda coming soon', 'info');
@@ -253,7 +260,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                                     <Search className="w-5 h-5 text-slate-400" />
                                     <span className="text-sm font-bold text-white">Buscar en chat</span>
                                 </button>
-                                <button 
+                                <button
                                     onClick={handleClearChat}
                                     className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
                                 >
@@ -270,104 +277,103 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
             <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-8 space-y-8 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-fixed opacity-95 relative">
                 <div className="absolute inset-0 bg-gradient-to-b from-[#020617] via-slate-900/10 to-[#020617] pointer-events-none" />
                 <div className="relative z-10 space-y-8">
-                {messages.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full space-y-4 opacity-30">
-                        <div className="w-16 h-16 bg-white/5 rounded-[2rem] flex items-center justify-center border border-dashed border-white/20">
-                            <MessageCircle className="w-8 h-8" />
+                    {messages.length === 0 && (
+                        <div className="flex flex-col items-center justify-center h-full space-y-4 opacity-30">
+                            <div className="w-16 h-16 bg-white/5 rounded-[2rem] flex items-center justify-center border border-dashed border-white/20">
+                                <MessageCircle className="w-8 h-8" />
+                            </div>
+                            <p className="text-xs font-black uppercase tracking-widest">Di hola para empezar</p>
                         </div>
-                        <p className="text-xs font-black uppercase tracking-widest">Di hola para empezar</p>
-                    </div>
-                )}
+                    )}
 
-                {messages.map((msg, idx) => {
-                    const isMe = msg.senderId === user?.id || (userBusiness && msg.senderId === userBusiness.id);
-                    const showAvatar = !isMe && (idx === 0 || messages[idx - 1].senderId !== msg.senderId);
-                    const isFirstInGroup = idx === 0 || messages[idx - 1].senderId !== msg.senderId;
-                    const isLastInGroup = idx === messages.length - 1 || messages[idx + 1].senderId !== msg.senderId;
+                    {messages.map((msg, idx) => {
+                        const isMe = msg.senderId === user?.id || (userBusiness && msg.senderId === userBusiness.id);
+                        const showAvatar = !isMe && (idx === 0 || messages[idx - 1].senderId !== msg.senderId);
+                        const isFirstInGroup = idx === 0 || messages[idx - 1].senderId !== msg.senderId;
+                        const isLastInGroup = idx === messages.length - 1 || messages[idx + 1].senderId !== msg.senderId;
 
-                    return (
-                        <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group/msg animate-in fade-in slide-in-from-bottom-4 duration-500`}>
-                            {!isMe && (
-                                <div className="w-10 shrink-0 self-end mb-1">
-                                    {showAvatar ? (
-                                        <img src={msg.senderAvatar || 'https://i.pravatar.cc/100'} className="w-9 h-9 rounded-2xl border-2 border-white/10 shadow-xl" alt="" />
-                                    ) : <div className="w-9" />}
-                                </div>
-                            )}
-
-                            <div className={`flex flex-col gap-1.5 max-w-[80%] ${isMe ? 'items-end' : 'items-start'}`}>
-                                {!isMe && showAvatar && (
-                                    <div className="flex items-center gap-1 ml-2 mb-0.5">
-                                        {msg.isBusinessMessage && (
-                                            <span className="text-[8px] font-black text-amber-400 uppercase bg-amber-500/20 px-1.5 py-0.5 rounded">
-                                                ★
-                                            </span>
-                                        )}
-                                        <span className={`text-[10px] font-black uppercase tracking-widest ${msg.isBusinessMessage ? 'text-amber-400' : 'text-orange-500'}`}>
-                                            {msg.senderName}
-                                        </span>
-                                        {msg.isBusinessMessage && (
-                                            <span className="text-[8px] text-slate-600">• Negocio</span>
-                                        )}
+                        return (
+                            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group/msg animate-in fade-in slide-in-from-bottom-4 duration-500`}>
+                                {!isMe && (
+                                    <div className="w-10 shrink-0 self-end mb-1">
+                                        {showAvatar ? (
+                                            <img src={msg.senderAvatar || 'https://i.pravatar.cc/100'} className="w-9 h-9 rounded-2xl border-2 border-white/10 shadow-xl" alt="" />
+                                        ) : <div className="w-9" />}
                                     </div>
                                 )}
 
-                                <div className={`relative flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                                    {/* Delete button — only visible on hover for own messages */}
-                                    {isMe && (
-                                        <button
-                                            onClick={async () => {
-                                                const confirmed = await showConfirm('¿Eliminar este mensaje?', 'Eliminar Mensaje');
-                                                if (confirmed) {
-                                                    setDeletingMsgId(msg.id);
-                                                    try {
-                                                        await deleteRoomMessage(room.id, msg.id);
-                                                        showToast('Mensaje eliminado', 'success');
-                                                    } catch {
-                                                        showToast('No se pudo eliminar el mensaje.', 'error');
-                                                    } finally {
-                                                        setDeletingMsgId(null);
-                                                    }
-                                                }
-                                            }}
-                                            disabled={deletingMsgId === msg.id}
-                                            className="opacity-0 group-hover/msg:opacity-100 transition-opacity p-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 shrink-0 mb-1"
-                                            title="Eliminar mensaje"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                <div className={`flex flex-col gap-1.5 max-w-[80%] ${isMe ? 'items-end' : 'items-start'}`}>
+                                    {!isMe && showAvatar && (
+                                        <div className="flex items-center gap-1 ml-2 mb-0.5">
+                                            {msg.isBusinessMessage && (
+                                                <span className="text-[8px] font-black text-amber-400 uppercase bg-amber-500/20 px-1.5 py-0.5 rounded">
+                                                    ★
+                                                </span>
+                                            )}
+                                            <span className={`text-[10px] font-black uppercase tracking-widest ${msg.isBusinessMessage ? 'text-amber-400' : 'text-orange-500'}`}>
+                                                {msg.senderName}
+                                            </span>
+                                            {msg.isBusinessMessage && (
+                                                <span className="text-[8px] text-slate-600">• Negocio</span>
+                                            )}
+                                        </div>
                                     )}
 
-                                    <div className={`px-5 py-3.5 rounded-[2.2rem] text-sm font-bold leading-relaxed shadow-2xl transition-all hover:scale-[1.01] ${
-                                        isMe
-                                            ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-tr-sm shadow-orange-600/30'
-                                            : 'bg-slate-800/80 backdrop-blur-xl text-slate-100 rounded-tl-sm border border-white/5 shadow-black/40'
-                                        } ${deletingMsgId === msg.id ? 'opacity-40 grayscale' : ''}`}>
-                                        {msg.imageUrl && (
-                                            <div className="mb-3 -mx-1 -mt-1 group/img relative overflow-hidden rounded-2xl">
-                                                <img 
-                                                    src={msg.imageUrl} 
-                                                    alt="Imagen" 
-                                                    className="max-w-full rounded-2xl border border-white/10 shadow-inner transition-transform duration-500 group-hover/img:scale-105" 
-                                                />
-                                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity" />
-                                            </div>
+                                    <div className={`relative flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                        {/* Delete button — only visible on hover for own messages */}
+                                        {isMe && (
+                                            <button
+                                                onClick={async () => {
+                                                    const confirmed = await showConfirm('¿Eliminar este mensaje?', 'Eliminar Mensaje');
+                                                    if (confirmed) {
+                                                        setDeletingMsgId(msg.id);
+                                                        try {
+                                                            await deleteRoomMessage(room.id, msg.id);
+                                                            showToast('Mensaje eliminado', 'success');
+                                                        } catch {
+                                                            showToast('No se pudo eliminar el mensaje.', 'error');
+                                                        } finally {
+                                                            setDeletingMsgId(null);
+                                                        }
+                                                    }
+                                                }}
+                                                disabled={deletingMsgId === msg.id}
+                                                className="opacity-0 group-hover/msg:opacity-100 transition-opacity p-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 shrink-0 mb-1"
+                                                title="Eliminar mensaje"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
                                         )}
-                                        {msg.text && <p className="tracking-tight select-text">{msg.text}</p>}
 
-                                        <div className={`mt-2 flex items-center gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                            <span className={`text-[9px] font-black uppercase tracking-widest opacity-60 ${isMe ? 'text-white' : 'text-slate-500'}`}>
-                                                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </span>
-                                            {isMe && <CheckCheck className="w-3 h-3 text-cyan-300 shadow-[0_0_5px_rgba(103,232,249,0.5)]" />}
+                                        <div className={`px-5 py-3.5 rounded-[2.2rem] text-sm font-bold leading-relaxed shadow-2xl transition-all hover:scale-[1.01] ${isMe
+                                                ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-tr-sm shadow-orange-600/30'
+                                                : 'bg-slate-800/80 backdrop-blur-xl text-slate-100 rounded-tl-sm border border-white/5 shadow-black/40'
+                                            } ${deletingMsgId === msg.id ? 'opacity-40 grayscale' : ''}`}>
+                                            {msg.imageUrl && (
+                                                <div className="mb-3 -mx-1 -mt-1 group/img relative overflow-hidden rounded-2xl">
+                                                    <img
+                                                        src={msg.imageUrl}
+                                                        alt="Imagen"
+                                                        className="max-w-full rounded-2xl border border-white/10 shadow-inner transition-transform duration-500 group-hover/img:scale-105"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity" />
+                                                </div>
+                                            )}
+                                            {msg.text && <p className="tracking-tight select-text">{msg.text}</p>}
+
+                                            <div className={`mt-2 flex items-center gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                                <span className={`text-[9px] font-black uppercase tracking-widest opacity-60 ${isMe ? 'text-white' : 'text-slate-500'}`}>
+                                                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                                {isMe && <CheckCheck className="w-3 h-3 text-cyan-300 shadow-[0_0_5px_rgba(103,232,249,0.5)]" />}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })}
-                <div ref={messagesEndRef} />
+                        );
+                    })}
+                    <div ref={messagesEndRef} />
                 </div>
             </div>
 
@@ -415,7 +421,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                         </div>
                     )}
                     <div className="relative">
-                        <button 
+                        <button
                             onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowImageOptions(false); }}
                             className="p-3 text-slate-500 hover:text-orange-500 transition-colors transform active:scale-90"
                         >
@@ -449,7 +455,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                         {selectedImage && (
                             <div className="relative">
                                 <img src={selectedImage} alt="Preview" className="w-10 h-10 rounded-xl object-cover border border-amber-500/30" />
-                                <button 
+                                <button
                                     onClick={() => setSelectedImage(null)}
                                     className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center"
                                 >
@@ -458,8 +464,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                             </div>
                         )}
                         <div className="relative">
-                            <button 
-                                onClick={() => { 
+                            <button
+                                onClick={() => {
                                     if (canSendImages) {
                                         setShowImageOptions(!showImageOptions);
                                         setShowEmojiPicker(false);
@@ -472,13 +478,13 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                             </button>
                             {showImageOptions && (
                                 <div className="absolute bottom-full right-0 mb-2 p-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl flex gap-2">
-                                    <button 
+                                    <button
                                         onClick={() => cameraInputRef.current?.click()}
                                         className="p-3 bg-orange-500/20 rounded-xl hover:bg-orange-500/30 transition-colors"
                                     >
                                         <Camera className="w-5 h-5 text-orange-400" />
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => imageInputRef.current?.click()}
                                         className="p-3 bg-amber-500/20 rounded-xl hover:bg-amber-500/30 transition-colors"
                                     >
@@ -487,19 +493,19 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ room, onBack }) => {
                                 </div>
                             )}
                         </div>
-                        <input 
-                            type="file" 
-                            ref={imageInputRef} 
-                            accept="image/*" 
-                            className="hidden" 
+                        <input
+                            type="file"
+                            ref={imageInputRef}
+                            accept="image/*"
+                            className="hidden"
                             onChange={handleImageSelect}
                         />
-                        <input 
-                            type="file" 
-                            ref={cameraInputRef} 
-                            accept="image/*" 
+                        <input
+                            type="file"
+                            ref={cameraInputRef}
+                            accept="image/*"
                             capture="environment"
-                            className="hidden" 
+                            className="hidden"
                             onChange={handleImageSelect}
                         />
                         <button

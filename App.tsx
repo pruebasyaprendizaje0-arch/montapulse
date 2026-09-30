@@ -7,10 +7,11 @@ import { saveFCMToken, getUser, createUser, updateUser, createBusiness, updateBu
 import { PageLoader as PremiumLoader } from './components/common/PageLoader';
 import { ViewType, Sector, MontanitaEvent, Vibe, UserProfile, Business, SubscriptionPlan, BusinessCategory } from './types';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
-import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS, DEFAULT_NEW_LOCALITY_SECTORS } from './constants';
+import { MOCK_EVENTS, SECTOR_INFO, MOCK_BUSINESSES, SECTOR_POLYGONS, PLAN_LIMITS, PLAN_PRICES, DEFAULT_PAYMENT_DETAILS, LOCALITIES, LOCALITY_SECTORS, LOCALITY_POLYGONS, MAP_ICONS, DEFAULT_NEW_LOCALITY_SECTORS, resolveCanonicalRoute } from './constants';
 
 import { useAuthContext } from './context/AuthContext';
 import { logout, isSuperAdmin as checkSuperAdmin, updateUserProfile } from './services/authService';
+import firebaseApp from './firebase.config';
 import { compressImage } from './utils/imageUtils';
 import { BottomNav } from './components/Layout/BottomNav';
 import { TopNavbar } from './components/Layout/TopNavbar';
@@ -21,7 +22,7 @@ import { useTheme } from './hooks/useTheme';
 
 
 
-// Lazy load heavy components
+// Optimized lazy & static component splitting
 const EventModal = lazy(() => import('./components/EventModal').then(m => ({ default: m.EventModal })));
 const EventCard = lazy(() => import('./components/EventCard').then(m => ({ default: m.EventCard })));
 const MigrationPanel = lazy(() => import('./components/MigrationPanel').then(m => ({ default: m.MigrationPanel })));
@@ -31,19 +32,33 @@ const BusinessEditModal = lazy(() => import('./components/Modals/BusinessEditMod
 const EventEditorModal = lazy(() => import('./components/Modals/EventEditorModal').then(m => ({ default: m.EventEditorModal })));
 const PublicProfileModal = lazy(() => import('./components/PublicProfileModal').then(m => ({ default: m.PublicProfileModal })));
 
-// Lazy load pages for better performance
 const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
-const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const SavedEvents = lazy(() => import('./pages/SavedEvents').then(m => ({ default: m.SavedEvents })));
 const Passport = lazy(() => import('./pages/Passport').then(m => ({ default: m.Passport })));
-
-const Explore = lazy(() => import('./pages/ExploreFeed').then(m => ({ default: m.ExploreFeed })));
+const Explore = lazy(() => import('./pages/Explore').then(m => ({ default: m.Explore })));
 const InfoPage = lazy(() => import('./pages/InfoPage').then(m => ({ default: m.InfoPage })));
 const CalendarPage = lazy(() => import('./pages/Calendar').then(m => ({ default: m.Calendar })));
 const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })));
 const GeoGuide = lazy(() => import('./pages/GeoGuide').then(m => ({ default: m.GeoGuide })));
 const Plans = lazy(() => import('./pages/Plans').then(m => ({ default: m.Plans })));
 const Policies = lazy(() => import('./pages/Policies').then(m => ({ default: m.Policies })));
+
+// Preload components immediately in background so modal opening is 0ms instant
+if (typeof window !== 'undefined') {
+    setTimeout(() => {
+        import('./components/EventModal');
+        import('./components/PublicProfileModal');
+        import('./components/Modals/BusinessEditModal');
+        import('./components/Modals/EventEditorModal');
+        import('./components/Modals/PulsePassModal');
+        import('./components/LoginScreen');
+        import('./pages/Explore');
+        import('./pages/InfoPage');
+        import('./pages/Calendar');
+        import('./pages/Notifications');
+        import('./pages/Passport');
+    }, 50);
+}
 
 const PageLoader = () => <PremiumLoader message="Iniciando MontaPulse..." />;
 
@@ -220,7 +235,6 @@ const Dashboard: React.FC = () => {
 
             try {
               const { getToken, getMessaging } = await import('firebase/messaging');
-              const { default: firebaseApp } = await import('./firebase.config');
               const messaging = getMessaging(firebaseApp);
               const token = await getToken(messaging, { vapidKey });
               if (token) {
@@ -261,23 +275,23 @@ const Dashboard: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
-    const path = location.pathname;
-    if (path === '/') setActiveView('home');
-    else if (path === '/history') setActiveView('history');
-    else if (path === '/explore' || path.startsWith('/evento/')) setActiveView('explore');
-    else if (path.startsWith('/negocio/')) setActiveView('services');
-    else if (path === '/calendar' || path.startsWith('/agenda/')) setActiveView('calendar');
-    else if (path === '/community' || path === '/chat') setActiveView('community');
-    else if (path === '/passport') setActiveView('favorites');
 
-    else if (path === '/ruta-del-spondylus' || path.startsWith('/guia/')) setActiveView('guide');
-    else if (path === '/plans') setActiveView('plans');
-    else if (path === '/saved-events') setActiveView('all-favorites');
+    setActiveView(resolveCanonicalRoute(location.pathname));
+
+
+
+
+
+
+
+
+
+
     
-    else if (path === '/info') setActiveView('info');
-    else if (path === '/services') setActiveView('services');
-    else if (path === '/policies') setActiveView('policies');
-  }, [location.pathname]);
+
+
+
+  }, [location.pathname, setActiveView]);
 
   const urlToStateRef = React.useRef<string>('');
   const hasProcessedUrlRef = React.useRef(false);
@@ -412,16 +426,6 @@ const Dashboard: React.FC = () => {
 
   const [profileError, setProfileError] = useState<string | null>(null);
   const [managementTab, setManagementTab] = useState<'users' | 'businesses' | 'stats'>('users');
-  const [focusMapCoords, setFocusMapCoords] = useState<{ coords: [number, number]; zoom: number } | null>(null);
-
-  const resizeRefreshRef = React.useRef(false);
-  React.useEffect(() => {
-    if (activeView === 'explore' && !resizeRefreshRef.current) {
-      resizeRefreshRef.current = true;
-      setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
-    }
-  }, [activeView]);
-
   const bizEditFileInputRef = useRef<HTMLInputElement>(null);
   const bizEditCameraInputRef = useRef<HTMLInputElement>(null);
   const profileFileInputRef = useRef<HTMLInputElement>(null);
@@ -556,14 +560,6 @@ const Dashboard: React.FC = () => {
 
   const renderView = () => {
     switch (activeView) {
-      case 'home':
-        return (
-          <ErrorBoundary name="Home">
-            <Suspense fallback={<PageLoader />}>
-              <Home />
-            </Suspense>
-          </ErrorBoundary>
-        );
       case 'explore':
       case 'feed':
         return (
@@ -571,9 +567,6 @@ const Dashboard: React.FC = () => {
             <Suspense fallback={<PageLoader />}>
               <Explore
                 onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)}
-                userBusinessId={userBusiness?.id}
-                focusCoords={focusMapCoords}
-                onClearFocusCoords={() => setFocusMapCoords(null)}
               />
             </Suspense>
           </ErrorBoundary>
@@ -655,9 +648,11 @@ const Dashboard: React.FC = () => {
         );
       default:
         return (
-          <ErrorBoundary name="Default Home">
+          <ErrorBoundary name="Canonical Explore">
             <Suspense fallback={<PageLoader />}>
-              <Home />
+              <Explore
+                onEditBusiness={canEditAllBusiness ? handleEditBusiness : (canEditOwnBusiness ? handleEditBusiness : undefined)}
+              />
             </Suspense>
           </ErrorBoundary>
         );
@@ -667,8 +662,8 @@ const Dashboard: React.FC = () => {
   return (
     <div className={`fixed inset-0 w-screen bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden flex flex-col font-sans transition-colors duration-500`}>
       <TopNavbar />
-      <div className={`flex-1 w-full flex flex-col relative ${['home', 'explore', 'feed', 'favorites', 'all-favorites', 'saved', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history', 'guide', 'services'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-        <main className={`flex-1 w-full pb-20 lg:pb-6 ${['home', 'explore', 'feed', 'favorites', 'all-favorites', 'saved', 'policies', 'plans', 'calendar', 'info', 'history', 'guide'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['home', 'explore', 'feed', 'favorites', 'all-favorites', 'saved', 'policies', 'plans', 'calendar', 'info', 'history', 'guide'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
+      <div className={`flex-1 w-full flex flex-col relative ${['explore', 'feed', 'favorites', 'all-favorites', 'saved', 'admin-users', 'policies', 'plans', 'calendar', 'info', 'history', 'guide', 'services'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+        <main className={`flex-1 w-full pb-20 lg:pb-6 ${['explore', 'feed', 'favorites', 'all-favorites', 'saved', 'policies', 'plans', 'calendar', 'info', 'history', 'guide'].includes(activeView) ? 'overflow-y-auto' : 'overflow-hidden'}`} style={{ height: ['explore', 'feed', 'favorites', 'all-favorites', 'saved', 'policies', 'plans', 'calendar', 'info', 'history', 'guide'].includes(activeView) ? 'auto' : '100%', minHeight: '0' }}>
           {renderView()}
         </main>
       </div>
@@ -995,7 +990,7 @@ const Dashboard: React.FC = () => {
               setPublicProfileId(null);
             }}
             businessId={publicProfileType === 'business' ? publicProfileId || undefined : undefined}
-            userId={publicProfileType === 'user' ? publicProfileId || undefined : undefined}
+            userId={undefined}
             dataLoading={loading}
             onEditBusiness={(business) => {
               setShowPublicProfile(false);

@@ -76,18 +76,28 @@ export const EventCard = React.memo(({ event, locality, onClick, onRsvp, isRsvp,
 
           {/* Top Badges */}
           <div className="absolute top-4 left-4 flex flex-wrap gap-2 z-20">
-            <div className={`px-3 py-1 text-white text-[10px] font-black uppercase rounded-lg shadow-lg flex items-center gap-1.5 ${
-              dateInfo.statusColor === 'rose' ? 'bg-red-600' :
-              dateInfo.statusColor === 'emerald' ? 'bg-emerald-600' :
-              dateInfo.statusColor === 'slate' ? 'bg-slate-800' :
-              'bg-amber-500'
+            <div className={`px-3 py-1 text-white text-[11px] font-black uppercase rounded-full shadow-lg flex items-center gap-1.5 backdrop-blur-md ${
+              dateInfo.isOngoing || dateInfo.statusColor === 'emerald' ? 'bg-emerald-600/90' :
+              dateInfo.statusColor === 'rose' ? 'bg-red-600/90' :
+              dateInfo.statusColor === 'slate' ? 'bg-slate-800/90' :
+              'bg-amber-500/90'
             }`}>
-              <div className="w-1.5 h-1.5 bg-white rounded-full" />
+              <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
               {dateInfo.statusLabel}
             </div>
 
-            <div className="px-3 py-1 bg-white/10 backdrop-blur-md text-white text-[10px] font-bold uppercase rounded-lg border border-white/10 flex items-center gap-1">
-              <MapPin className="w-3 h-3 text-white/70" />
+            {event.eventType && (
+              <div className={`px-2.5 py-1 backdrop-blur-md text-white text-[11px] font-black uppercase rounded-full border flex items-center gap-1 shadow-lg ${
+                event.eventType === 'promocion' ? 'bg-purple-600/90 border-purple-400/30' :
+                event.eventType === 'actividad' ? 'bg-teal-600/90 border-teal-400/30' :
+                'bg-orange-600/90 border-orange-400/30'
+              }`}>
+                <span>{event.eventType === 'promocion' ? '🏷️ Promoción' : event.eventType === 'actividad' ? '🏄 Actividad' : '🎉 Evento'}</span>
+              </div>
+            )}
+
+            <div className="px-3 py-1 bg-black/60 backdrop-blur-md text-amber-300 text-[11px] font-black uppercase rounded-full border border-amber-400/30 flex items-center gap-1 shadow-lg">
+              <MapPin className="w-3.5 h-3.5 text-amber-400" />
               <span className="truncate max-w-[120px]">{event.locality || locality || 'Montañita'}</span>
             </div>
           </div>

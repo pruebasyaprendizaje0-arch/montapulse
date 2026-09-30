@@ -472,35 +472,42 @@ export const cleanupExpiredRedemptions = async (userId?: string, businessId?: st
             q = query(
                 collection(db, 'couponRedemptions'),
                 where('status', '==', 'reserved'),
-                where('userId', '==', userId),
-                where('expiresAt', '<=', Timestamp.now())
+                where('userId', '==', userId)
             );
         } else if (businessId) {
             q = query(
                 collection(db, 'couponRedemptions'),
                 where('status', '==', 'reserved'),
-                where('businessId', '==', businessId),
-                where('expiresAt', '<=', Timestamp.now())
+                where('businessId', '==', businessId)
             );
         } else {
             q = query(
                 collection(db, 'couponRedemptions'),
-                where('status', '==', 'reserved'),
-                where('expiresAt', '<=', Timestamp.now())
+                where('status', '==', 'reserved')
             );
         }
-
 
         const snap = await getDocs(q);
         if (snap.empty) return 0;
 
+        const now = Date.now();
+        const expiredDocs = snap.docs.filter(doc => {
+            const data = doc.data() as any;
+            const exp = data?.expiresAt;
+            if (!exp) return false;
+            const expiresAtMs = exp.toMillis ? exp.toMillis() : (typeof exp === 'number' ? exp : new Date(exp).getTime());
+            return expiresAtMs <= now;
+        });
+
+        if (expiredDocs.length === 0) return 0;
+
         const batch = writeBatch(db);
-        snap.docs.forEach(doc => {
+        expiredDocs.forEach(doc => {
             batch.update(doc.ref, { status: 'expired' });
         });
 
         await batch.commit();
-        return snap.size;
+        return expiredDocs.length;
     } catch (error) {
         console.error('Error cleaning up expired redemptions:', error);
         return 0;
@@ -517,17 +524,22 @@ export const getUserWallet = async (userId: string): Promise<CouponRedemption[]>
 
         const q = query(
             collection(db, 'couponRedemptions'),
-            where('userId', '==', userId),
-            orderBy('reservedAt', 'desc')
+            where('userId', '==', userId)
         );
         const snap = await getDocs(q);
-        return snap.docs.map(d => ({ 
+        const list = snap.docs.map(d => ({ 
             id: d.id, 
             ...d.data(),
             reservedAt: d.data().reservedAt?.toDate ? d.data().reservedAt.toDate() : d.data().reservedAt,
             expiresAt: d.data().expiresAt?.toDate ? d.data().expiresAt.toDate() : d.data().expiresAt,
             redeemedAt: d.data().redeemedAt?.toDate ? d.data().redeemedAt.toDate() : d.data().redeemedAt
         } as CouponRedemption));
+
+        return list.sort((a, b) => {
+            const tA = new Date(a.reservedAt || 0).getTime();
+            const tB = new Date(b.reservedAt || 0).getTime();
+            return tB - tA;
+        });
     } catch (error) {
         console.error('Error getting user wallet:', error);
         return [];
@@ -541,11 +553,15 @@ export const getCouponRedemptions = async (couponId: string): Promise<CouponRede
     try {
         const q = query(
             collection(db, 'couponRedemptions'),
-            where('couponId', '==', couponId),
-            orderBy('reservedAt', 'desc')
+            where('couponId', '==', couponId)
         );
         const snap = await getDocs(q);
-        return snap.docs.map(d => ({ id: d.id, ...d.data() } as CouponRedemption));
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as CouponRedemption));
+        return list.sort((a, b) => {
+            const tA = new Date(a.reservedAt || 0).getTime();
+            const tB = new Date(b.reservedAt || 0).getTime();
+            return tB - tA;
+        });
     } catch (error) {
         console.error('Error getting coupon redemptions:', error);
         return [];

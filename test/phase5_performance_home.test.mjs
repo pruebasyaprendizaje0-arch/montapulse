@@ -3,45 +3,29 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-test('Phase 5.1 Reconciliation, Mobile Home & Performance Verifications', async (t) => {
+test('Phase 5.1 Reconciliation, Published Experience & Performance Verifications', async (t) => {
 
     await t.test('1. Canonical Root View Source of Truth', () => {
         const dataContextCode = fs.readFileSync(path.resolve('context/DataContext.tsx'), 'utf8');
 
-        // Verify root path strictly maps to 'history' (Nosotros) as in production
-        assert.match(dataContextCode, /if\s*\(path\s*===\s*['"]\/['"]\s*\|\|\s*path\s*===\s*['"]\/history['"]\)\s*return\s*['"]history['"]/, 'DataContext must map "/" to "history"');
+        // Verify DataContext uses the canonical resolver for the published routes.
+        assert.match(dataContextCode, /resolveCanonicalRoute\(location\.pathname\)/, 'DataContext must use resolveCanonicalRoute');
     });
 
-    await t.test('2. Mobile Home (390 x 844) Structure & Hero Compactness', () => {
-        const homeCode = fs.readFileSync(path.resolve('pages/Home.tsx'), 'utf8');
-
-        // Check no excessive fixed heights on hero container (e.g. h-[80vh], h-screen, min-h-[600px] on hero)
-        assert.equal(/Hero[\s\S]*?h-\[\d+vh\]/.test(homeCode), false, 'Hero should not have large fixed viewport height');
-        assert.equal(/Hero[\s\S]*?min-h-\[\d+px\]/.test(homeCode), false, 'Hero should not have oversized min-height');
-
-        // Ensure no "Volver" / "Back" button rendered at the root Home page
-        assert.equal(/<button[^>]*>(?:<ArrowLeft|<ChevronLeft)[^>]*>[\s\S]*?(?:Volver|Atrás)<\/button>/i.test(homeCode), false, 'Root Home should not have back button');
-
-        // Ensure explicit image aspect ratios and fallback error handlers exist on business cards
-        assert.match(homeCode, /aspect-\[16\/9\]/, 'Image containers must declare explicit aspect ratio');
-        assert.match(homeCode, /onError=/, 'Image elements must declare onError fallback handler');
-
-        // Ensure single prominent search CTA in hero
-        assert.match(homeCode, /<form\s+onSubmit={handleSearchSubmit}/, 'Hero must have clear search form CTA');
-    });
-
-    await t.test('3. Mobile Map Canonical Component & Clustering', () => {
-        const mapViewCode = fs.readFileSync(path.resolve('components/Map/MapView.tsx'), 'utf8');
+    await t.test('2. Explore is a searchable feed, not an embedded map', () => {
         const exploreCode = fs.readFileSync(path.resolve('pages/Explore.tsx'), 'utf8');
 
-        // Ensure MapView implements spatial clustering
-        assert.match(mapViewCode, /cluster-marker|leaflet-cluster-icon|clusters\.push/, 'MapView must implement spatial clustering');
-        
-        // Ensure Explore loads MapView
-        assert.match(exploreCode, /<MapView/, 'Explore must render canonical MapView component');
+        assert.equal(exploreCode.includes('MapView'), false, 'Explore must not render an embedded map');
+        assert.match(exploreCode, /handleSearchSubmit|onSearch|searchQuery/, 'Explore must render search capability');
 
-        // Ensure MapView does not have permanent tooltip/labels on all markers
-        assert.equal(mapViewCode.includes('permanent: true') || mapViewCode.includes('permanent={true}'), false, 'Map markers must not have permanent labels overlapping in mobile');
+        // Ensure EventCard is integrated for event listings
+        assert.match(exploreCode, /<EventCard/, 'Explore must render EventCard');
+    });
+
+    await t.test('3. No legacy map component remains in the active experience', () => {
+        const exploreCode = fs.readFileSync(path.resolve('pages/Explore.tsx'), 'utf8');
+        assert.equal(fs.existsSync(path.resolve('components/Map/MapView.tsx')), false, 'Legacy MapView must be removed');
+        assert.equal(exploreCode.includes('MapView'), false, 'Explore must not reference MapView');
     });
 
     await t.test('4. Real Performance & Dynamic Chunk Splitting', () => {
@@ -55,11 +39,10 @@ test('Phase 5.1 Reconciliation, Mobile Home & Performance Verifications', async 
         assert.match(couponManagerCode, /(?:React\.)?lazy\(\s*\(\)\s*=>\s*import\(['"].*QRScanner/, 'QRScanner / html5-qrcode must be lazy loaded');
         assert.match(appCode, /(?:React\.)?lazy\(\s*\(\)\s*=>\s*import\(['"].*EventModal/, 'EventModal must be lazy loaded');
 
-        // Verify manualChunks in vite.config.ts separates firebase-firestore, firebase-auth, qr, leaflet
+        // Verify manualChunks separates active heavy dependencies.
         assert.match(viteConfigCode, /firebase-firestore/, 'vite.config.ts must split firestore');
         assert.match(viteConfigCode, /firebase-auth/, 'vite.config.ts must split auth');
         assert.match(viteConfigCode, /qr/, 'vite.config.ts must split qr tools');
-        assert.match(viteConfigCode, /leaflet/, 'vite.config.ts must split leaflet');
 
         // Ensure chunkSizeWarningLimit is not artificially inflated to hide bundle bloat
         assert.equal(viteConfigCode.includes('chunkSizeWarningLimit: 1500'), false, 'chunkSizeWarningLimit must not be inflated');
@@ -78,29 +61,24 @@ test('Phase 5.1 Reconciliation, Mobile Home & Performance Verifications', async 
         assert.match(pageLoaderCode, /@media\s*\(prefers-reduced-motion:\s*no-preference\)/, 'CSS keyframes must respect prefers-reduced-motion');
     });
 
-    await t.test('6. Build Manifest Verification (No Leaflet, QR, SuperAdmin in Home entry)', () => {
+    await t.test('6. Build Manifest Verification (No legacy Home, ExploreFeed, or MapView chunks)', () => {
         const manifestPath = path.resolve('dist/.vite/manifest.json');
         assert.equal(fs.existsSync(manifestPath), true, 'Manifest file must exist in dist/.vite/manifest.json');
 
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
-        // Locate Home entry
-        const homeEntry = manifest['pages/Home.tsx'];
-        assert.ok(homeEntry, 'pages/Home.tsx must exist in manifest');
-        assert.equal(homeEntry.isDynamicEntry, true, 'Home.tsx must be dynamic entry');
-
-        // Verify Home.tsx imports do not include leaflet or qr chunks
-        const homeImports = (homeEntry.imports || []).join(' ');
-        assert.equal(/leaflet/i.test(homeImports), false, 'Home.tsx must NOT import leaflet statically');
-        assert.equal(/_qr-/i.test(homeImports), false, 'Home.tsx must NOT import qr statically');
-        assert.equal(/SuperAdmin/i.test(homeImports), false, 'Home.tsx must NOT import SuperAdmin statically');
+        // Verify legacy chunks are NOT present
+        assert.equal(manifest['pages/Home.tsx'], undefined, 'pages/Home.tsx must NOT exist in manifest');
+        assert.equal(manifest['pages/ExploreFeed.tsx'], undefined, 'pages/ExploreFeed.tsx must NOT exist in manifest');
+        assert.equal(Object.keys(manifest).some(entry => /MapView/.test(entry)), false, 'The removed MapView chunk must not exist in the build manifest');
 
         // Locate Explore entry
-        const exploreEntry = manifest['pages/ExploreFeed.tsx'] || manifest['pages/Explore.tsx'];
-        assert.ok(exploreEntry, 'Explore entry must exist in manifest');
+        const exploreEntry = manifest['pages/Explore.tsx'];
+        assert.ok(exploreEntry, 'pages/Explore.tsx must exist in manifest');
+        assert.equal(exploreEntry.isDynamicEntry, true, 'Explore.tsx must be dynamic entry');
 
         // Locate Passport entry
-        const passportEntry = manifest['_Passport-CAtLdUwP.js'] || Object.values(manifest).find(entry => entry.name === 'Passport');
+        const passportEntry = Object.values(manifest).find(entry => entry.name === 'Passport');
         assert.ok(passportEntry, 'Passport entry must exist in manifest');
         assert.ok(passportEntry.dynamicImports, 'Passport must have dynamicImports');
         const passportDynamic = passportEntry.dynamicImports.join(' ');
@@ -108,3 +86,4 @@ test('Phase 5.1 Reconciliation, Mobile Home & Performance Verifications', async 
         assert.match(passportDynamic, /CouponManagerModal/, 'Passport must dynamically import CouponManagerModal');
     });
 });
+

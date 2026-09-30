@@ -199,29 +199,13 @@ describe('Fase 4.2: Integración Real de la Política de Eventos y Cierre de Inc
       assert.equal(content.includes('isEventPublicAndActive(event)'), true);
     });
 
-    test('Home.tsx usa isEventPublicAndActive para filtrar eventos públicos', () => {
-      const content = fs.readFileSync(path.join(rootDir, 'pages', 'Home.tsx'), 'utf-8');
-      assert.equal(content.includes('isEventPublicAndActive(e)'), true);
-    });
-
-    test('Explore.tsx y ExploreFeed.tsx usan isEventPublicAndActive y getWhatsAppUrl canónico', () => {
+    test('Explore.tsx usa isEventPublicAndActive y getWhatsAppUrl canónico', () => {
       const exploreContent = fs.readFileSync(path.join(rootDir, 'pages', 'Explore.tsx'), 'utf-8');
       assert.equal(exploreContent.includes('isEventPublicAndActive(e)'), true);
       assert.equal(exploreContent.includes('getWhatsAppUrl(business.whatsapp)'), true);
-
-      const feedContent = fs.readFileSync(path.join(rootDir, 'pages', 'ExploreFeed.tsx'), 'utf-8');
-      assert.equal(feedContent.includes('isEventPublicAndActive(e)'), true);
-      assert.equal(feedContent.includes('getWhatsAppUrl(business.whatsapp)'), true);
     });
 
-    test('MapHome.tsx, MapView.tsx y PulseModal.tsx usan isEventPublicAndActive para eventos en mapa y modal', () => {
-      const mapHomeContent = fs.readFileSync(path.join(rootDir, 'pages', 'MapHome.tsx'), 'utf-8');
-      assert.equal(mapHomeContent.includes('isEventPublicAndActive(e)'), true);
-
-      const mapViewContent = fs.readFileSync(path.join(rootDir, 'components', 'Map', 'MapView.tsx'), 'utf-8');
-      assert.equal(mapViewContent.includes('isEventPublicAndActive(e)'), true);
-      assert.equal(mapViewContent.includes('isEventPublicAndActive(event)'), true);
-
+    test('PulseModal.tsx usa isEventPublicAndActive para eventos', () => {
       const pulseModalContent = fs.readFileSync(path.join(rootDir, 'components', 'Modals', 'PulseModal.tsx'), 'utf-8');
       assert.equal(pulseModalContent.includes('isEventPublicAndActive(e)'), true);
     });

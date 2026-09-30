@@ -178,6 +178,7 @@ export interface Business {
   rating?: number;
   isReference?: boolean;
   plannerCategory?: 'hospedaje' | 'comida' | 'baile' | 'surf' | null;
+  activeOSModule?: 'hospedaje' | 'turnos';
   isFeatured?: boolean;
   featuredBannerUrl?: string;
   isDeleted?: boolean;
@@ -210,7 +211,85 @@ export interface Business {
   mapType?: MapEntryType;
   referredBy?: string;
   lastMonthlyResetDate?: any;
+  // Booking & Shift system settings
+  isOpen?: boolean;
+  occupancyPercentage?: number;
+  bookingMode?: 'reservas' | 'turnos' | 'none';
 }
+
+export interface ResourceItem {
+  id: string;
+  businessId: string;
+  name: string;
+  type: 'room' | 'service' | 'shift' | 'table';
+  price: number;
+  pricePeriod: 'noche' | 'hora' | 'turno' | 'dia' | 'reserva';
+  capacity: number;
+  status: 'available' | 'booked' | 'maintenance' | 'disabled';
+  features: string[];
+  description?: string;
+  imageUrl?: string;
+  nextBookingNote?: string;
+  isAvailable: boolean;
+}
+
+export interface BusinessReservation {
+  id: string;
+  reservationCode: string;
+  businessId: string;
+  resourceId: string;
+  resourceName: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  startDate: string;
+  endDate: string;
+  shiftTime?: string;
+  status: 'confirmed' | 'pending' | 'checked_in' | 'completed' | 'cancelled';
+  guestsCount: number;
+  totalPrice: number;
+  paymentStatus: 'paid' | 'pending' | 'deposit';
+  notes?: string;
+  createdAt: number;
+}
+
+export interface BlockedDateRange {
+  id: string;
+  resourceId: string;
+  resourceName: string;
+  startDate: string;
+  endDate: string;
+  reason: 'reservado' | 'mantenimiento' | 'bloqueado';
+  code?: string;
+}
+
+export interface ShiftSlot {
+  id: string;
+  businessId: string;
+  time: string;
+  serviceName: string;
+  customerName: string;
+  staffName: string;
+  stationName?: string;
+  durationMin: number;
+  price: number;
+  status: 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  notes?: string;
+  dateStr: string;
+}
+
+export interface BusinessServiceItem {
+  id: string;
+  businessId: string;
+  name: string;
+  durationMin: number;
+  price: number;
+  icon?: string;
+  category?: string;
+}
+
+
+
 
 export interface ProfileReview {
   id?: string;
@@ -225,6 +304,7 @@ export interface ProfileReview {
   createdAt?: any;
 }
 
+export type EventClassification = 'evento' | 'actividad' | 'promocion';
 export type EventStatus = 'draft' | 'published' | 'confirmed' | 'cancelled' | 'expired' | 'active' | 'readonly' | 'deactivated';
 
 export interface MontanitaEvent {
@@ -234,10 +314,14 @@ export interface MontanitaEvent {
   title: string;
   name?: string; // For compatibility
   locality?: string;
+  province?: string;
+  canton?: string;
+  parish?: string;
   description: string;
   startAt: any; // Using any to handle Firestore Timestamp vs Date
   endAt: any;
   category: string;
+  eventType?: EventClassification;
   vibe: Vibe | string;
   sector: Sector;
   imageUrl: string;

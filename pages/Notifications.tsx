@@ -26,7 +26,8 @@ export const Notifications: React.FC = () => {
     const {
         user, isAdmin,
         notifications, markAsRead, businesses, businessFollowers: contextFollowers = [],
-        events, masterVibes = [], customLocalities = [], setSelectedEvent
+        events, masterVibes = [], customLocalities = [], setSelectedEvent,
+        setShowPublicProfile, setPublicProfileId, setPublicProfileType
     } = useData();
 
     // Announce modal state
@@ -390,23 +391,40 @@ export const Notifications: React.FC = () => {
                         const Icon = style.icon;
 
                         const handleItemClick = () => {
-                            // For mass announcements, open detail modal
+                            markAsRead && markAsRead(notif.id);
+
+                            // 1. For mass announcements, open detail modal
                             if ((notif as any).isMassAnnouncement) {
                                 setSelectedAnnouncement(notif);
-                                markAsRead && markAsRead(notif.id);
                                 return;
                             }
 
-                            const eventId = (notif as any).eventId || (notif as any).data?.id;
+                            // 2. Check if matching event exists
+                            const eventId = (notif as any).eventId || (notif as any).data?.id || (notif as any).data?.eventId;
                             const targetEvent = eventId 
                                 ? events.find(e => e.id === eventId) 
-                                : events.find(e => e.title && notif.title && e.title.toLowerCase() === notif.title.toLowerCase());
+                                : events.find(e => e.title && notif.title && (e.title.toLowerCase() === notif.title.toLowerCase() || notif.title.toLowerCase().includes(e.title.toLowerCase())));
 
                             if (targetEvent) {
                                 setSelectedEvent(targetEvent);
+                                return;
                             }
 
-                            markAsRead && markAsRead(notif.id);
+                            // 3. Check if matching business exists
+                            const businessId = (notif as any).businessId || (notif as any).data?.businessId;
+                            const targetBusiness = businessId
+                                ? businesses.find(b => b.id === businessId)
+                                : businesses.find(b => b.name && notif.title && notif.title.toLowerCase().includes(b.name.toLowerCase()));
+
+                            if (targetBusiness) {
+                                setPublicProfileId(targetBusiness.id);
+                                setPublicProfileType('business');
+                                setShowPublicProfile(true);
+                                return;
+                            }
+
+                            // 4. Default: Open modal details so user can view full text & share
+                            setSelectedAnnouncement(notif);
                         };
                         const handleImageClick = (e: React.MouseEvent) => {
                             e.stopPropagation();

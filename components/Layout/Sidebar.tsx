@@ -25,17 +25,23 @@ export const Sidebar: React.FC = () => {
     }, []);
 
     const navItems = [
-        { id: 'home', icon: Home, label: 'INICIO', path: '/' },
+        { id: 'history', icon: Home, label: 'NOSOTROS', path: '/' },
         { id: 'explore', icon: Compass, label: 'EXPLORAR', path: '/explore' },
+        { id: 'info', icon: Info, label: 'INFO / BUSCAR', path: '/info' },
         { id: 'events', icon: Calendar, label: 'EVENTOS', path: '/calendar' },
-        { id: 'directory', icon: Info, label: 'DIRECTORIO', path: '/info' },
-        { id: 'favorites', icon: Heart, label: 'GUARDADOS', path: '/saved-events' },
-        { id: 'profile', icon: User, label: 'PERFIL', path: '/passport' },
+        { id: 'notifications', icon: Bell, label: 'AVISOS', path: '/community' },
+        { id: 'profile', icon: User, label: 'PASSPORT', path: '/passport' },
         { id: 'plans', icon: Star, label: 'PLANES', path: '/plans' },
     ] as const;
 
     const isActive = (path: string) => {
-        if (path === '/') return currentPath === '/';
+        if (path === '/') return currentPath === '/' || currentPath === '/history' || currentPath === '/nosotros';
+        if (path === '/explore') return currentPath === '/explore' || currentPath === '/feed' || currentPath.startsWith('/evento/');
+        if (path === '/info') return currentPath.startsWith('/info') || currentPath.startsWith('/buscar') || currentPath.startsWith('/directorio');
+        if (path === '/calendar') return currentPath.startsWith('/calendar') || currentPath.startsWith('/agenda/');
+        if (path === '/community') return currentPath.startsWith('/community') || currentPath.startsWith('/chat') || currentPath.startsWith('/avisos') || currentPath.startsWith('/notificaciones');
+        if (path === '/passport') return currentPath.startsWith('/passport') || currentPath.startsWith('/saved-events') || currentPath.startsWith('/perfil') || currentPath.startsWith('/profile');
+        if (path === '/plans') return currentPath.startsWith('/plans');
         return currentPath.startsWith(path);
     };
 
@@ -43,7 +49,7 @@ export const Sidebar: React.FC = () => {
         <aside className="hidden lg:flex flex-col w-64 bg-slate-900 border-r border-white/5 h-full pt-6 pb-4 px-4 z-40 transition-all overflow-y-auto" aria-label="Barra lateral de navegación">
             <button 
                 onClick={() => {
-                    setActiveView('home');
+                    setActiveView('history');
                     navigate('/');
                 }}
                 className="flex flex-col items-center gap-3 mb-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-2xl p-2 cursor-pointer group"
@@ -66,7 +72,13 @@ export const Sidebar: React.FC = () => {
                         <button
                             key={item.id}
                             onClick={() => {
-                                setActiveView(item.id === 'home' ? 'home' : item.id === 'favorites' ? 'saved' : item.id === 'profile' ? 'favorites' : item.id as any);
+                                if (item.id === 'history') setActiveView('history');
+                                else if (item.id === 'explore') setActiveView('explore');
+                                else if (item.id === 'info') setActiveView('info');
+                                else if (item.id === 'events') setActiveView('calendar');
+                                else if (item.id === 'notifications') setActiveView('community');
+                                else if (item.id === 'profile') setActiveView('favorites');
+                                else if (item.id === 'plans') setActiveView('plans');
                                 navigate(item.path);
                             }}
                             aria-current={active ? "page" : undefined}

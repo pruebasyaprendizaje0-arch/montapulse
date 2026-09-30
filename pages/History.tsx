@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-    ChevronLeft, Clock, Trash2, Calendar, MapPin, Zap, Sparkles, 
+    Clock, Trash2, Calendar, MapPin, Zap, Sparkles, 
     BarChart3, HelpCircle, BookOpen, Activity, Users, Heart, 
     Star, Droplets, ChevronDown, ChevronUp, Search, Info, MessageCircle, ArrowRight,
     Edit3, Save, X
@@ -218,19 +218,6 @@ export const History: React.FC = () => {
                 <div className="max-w-4xl mx-auto px-5 sm:px-8">
                     {/* Top Bar Controls */}
                     <div className="flex items-center justify-between gap-3 mb-6">
-                        <button 
-                            type="button" 
-                            onClick={() => {
-                                setActiveView('home');
-                                navigate('/');
-                            }} 
-                            className="px-3.5 py-2 bg-black/50 hover:bg-black/70 backdrop-blur-xl border border-white/20 rounded-2xl text-xs font-bold text-slate-200 hover:text-white transition-all active:scale-95 shadow-lg flex items-center gap-1.5 cursor-pointer"
-                            aria-label="Volver al Inicio"
-                        >
-                            <ChevronLeft className="w-4 h-4 text-orange-400" />
-                            <span>Inicio</span>
-                        </button>
-
                         {isSuperUser && (
                             <div className="flex items-center gap-2">
                                 {isEditing ? (

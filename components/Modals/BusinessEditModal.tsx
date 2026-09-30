@@ -6,7 +6,6 @@ import { Sector, BusinessCategory, MapEntryType } from '../../types';
 import { IconMap } from '../../utils/icons';
 import { OptimizedImageUploader } from '../OptimizedImageUploader';
 import { TikTokIcon, getInstagramUrl, getFacebookUrl, getTikTokUrl, getYouTubeUrl, getWhatsAppUrl } from '../../utils/social';
-import { LocationPickerMiniMap } from '../Map/LocationPickerMiniMap';
 
 interface BusinessEditModalProps {
     onClose?: () => void;
@@ -280,6 +279,59 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                     )}
 
                     <div>
+                        <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">
+                            Módulo de Reservas & Turnos (Perfil Público)
+                        </label>
+                        <p className="text-[10px] text-slate-400 mb-3">
+                            Elige qué botón y flujo encontrarán tus clientes al visitar tu perfil público.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => updateField('bookingMode', 'reservas')}
+                                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                                    (data as any).bookingMode === 'reservas'
+                                        ? 'bg-teal-500/20 border-teal-500 text-teal-300 shadow-md'
+                                        : 'bg-slate-800/40 border-white/5 text-slate-400 hover:bg-slate-800'
+                                }`}
+                            >
+                                <div className="font-black text-xs uppercase flex items-center gap-1.5 mb-1">
+                                    <span>🛏️ Módulo Reservas</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400">Para hoteles, hostales y cabañas. Muestra el botón "Reservar".</p>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => updateField('bookingMode', 'turnos')}
+                                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                                    (data as any).bookingMode === 'turnos'
+                                        ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-md'
+                                        : 'bg-slate-800/40 border-white/5 text-slate-400 hover:bg-slate-800'
+                                }`}
+                            >
+                                <div className="font-black text-xs uppercase flex items-center gap-1.5 mb-1">
+                                    <span>✂️ Módulo Turnos</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400">Para barberías, surf, masajes y citas. Muestra el botón "Pedir Turno".</p>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => updateField('bookingMode', 'none')}
+                                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                                    (!(data as any).bookingMode || (data as any).bookingMode === 'none')
+                                        ? 'bg-slate-700/50 border-slate-500 text-white shadow-md'
+                                        : 'bg-slate-800/40 border-white/5 text-slate-400 hover:bg-slate-800'
+                                }`}
+                            >
+                                <div className="font-black text-xs uppercase flex items-center gap-1.5 mb-1">
+                                    <span>⚡ Detección Automática</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400">Detecta según categoría (Hospedaje vs Turno).</p>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
                         <label className="text-xs font-black text-slate-500 uppercase mb-3 block tracking-widest">Descripción</label>
                         <textarea
                             rows={3}
@@ -379,22 +431,15 @@ export const BusinessEditModal: React.FC<BusinessEditModalProps> = ({ onClose, i
                             </select>
                         </div>
 
-                        {/* Mapa Interactivo con Pin Arrastrable */}
+                        {/* Coordenadas GPS */}
                         <div className="space-y-2.5 pt-2 relative z-10">
                             <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center justify-between">
                                 <span className="flex items-center gap-1.5">
                                     <MapPin className="w-3.5 h-3.5" />
-                                    Fijar Punto en el Mapa (Coordenadas GPS)
+                                    Coordenadas GPS
                                 </span>
-                                <span className="text-[10px] text-slate-400 font-normal">Toca o arrastra el pin</span>
+                                <span className="text-[10px] text-slate-400 font-normal">Edítalas manualmente abajo</span>
                             </label>
-
-                            <LocationPickerMiniMap
-                                coordinates={data.coordinates}
-                                onChangeCoordinates={(coords) => updateField('coordinates', coords)}
-                                localityName={data.locality || 'Montañita'}
-                                height="280px"
-                            />
                         </div>
 
                         {/* Inputs Manuales de Coordenadas Lat/Lng */}

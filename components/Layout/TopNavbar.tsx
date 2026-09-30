@@ -23,21 +23,21 @@ export const TopNavbar: React.FC = () => {
     const navItems = [
         { id: 'history', icon: Home, label: 'NOSOTROS', path: '/', action: 'history' },
         { id: 'explore', icon: Compass, label: 'EXPLORAR', path: '/explore', action: 'explore' },
+        { id: 'info', icon: Search, label: 'INFO / BUSCAR', path: '/info', action: 'info' },
         { id: 'events', icon: Calendar, label: 'EVENTOS', path: '/calendar', action: 'calendar' },
+        { id: 'notifications', icon: Bell, label: 'AVISOS', path: '/community', action: 'community' },
         { id: 'profile', icon: User, label: 'PASSPORT', path: '/passport', action: 'favorites' },
-        { id: 'notifications', icon: Bell, label: 'NOTIFICACIONES', path: '/community', action: 'community' },
         { id: 'plans', icon: Star, label: 'SUSCRIPCIONES', path: '/plans', action: 'plans' },
-        { id: 'info', icon: Info, label: 'AYUDA / INFO', path: '/info', action: 'info' },
     ] as const;
 
     const isActive = (path: string) => {
-        if (path === '/') return currentPath === '/' || currentPath === '/history';
-        if (path === '/explore') return currentPath.startsWith('/explore') || currentPath.startsWith('/evento/');
+        if (path === '/') return currentPath === '/' || currentPath === '/history' || currentPath === '/nosotros';
+        if (path === '/explore') return currentPath === '/explore' || currentPath === '/feed' || currentPath.startsWith('/evento/');
+        if (path === '/info') return currentPath.startsWith('/info') || currentPath.startsWith('/buscar') || currentPath.startsWith('/directorio');
         if (path === '/calendar') return currentPath.startsWith('/calendar') || currentPath.startsWith('/agenda/');
-        if (path === '/passport') return currentPath.startsWith('/passport') || currentPath.startsWith('/saved-events');
-        if (path === '/community') return currentPath.startsWith('/community') || currentPath.startsWith('/chat');
+        if (path === '/passport') return currentPath.startsWith('/passport') || currentPath.startsWith('/saved-events') || currentPath.startsWith('/perfil') || currentPath.startsWith('/profile');
+        if (path === '/community') return currentPath.startsWith('/community') || currentPath.startsWith('/chat') || currentPath.startsWith('/avisos') || currentPath.startsWith('/notificaciones');
         if (path === '/plans') return currentPath.startsWith('/plans');
-        if (path === '/info') return currentPath.startsWith('/info');
         return currentPath.startsWith(path);
     };
 
@@ -48,7 +48,7 @@ export const TopNavbar: React.FC = () => {
                 {/* Brand / Logo Semántico */}
                 <button 
                     onClick={() => {
-                        setActiveView('home');
+                        setActiveView('history');
                         navigate('/');
                     }}
                     aria-label="Ir al inicio de ubicame.info MontaPulse"

@@ -466,3 +466,37 @@ export const DEFAULT_POLICIES: PolicyData = {
   disclaimer: '"ubicame.info PULSE no garantiza que la plataforma esté libre de errores o interrupciones. El uso de la información y la asistencia a eventos publicados es bajo el propio riesgo del usuario. No seremos responsables por pérdidas directas o indirectas derivadas del uso de la aplicación."',
   supportEmail: 'fhernandezcalle@gmail.com'
 };
+
+export const CANONICAL_ROUTES = {
+  ROOT: '/',
+  EXPLORE: '/explore',
+  HISTORY: '/history',
+  CALENDAR: '/calendar',
+  PASSPORT: '/passport',
+  INFO: '/info',
+  PLANS: '/plans',
+  SAVED_EVENTS: '/saved-events',
+  COMMUNITY: '/community',
+  CHAT: '/chat',
+  SERVICES: '/services',
+  POLICIES: '/policies',
+  GUIDE: '/ruta-del-spondylus'
+} as const;
+
+export function resolveCanonicalRoute(pathname: string): 'explore' | 'feed' | 'calendar' | 'favorites' | 'saved' | 'host' | 'history' | 'guide' | 'all-favorites' | 'plans' | 'community' | 'chat' | 'admin-users' | 'info' | 'services' | 'policies' {
+  if (pathname === '/' || pathname === '/history' || pathname === '/nosotros') return 'history';
+  if (pathname === '/explore' || pathname === '/feed' || pathname.startsWith('/evento/')) return 'explore';
+  if (pathname === '/calendar' || pathname.startsWith('/agenda/')) return 'calendar';
+  if (pathname === '/passport' || pathname === '/perfil' || pathname === '/profile' || pathname === '/host') return 'favorites';
+  if (pathname === '/plans') return 'plans';
+  if (pathname === '/saved-events') return 'all-favorites';
+  if (pathname === '/community' || pathname === '/avisos' || pathname === '/notificaciones') return 'community';
+  if (pathname === '/chat') return 'chat';
+  if (pathname === '/info' || pathname === '/buscar' || pathname === '/directorio') return 'info';
+  if (pathname === '/policies') return 'policies';
+  if (pathname === '/services' || pathname.startsWith('/negocio/')) return 'services';
+  if (pathname === '/ruta-del-spondylus' || pathname.startsWith('/guia/')) return 'guide';
+  return 'history';
+}
+
+

@@ -86,13 +86,45 @@ root.render(
 );
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((registration) => {
-        console.log('Service Worker registrado con éxito. Scope:', registration.scope);
-      })
-      .catch((error) => {
-        console.log('Fallo al registrar el Service Worker:', error);
+  // En entorno local o modo dev, desregistramos SWs y limpiamos cachés para que Antigravity/desarrollo no lea versiones viejas
+  if (import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister();
+        console.log('[Dev] Service Worker desregistrado para desarrollo limpio');
+      }
+    });
+    if ('caches' in window) {
+      caches.keys().then((names) => {
+        for (const name of names) {
+          caches.delete(name);
+        }
       });
-  });
+    }
+  } else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker
+        .register('/sw.js', { updateViaCache: 'none' })
+        .then((registration) => {
+          console.log('[SW] Registrado con éxito. Scope:', registration.scope);
+          // Forzar chequeo de nueva versión de inmediato
+          registration.update();
+          window.addEventListener('focus', () => {
+            registration.update();
+          });
+        })
+        .catch((error) => {
+          console.log('[SW] Fallo al registrar:', error);
+        });
+
+      // Recargar automáticamente cuando un nuevo Service Worker tome el control
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    });
+  }
 }

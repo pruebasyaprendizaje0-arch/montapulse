@@ -1,29 +1,30 @@
-const CACHE_NAME = 'ubicame-pulse-v7';
+// Version dinámica de la cache (se actualiza automáticamente o con timestamp)
+const CACHE_VERSION = 'ubicame-pulse-v-' + Date.now();
+const CACHE_NAME = CACHE_VERSION;
+
+// Solo archivos mínimos estáticos sin HTML para evitar retener index.html obsoleto
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/explore',
   '/manifest.json'
 ];
 
-// Instalar el Service Worker y cachear el App Shell
+// 1. INSTALACIÓN: Forzar activación inmediata sin esperar a cerrar pestañas
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Cacheando App Shell estático');
       return cache.addAll(STATIC_ASSETS);
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
-// Activar y limpiar cachés antiguas
+// 2. ACTIVACIÓN: Purgar todas las cachés viejas (incluyendo v7 y versiones previas)
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
-            console.log('[Service Worker] Limpiando caché antigua:', cache);
+            console.log('[SW] Purgando caché obsoleta:', cache);
             return caches.delete(cache);
           }
         })
@@ -32,70 +33,89 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Interceptar peticiones y aplicar estrategias de almacenamiento en caché
+// 3. INTERCEPTACIÓN DE PETICIONES
 self.addEventListener('fetch', (event) => {
-  const requestUrl = new URL(event.request.url);
+  const request = event.request;
+  const url = new URL(request.url);
 
-  // Evitar interceptar peticiones que no sean GET (como escrituras a Firestore)
-  if (event.request.method !== 'GET') {
+  // Solo peticiones GET
+  if (request.method !== 'GET') return;
+
+  // Ignorar APIs externas, Firebase Auth, Firestore y llamadas /api/
+  if (
+    url.hostname.includes('firestore.googleapis.com') ||
+    url.hostname.includes('identitytoolkit.googleapis.com') ||
+    url.hostname.includes('firebaseinstallations.googleapis.com') ||
+    url.hostname.includes('fcmregistrations.googleapis.com') ||
+    url.pathname.startsWith('/api/')
+  ) {
     return;
   }
 
-  // Ignorar peticiones de Firebase Auth/Firestore directas por websockets/SDK (estas usan sus propios mecanismos)
-  if (requestUrl.hostname.includes('firestore.googleapis.com') || 
-      requestUrl.hostname.includes('identitytoolkit.googleapis.com') ||
-      requestUrl.hostname.includes('firebaseinstallations.googleapis.com')) {
-    return;
-  }
-
-  // 1. Estrategia de 'Stale-While-Revalidate' para mapas (OpenStreetMap / Mapbox) y API/recursos dinámicos
-  if (requestUrl.hostname.includes('tile.openstreetmap.org') || 
-      requestUrl.hostname.includes('basemaps.cartocdn.com') ||
-      requestUrl.pathname.includes('/api/')) {
+  // A) NAVEGACIÓN / HTML: ESTRATEGIA NETWORK-FIRST ESTRICTA
+  // Nunca sirve HTML desde caché si hay conexión a internet.
+  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      caches.open(CACHE_NAME).then((cache) => {
-        return cache.match(event.request).then((cachedResponse) => {
-          const fetchPromise = fetch(event.request).then((networkResponse) => {
-            if (networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          }).catch(() => {
-            // Error silencioso en fetch si está offline, se usará la caché
-          });
-          return cachedResponse || fetchPromise;
-        });
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, responseClone);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // Fallback offline solo si la red falla totalmente
+          return caches.match(request).then((cached) => cached || caches.match('/index.html'));
+        })
+    );
+    return;
+  }
+
+  // B) MAPAS (OpenStreetMap / CARTO): STALE-WHILE-REVALIDATE
+  if (
+    url.hostname.includes('tile.openstreetmap.org') ||
+    url.hostname.includes('basemaps.cartocdn.com')
+  ) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cachedResponse = await cache.match(request);
+        const fetchPromise = fetch(request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(() => null);
+
+        return cachedResponse || fetchPromise;
       })
     );
     return;
   }
 
-  // 2. Estrategia de 'Cache First' con caída a red para archivos estáticos locales de la app
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
-        // Guardar en caché dinámicamente si es un recurso local de la app
-        if (networkResponse.status === 200 && 
-            (requestUrl.origin === self.location.origin || 
-             requestUrl.hostname.includes('fonts.googleapis.com') || 
-             requestUrl.hostname.includes('fonts.gstatic.com') ||
-             requestUrl.hostname.includes('unpkg.com'))) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
-        }
-        return networkResponse;
-      }).catch((err) => {
-        // Si no hay red y es index.html o similar, servir del caché
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
-        throw err;
-      });
-    })
-  );
+  // C) ASSETS CON HASH (JS/CSS en /assets/, Google Fonts, unpkg)
+  if (
+    url.pathname.includes('/assets/') ||
+    url.hostname.includes('fonts.googleapis.com') ||
+    url.hostname.includes('fonts.gstatic.com') ||
+    url.hostname.includes('unpkg.com')
+  ) {
+    event.respondWith(
+      caches.match(request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
+
+        return fetch(request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, responseClone);
+            });
+          }
+          return networkResponse;
+        });
+      })
+    );
+  }
 });

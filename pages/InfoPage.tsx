@@ -248,7 +248,7 @@ export const InfoPage: React.FC = () => {
         setPublicProfileId(id);
         setPublicProfileType('business');
         setShowPublicProfile(true);
-    }, [setShowPublicProfile]);
+    }, [setPublicProfileId, setPublicProfileType, setShowPublicProfile]);
 
     if (loading) {
         return <PageLoader message="Cargando información local..." />;
@@ -274,26 +274,6 @@ export const InfoPage: React.FC = () => {
                             <h1 className="text-2xl sm:text-3xl font-black text-amber-400 uppercase tracking-tight">📱 DIRECTORIO {localityName}</h1>
                             <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest">Negocios, Servicios y Referencias</p>
                         </div>
-                        {/* Botón cerrar en móvil */}
-                        <button
-                            onClick={() => navigate('/explore')}
-                            className="sm:hidden p-2.5 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-colors shrink-0"
-                            title="Cerrar"
-                        >
-                            <X className="w-5 h-5 text-slate-400" />
-                        </button>
-                    </div>
-
-                    <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-                        {/* Botón cerrar en escritorio */}
-                        <button
-                            onClick={() => navigate('/explore')}
-                            className="hidden sm:flex p-2.5 sm:p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-colors shrink-0 items-center gap-2 text-slate-300 hover:text-white"
-                            title="Cerrar"
-                        >
-                            <X className="w-5 h-5 text-slate-400" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Cerrar</span>
-                        </button>
                     </div>
                 </div>
 

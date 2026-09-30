@@ -267,7 +267,7 @@ export const Plans: React.FC = () => {
                     {/* Header */}
                     <div className="flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
                         <button
-                            onClick={() => navigate('/host')}
+                            onClick={() => navigate('/passport')}
                             className="p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 transition-all active:scale-95"
                         >
                             <ChevronLeft className="w-6 h-6 text-white" />

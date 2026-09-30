@@ -6,6 +6,8 @@ import { LOCALITIES, LOCALITY_SECTORS, PLAN_LIMITS, DEFAULT_NEW_LOCALITY_SECTORS
 import { useAuthContext } from '../../context/AuthContext';
 import { OptimizedImageUploader } from '../OptimizedImageUploader';
 
+import { getProvinces, getCantons, getParishes, getLocalities } from '../../utils/locationHierarchy';
+
 export const EventEditorModal: React.FC = () => {
     const { user } = useAuthContext();
     const {
@@ -48,6 +50,59 @@ export const EventEditorModal: React.FC = () => {
     const planCreditsLimit = isPremium ? Infinity : (PLAN_LIMITS[userBusiness?.plan || SubscriptionPlan.FREE] || 0);
     const availableCredits = userBusiness?.eventCredits ?? 0;
     const isAtLimit = !isPremium && availableCredits <= 0;
+
+    // Location Hierarchy Cascading State
+    const currentProvince = newEvent.province || 'Santa Elena';
+    const currentCanton = newEvent.canton || 'Santa Elena';
+    const currentParish = newEvent.parish || 'Manglaralto';
+    const currentLocalityName = newEvent.locality || 'Montañita';
+
+    const provincesList = getProvinces();
+    const cantonsList = getCantons(currentProvince);
+    const parishesList = getParishes(currentProvince, currentCanton);
+    const localitiesInParish = getLocalities(currentProvince, currentCanton, currentParish);
+
+    const handleProvinceChange = (prov: string) => {
+        const availableCantons = getCantons(prov);
+        const firstCanton = availableCantons[0] || '';
+        const availableParishes = getParishes(prov, firstCanton);
+        const firstParish = availableParishes[0] || '';
+        const availableLocs = getLocalities(prov, firstCanton, firstParish);
+        const firstLoc = availableLocs[0] || 'Montañita';
+
+        setNewEvent(prev => ({
+            ...prev,
+            province: prov,
+            canton: firstCanton,
+            parish: firstParish,
+            locality: firstLoc
+        }));
+    };
+
+    const handleCantonChange = (cant: string) => {
+        const availableParishes = getParishes(currentProvince, cant);
+        const firstParish = availableParishes[0] || '';
+        const availableLocs = getLocalities(currentProvince, cant, firstParish);
+        const firstLoc = availableLocs[0] || 'Montañita';
+
+        setNewEvent(prev => ({
+            ...prev,
+            canton: cant,
+            parish: firstParish,
+            locality: firstLoc
+        }));
+    };
+
+    const handleParishChange = (par: string) => {
+        const availableLocs = getLocalities(currentProvince, currentCanton, par);
+        const firstLoc = availableLocs[0] || 'Montañita';
+
+        setNewEvent(prev => ({
+            ...prev,
+            parish: par,
+            locality: firstLoc
+        }));
+    };
 
     if (!showHostWizard) return null;
 
@@ -267,6 +322,37 @@ export const EventEditorModal: React.FC = () => {
                         </div>
                     )}
 
+                    {/* Classification Type Selector (Evento | Actividad | Promoción) */}
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2 flex items-center gap-1.5">
+                            <Tag className="w-3.5 h-3.5 text-orange-400" /> Clasificación del Pulso
+                        </label>
+                        <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-800/80 rounded-2xl border border-white/10">
+                            {[
+                                { id: 'evento', label: 'Evento', emoji: '🎉', desc: 'Fiesta, show, música' },
+                                { id: 'actividad', label: 'Actividad', emoji: '🏄', desc: 'Clase, tour, deporte' },
+                                { id: 'promocion', label: 'Promoción', emoji: '🏷️', desc: 'Descuento, 2x1, oferta' }
+                            ].map(cat => {
+                                const isSelected = (newEvent.eventType || 'evento') === cat.id;
+                                return (
+                                    <button
+                                        key={cat.id}
+                                        type="button"
+                                        onClick={() => setNewEvent({ ...newEvent, eventType: cat.id as any })}
+                                        className={`py-3 px-2 rounded-xl font-black text-xs transition-all flex flex-col items-center justify-center gap-1 cursor-pointer border ${
+                                            isSelected
+                                                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-400/50 shadow-lg shadow-orange-500/20 scale-[1.02]'
+                                                : 'bg-transparent text-slate-400 border-transparent hover:text-white hover:bg-white/5'
+                                        }`}
+                                    >
+                                        <span className="text-base">{cat.emoji}</span>
+                                        <span className="uppercase tracking-wider text-[10px] sm:text-[11px]">{cat.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-2">Título del Pulso</label>
                         <input
@@ -279,33 +365,73 @@ export const EventEditorModal: React.FC = () => {
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-2 flex items-center gap-1.5">
-                                <MapPin className="w-3 h-3" /> Localidad
-                            </label>
-                            <select
-                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-5 py-5 font-bold text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50"
-                                value={newEvent.locality || ""}
-                                onChange={e => {
-                                    const loc = e.target.value;
-                                    const locSectors = LOCALITY_SECTORS[loc] || DEFAULT_NEW_LOCALITY_SECTORS;
-                                    setNewEvent({ ...newEvent, locality: loc, sector: locSectors[0] as Sector || Sector.CENTRO });
-                                }}
-                            >
-                                <option value="" disabled>Selecciona una localidad</option>
-                                {allLocalities.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
-                            </select>
+                    {/* Cascading Geographic Location Hierarchy: Provincia -> Cantón -> Parroquia -> Localidad */}
+                    <div className="space-y-4 p-4 bg-slate-800/40 border border-white/5 rounded-3xl">
+                        <div className="flex items-center gap-1.5 pl-1 text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                            <MapPin className="w-3.5 h-3.5 text-amber-400" /> Ubicación Geográfica (Provincia • Cantón • Parroquia • Localidad)
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-2 flex items-center gap-1.5">
-                                <MapPin className="w-3 h-3" /> Sector
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider pl-1">Provincia</label>
+                                <select
+                                    className="w-full bg-slate-900 border border-white/10 rounded-2xl px-3.5 py-3.5 font-bold text-white text-xs appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50 cursor-pointer"
+                                    value={currentProvince}
+                                    onChange={e => handleProvinceChange(e.target.value)}
+                                >
+                                    {provincesList.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider pl-1">Cantón</label>
+                                <select
+                                    className="w-full bg-slate-900 border border-white/10 rounded-2xl px-3.5 py-3.5 font-bold text-white text-xs appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50 cursor-pointer"
+                                    value={currentCanton}
+                                    onChange={e => handleCantonChange(e.target.value)}
+                                >
+                                    {cantonsList.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider pl-1">Parroquia</label>
+                                <select
+                                    className="w-full bg-slate-900 border border-white/10 rounded-2xl px-3.5 py-3.5 font-bold text-white text-xs appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50 cursor-pointer"
+                                    value={currentParish}
+                                    onChange={e => handleParishChange(e.target.value)}
+                                >
+                                    {parishesList.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider pl-1">Localidad / Zona</label>
+                                <select
+                                    className="w-full bg-slate-900 border border-white/10 rounded-2xl px-3.5 py-3.5 font-bold text-white text-xs appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50 cursor-pointer"
+                                    value={currentLocalityName}
+                                    onChange={e => {
+                                        const loc = e.target.value;
+                                        const locSectors = LOCALITY_SECTORS[loc] || DEFAULT_NEW_LOCALITY_SECTORS;
+                                        setNewEvent({ ...newEvent, locality: loc, sector: (locSectors[0] as Sector) || Sector.CENTRO });
+                                    }}
+                                >
+                                    {localitiesInParish.map(l => <option key={l} value={l}>{l}</option>)}
+                                    {!localitiesInParish.includes(currentLocalityName) && (
+                                        <option value={currentLocalityName}>{currentLocalityName}</option>
+                                    )}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5 pt-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider pl-1 flex items-center gap-1.5">
+                                <MapPin className="w-3 h-3 text-orange-400" /> Sector Específico
                             </label>
                             <select
-                                className="w-full bg-slate-800/50 border border-white/5 rounded-2xl px-5 py-5 font-bold text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50"
+                                className="w-full bg-slate-900 border border-white/10 rounded-2xl px-4 py-3.5 font-bold text-white text-xs appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/50 cursor-pointer"
                                 value={newEvent.sector || ""}
                                 onChange={e => setNewEvent({ ...newEvent, sector: e.target.value as Sector })}
-                                disabled={!newEvent.locality}
                             >
                                 <option value="" disabled>Selecciona un sector</option>
                                 {[...availableSectors, ...(masterSectors || []).filter(s => s.locality === newEvent.locality).map(s => s.name)].map(s => <option key={s} value={s}>{s}</option>)}
